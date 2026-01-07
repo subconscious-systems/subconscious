@@ -7,7 +7,6 @@ A Python command-line interface (CLI) that demonstrates how to use [Subconscious
 - 🔍 **Deep Research**: Perform comprehensive web research with multi-source information gathering
 - 🧠 **Live Thinking Feedback**: See the agent's thoughts in real-time as it reasons through your question
 - 🌊 **Streaming**: See results in real-time as they're generated, with live thought updates
-- 🔧 **All Search Tools**: Automatically uses all available search tools (the agent intelligently selects the best ones)
 - 📚 **Citations**: Automatically extract and display source citations
 - ⚡ **Error Handling**: User-friendly error messages with actionable guidance
 
@@ -62,18 +61,10 @@ The simplest way to use the CLI - just ask a question and see results stream in 
 python cli.py "What are the latest developments in quantum computing?"
 ```
 
-**Make it executable for convenience:**
-
-```bash
-chmod +x cli.py
-./cli.py "Your question here"
-```
-
 This will show:
 
 - 💭 Thoughts appearing in dim text as the agent thinks
 - The final answer streaming in real-time
-- Citations at the end
 
 ## Usage Examples
 
@@ -85,7 +76,7 @@ python cli.py "What are the latest developments in quantum computing and how mig
 
 **Output:**
 
-```
+````
 💭 Starting with a methodical plan: I'll define objectives...
 💭 The official documentation will provide authoritative information...
 💭 I need to search multiple sources for diverse perspectives...
@@ -96,22 +87,15 @@ Answer:
 
 ✓ Complete
 
-Sources:
-  1. https://example.com/source1
-  2. https://example.com/source2
-```
-
-## Command Reference
-
 ### Usage
 
-Stream search results in real-time with live thought feedback. The agent automatically has access to all available search tools and will intelligently select the best ones for your query. You'll see the agent's thoughts appear as it reasons through your question.
+Stream search results in real-time with live thought feedback. You'll see the agent's thoughts appear as it reasons through your question.
 
 **Usage:**
 
 ```bash
 python cli.py QUESTION
-```
+````
 
 **Arguments:**
 
