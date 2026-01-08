@@ -7,7 +7,6 @@ A Python command-line interface (CLI) that demonstrates how to use [Subconscious
 - 🔍 **Deep Research**: Perform comprehensive web research with multi-source information gathering
 - 🧠 **Live Thinking Feedback**: See the agent's thoughts in real-time as it reasons through your question
 - 🌊 **Streaming**: See results in real-time as they're generated, with live thought updates
-- 📚 **Citations**: Automatically extract and display source citations
 - ⚡ **Error Handling**: User-friendly error messages with actionable guidance
 
 ## Installation

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from subconscious import Subconscious
 
 from utils.errors import handle_error
-from utils.streaming import StreamState, handle_stream_event
+from utils.streaming import StreamState, handle_stream_event, start_loading_spinner
 from utils.timeout import (
     handle_keyboard_interrupt,
     handle_timeout_error,
@@ -26,6 +26,9 @@ load_dotenv()
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
+# Default timeout in seconds - change this value to update the default timeout
+DEFAULT_TIMEOUT = 300
+
 # Create main app
 app = typer.Typer(
     name="getting-started-search-agent",
@@ -34,13 +37,13 @@ app = typer.Typer(
 )
 
 
-def stream(question: str, timeout: int = 60) -> None:
+def stream(question: str, timeout: int = DEFAULT_TIMEOUT) -> None:
     """
     Stream search results in real-time as text deltas arrive.
 
     Args:
         question: The question to answer
-        timeout: Timeout in seconds (default: 60)
+        timeout: Timeout in seconds (default: DEFAULT_TIMEOUT)
     """
     try:
         # Get API key from environment
@@ -55,7 +58,9 @@ def stream(question: str, timeout: int = 60) -> None:
             )
 
         # Initialize client and prepare request
-        client = Subconscious(api_key=api_key)
+        client = Subconscious(
+            api_key=api_key
+        )
 
         # Add terminal-readable formatting instructions
         terminal_prompt = (
@@ -65,25 +70,28 @@ def stream(question: str, timeout: int = 60) -> None:
             "Ensure the output is readable in a terminal environment."
         )
 
-        enhanced_question = f"{question}\n\n{terminal_prompt}"
+        prompt = f"{question}\n\n{terminal_prompt}"
 
         input_dict = {
-            "instructions": enhanced_question,
+            "instructions": prompt,
             "tools": [
                 {
                     "type": "platform",
-                    "id": "exa_search",
+                    "id": "parallel_search",
                     "options": {},
-                }
+                },
             ],
         }
+        
+        streamResponse = client.stream(engine="tim-large", input=input_dict)
 
         # Stream and process events with timeout
         state = StreamState()
+        start_loading_spinner(state)
 
         try:
             with timeout_context(timeout):
-                for event in client.stream(engine="tim-large", input=input_dict):
+                for event in streamResponse:
                     reset_timeout(timeout)
                     if not handle_stream_event(event, state):
                         break
@@ -104,10 +112,10 @@ def stream(question: str, timeout: int = 60) -> None:
 def main(
     question: str = typer.Argument(..., help="The question to answer"),
     timeout: int = typer.Option(
-        60,
+        DEFAULT_TIMEOUT,
         "--timeout",
         "-t",
-        help="Timeout in seconds (default: 60)",
+        help=f"Timeout in seconds (default: {DEFAULT_TIMEOUT})",
     ),
 ) -> None:
     """
@@ -120,7 +128,7 @@ def main(
 
     Usage:
         python cli.py "Your question here"
-        python cli.py "Your question here" --timeout 60
+        python cli.py "Your question here" --timeout 180
     """
     stream(question, timeout=timeout)
 
