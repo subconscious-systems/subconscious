@@ -37,12 +37,12 @@ app = typer.Typer(
 )
 
 
-def stream(question: str, timeout: int = DEFAULT_TIMEOUT) -> None:
+def stream(user_input_question: str, timeout: int = DEFAULT_TIMEOUT) -> None:
     """
     Stream search results in real-time as text deltas arrive.
 
     Args:
-        question: The question to answer
+        user_input_question: The question to answer
         timeout: Timeout in seconds (default: DEFAULT_TIMEOUT)
     """
     try:
@@ -63,27 +63,26 @@ def stream(question: str, timeout: int = DEFAULT_TIMEOUT) -> None:
         )
 
         # Add terminal-readable formatting instructions
-        terminal_prompt = (
+        output_format_prompt = (
             "IMPORTANT: Format your response for terminal/command-line display. "
             "Use plain text only - no LaTeX, no markdown formatting, no special characters. "
             "Use simple line breaks and standard ASCII characters. "
             "Ensure the output is readable in a terminal environment."
         )
 
-        prompt = f"{question}\n\n{terminal_prompt}"
-
-        input_dict = {
-            "instructions": prompt,
-            "tools": [
-                {
-                    "type": "platform",
-                    "id": "parallel_search",
-                    "options": {},
-                },
-            ],
-        }
-        
-        streamResponse = client.stream(engine="tim-large", input=input_dict)
+        stream_agent_response = client.stream(
+            engine="tim-large", 
+            input={
+                "instructions":  f"{user_input_question}\n\n{output_format_prompt}",
+                "tools": [
+                    {
+                        "type": "platform",
+                        "id": "parallel_search",
+                        "options": {},
+                    },
+                ]
+            }
+        )
 
         # Stream and process events with timeout
         state = StreamState()
@@ -91,7 +90,7 @@ def stream(question: str, timeout: int = DEFAULT_TIMEOUT) -> None:
 
         try:
             with timeout_context(timeout):
-                for event in streamResponse:
+                for event in stream_agent_response:
                     reset_timeout(timeout)
                     if not handle_stream_event(event, state):
                         break
