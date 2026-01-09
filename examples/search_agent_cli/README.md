@@ -21,7 +21,7 @@ A Python command-line interface (CLI) that demonstrates how to use [Subconscious
 1. **Clone or navigate to this directory**:
 
    ```bash
-   cd getting_started_search_agent
+   cd search_agent_cli
    ```
 
 2. **Install dependencies**:
@@ -34,12 +34,6 @@ A Python command-line interface (CLI) that demonstrates how to use [Subconscious
 
    ```bash
    uv pip install -r requirements.txt
-   ```
-
-   **Note**: You also need to install the Subconscious SDK from the local source:
-
-   ```bash
-   cd ../subconscious-python && pip install -e .
    ```
 
 3. **Set your API key**:
