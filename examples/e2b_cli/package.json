@@ -21,10 +21,12 @@
     "license": "Apache-2.0",
     "dependencies": {
         "subconscious": "^0.1.9",
-        "@e2b/sdk": "^2.0.0"
+        "@e2b/sdk": "^2.0.0",
+        "localtunnel": "^2.0.2"
     },
     "devDependencies": {
         "@types/bun": "latest",
+        "@types/localtunnel": "^2.0.4",
         "typescript": "^5.9.3"
     },
     "engines": {

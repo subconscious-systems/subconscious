@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+
+# Lock files (using bun.lock)
+package-lock.json
+
+# Config overrides
+agent.config.json
+
+# Tests (internal)
+tests/
