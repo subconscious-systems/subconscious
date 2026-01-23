@@ -1,0 +1,33 @@
+{
+    "name": "e2b-subconscious-agent",
+    "version": "1.0.0",
+    "type": "module",
+    "description": "CLI-first autonomous agent using Subconscious + E2B",
+    "main": "src/index.ts",
+    "scripts": {
+        "agent": "bun run src/index.ts",
+        "dev": "bun run src/index.ts",
+        "build": "bun build src/index.ts --outdir dist --target bun",
+        "typecheck": "tsc --noEmit",
+        "test": "bun test tests"
+    },
+    "keywords": [
+        "agent",
+        "subconscious",
+        "e2b",
+        "cli"
+    ],
+    "author": "",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "subconscious": "^0.1.9",
+        "@e2b/sdk": "^2.0.0"
+    },
+    "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.9.3"
+    },
+    "engines": {
+        "bun": ">=1.0.0"
+    }
+}
