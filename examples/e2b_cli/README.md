@@ -16,7 +16,7 @@ A developer-first autonomous agent that reasons and executes code in a secure cl
 - **Multi-language**: Python, JavaScript, TypeScript, Go, Rust, C++, Ruby, Java, Bash
 - **Data science ready**: numpy, pandas, matplotlib pre-installed
 - **Command history**: Arrow keys navigate previous commands
-- **Auto-tunneling**: Cloudflare tunnel starts automatically
+- **Zero-config tunneling**: Works out of the box - no external dependencies
 
 ## Quick Start
 
@@ -34,29 +34,30 @@ bun run agent
 
 ## Example Usage
 
+### Try it with the included demo file
+
+```
+▸ Task › Analyze file: ./demo_data.csv and create a summary of hours worked per employee
+▸ Context ›
+```
+
 ### Simple task (no files)
 ```
 ▸ Task › Calculate the first 50 Fibonacci numbers and identify which ones are prime
 ▸ Context ›
 ```
 
-### Analyze a file
-```
-▸ Task › Analyze file: ./sales_data.csv and tell me the top 3 products by revenue
-▸ Context ›
-```
-
 ### Generate a chart
 ```
-▸ Task › Read file: ./metrics.csv and create a line chart of MRR over time. Save to output: ./mrr_chart.png
-▸ Context ›
+▸ Task › Analyze file: ./demo_data.csv and create a bar chart of total billable hours by department. Save to output: ./chart.png
+▸ Context › Use pandas and matplotlib
 ```
 
 ### Full analysis with multiple outputs
 ```
-▸ Task › Analyze file: /Users/me/Desktop/startup_metrics.csv and do the following:
-1. Create a dual-axis chart of MRR and Customers over time. Save to output: /Users/me/Desktop/growth.png
-2. Write a markdown report with key insights. Save to output: /Users/me/Desktop/analysis.md
+▸ Task › Analyze file: ./demo_data.csv and do the following:
+1. Create a chart of hours by employee. Save to output: ./hours_chart.png
+2. Write a markdown report with key insights. Save to output: ./analysis.md
 ▸ Context › Use pandas and matplotlib
 ```
 
@@ -125,7 +126,7 @@ src/
     sandbox.ts          # E2B sandbox wrapper with multi-language support
   tools/
     e2bServer.ts        # HTTP server exposing execute_code tool
-    tunnel.ts           # Cloudflare tunnel management
+    tunnel.ts           # Tunnel management (localtunnel)
   types/
     agent.ts            # TypeScript definitions
   config.ts             # Configuration loading
@@ -167,19 +168,12 @@ Create `agent.config.json` to customize:
 
 ## Troubleshooting
 
-### cloudflared not found
+### Tunnel not starting
 
-Install Cloudflare Tunnel:
+The agent uses `localtunnel` which is installed automatically with `bun install`. If you're having issues:
 
-```bash
-# macOS
-brew install cloudflare/cloudflare/cloudflared
-
-# Linux
-curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
-chmod +x cloudflared
-sudo mv cloudflared /usr/local/bin/
-```
+1. **Check your network** - localtunnel requires outbound internet access
+2. **Use an existing tunnel** - Set `TUNNEL_URL` environment variable to bypass auto-start
 
 ### Output files not appearing
 
@@ -195,7 +189,7 @@ The first run may take 30-60 seconds as E2B provisions the sandbox and installs 
 
 - [Subconscious](https://subconscious.dev) - Long-horizon AI reasoning
 - [E2B](https://e2b.dev) - Secure code sandboxes
-- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+- [localtunnel](https://github.com/localtunnel/localtunnel) - Tunnel service
 
 ## License
 

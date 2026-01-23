@@ -503,8 +503,8 @@ export async function runAgentWithTask(
     }
     throw error;
   } finally {
-    if (tunnelResult?.process) {
-      stopTunnel(tunnelResult.process);
+    if (tunnelResult) {
+      stopTunnel(tunnelResult);
     }
     await toolServer.stop();
     await sandbox.cleanup();

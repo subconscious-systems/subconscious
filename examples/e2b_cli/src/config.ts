@@ -24,7 +24,6 @@ export interface AgentConfig {
     enabled: boolean;
     autoStart: boolean;
     port: number;
-    cloudflaredPath?: string;
   };
   tools: {
     port: number;
@@ -74,7 +73,6 @@ export const defaultConfig: AgentConfig = {
     enabled: true,
     autoStart: true,
     port: 3001,
-    cloudflaredPath: undefined,
   },
   tools: {
     port: 3001,
