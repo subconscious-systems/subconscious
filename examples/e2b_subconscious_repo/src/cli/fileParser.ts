@@ -9,8 +9,6 @@ import { promises as fs } from "fs";
  * - file: ./path/to/file.csv
  * - files: ./dir/*.csv
  * - output: ./results.json
- * - '/path/to/file.csv' (drag-and-drop quoted paths)
- * - "/path/to/file.csv" (drag-and-drop quoted paths)
  */
 
 export interface ParsedFile {
@@ -77,58 +75,7 @@ export async function parseFileReferences(
     }
   }
 
-  // Pattern 2: Quoted paths (drag-and-drop) - '/path/to/file' or "/path/to/file"
-  // This handles both single and double quoted absolute/relative paths
-  const quotedPathPattern = /(['"])([^'"]+\.[a-zA-Z0-9]+)\1/g;
-  let quotedMatch;
-
-  const quotedMatches = description.match(quotedPathPattern);
-  if (quotedMatches) {
-    console.log(
-      `[file] Found ${quotedMatches.length} quoted path(s) in description`
-    );
-  }
-
-  while ((quotedMatch = quotedPathPattern.exec(description)) !== null) {
-    const fullMatch = quotedMatch[0];
-    let filePath = quotedMatch[2].trim();
-
-    // Skip if already processed or if it's part of a file: pattern
-    if (processedPaths.has(filePath)) continue;
-    
-    // Check if this quoted path is preceded by "file:" - if so, skip (already handled)
-    const matchIndex = quotedMatch.index;
-    const precedingText = description.slice(Math.max(0, matchIndex - 10), matchIndex);
-    if (/file:\s*$/.test(precedingText)) continue;
-
-    processedPaths.add(filePath);
-
-    const resolvedPath = path.resolve(filePath);
-    const exists = await fileExists(resolvedPath);
-
-    console.log(
-      `[file] Checking quoted path: ${filePath} -> ${resolvedPath} (exists: ${exists})`
-    );
-
-    if (exists) {
-      const fileName = path.basename(resolvedPath);
-      const sandboxPath = `/home/user/input/${fileName}`;
-
-      files.push({
-        localPath: resolvedPath,
-        sandboxPath,
-        type: "input",
-      });
-
-      // Replace the quoted path with reference to sandbox path
-      updatedDescription = updatedDescription.replace(
-        fullMatch,
-        `file: ${sandboxPath}`
-      );
-    }
-  }
-
-  // Pattern 3: files: ./dir/*.csv (wildcard support)
+  // Pattern 2: files: ./dir/*.csv (wildcard support)
   const filesPattern = /files:\s*([^\s]+)/gi;
   while ((match = filesPattern.exec(description)) !== null) {
     const pattern = match[1].trim();
@@ -168,7 +115,7 @@ export async function parseFileReferences(
     }
   }
 
-  // Pattern 4: output: ./results.json
+  // Pattern 3: output: ./results.json
   const outputPattern = /output:\s*([^\s\n]+)/gi;
   const textsToParse = [description];
   if (context) textsToParse.push(context);
