@@ -513,47 +513,17 @@ export async function runAgent(): Promise<void> {
   const history: string[] = [];
   const c = COLORS;
 
-  const question = (prompt: string, multiLine = false): Promise<string> => {
+  const question = (prompt: string): Promise<string> => {
     return new Promise((resolve) => {
       (rl as any).history = [...history];
-
-      if (multiLine) {
-        console.log(`${c.dim}(press Enter twice on empty line to submit)${c.reset}`);
-        const lines: string[] = [];
-        let lastLineEmpty = false;
-
-        const lineHandler = (line: string) => {
-          const isEmpty = line.trim() === "";
-
-          if (isEmpty && lastLineEmpty) {
-            rl.removeListener("line", lineHandler);
-            if (lines.length > 0 && lines[lines.length - 1].trim() === "") {
-              lines.pop();
-            }
-            const fullText = lines.join("\n").trim();
-            if (fullText && !history.includes(fullText)) {
-              history.unshift(fullText);
-              if (history.length > 100) history.pop();
-            }
-            resolve(fullText);
-          } else {
-            lines.push(line);
-            lastLineEmpty = isEmpty;
-          }
-        };
-
-        process.stdout.write(prompt);
-        rl.on("line", lineHandler);
-      } else {
-        rl.question(prompt, (answer) => {
-          const trimmed = answer.trim();
-          if (trimmed && !history.includes(trimmed)) {
-            history.unshift(trimmed);
-            if (history.length > 100) history.pop();
-          }
-          resolve(trimmed);
-        });
-      }
+      rl.question(prompt, (answer) => {
+        const trimmed = answer.trim();
+        if (trimmed && !history.includes(trimmed)) {
+          history.unshift(trimmed);
+          if (history.length > 100) history.pop();
+        }
+        resolve(trimmed);
+      });
     });
   };
 
@@ -572,7 +542,7 @@ ${c.dim}────────────────────────
   ${c.green}▸${c.reset} ${c.bold}Quick Tips${c.reset}
     ${c.dim}•${c.reset} Include ${c.cyan}file: ./data.csv${c.reset} in your task to upload a file
     ${c.dim}•${c.reset} Include ${c.cyan}output: ./result.json${c.reset} to download output when done
-    ${c.dim}•${c.reset} Multi-line: type task, then ${c.white}2 blank lines${c.reset} to submit
+    ${c.dim}•${c.reset} Add details in the optional ${c.white}Context${c.reset} prompt
     ${c.dim}•${c.reset} Type ${c.white}exit${c.reset} to quit
 
   ${c.green}▸${c.reset} ${c.bold}Example${c.reset}
@@ -584,8 +554,7 @@ ${c.dim}────────────────────────
   // REPL loop
   while (true) {
     const taskDescription = await question(
-      `${c.green}${c.bold}▸${c.reset} ${c.bold}Task${c.reset} ${c.dim}›${c.reset} `,
-      true
+      `${c.green}${c.bold}▸${c.reset} ${c.bold}Task${c.reset} ${c.dim}›${c.reset} `
     );
 
     if (
@@ -600,8 +569,7 @@ ${c.dim}────────────────────────
     }
 
     const contextInput = await question(
-      `${c.blue}${c.bold}▸${c.reset} ${c.bold}Context${c.reset} ${c.dim}(optional)${c.reset} ${c.dim}›${c.reset} `,
-      false
+      `${c.blue}${c.bold}▸${c.reset} ${c.bold}Context${c.reset} ${c.dim}(optional)${c.reset} ${c.dim}›${c.reset} `
     );
 
     try {
