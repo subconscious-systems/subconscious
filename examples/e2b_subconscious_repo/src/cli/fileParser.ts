@@ -1,10 +1,9 @@
 import * as path from "path";
 import { promises as fs } from "fs";
-import type { AgentTask } from "../types/agent";
 
 /**
  * File Reference Parser
- * 
+ *
  * Parses file references from task descriptions and validates file existence.
  * Supports patterns like:
  * - file: ./path/to/file.csv
@@ -32,22 +31,30 @@ export async function parseFileReferences(
 ): Promise<FileParseResult> {
   const files: ParsedFile[] = [];
   let updatedDescription = description;
-
-  // Pattern 1: file: ./path/to/file.csv or file:path/to/file.csv
-  // Match file: followed by path (can include spaces if quoted, or until whitespace/newline)
-  const filePattern = /file:\s*([^\s\n]+)/gi;
-  let match;
   const processedPaths = new Set<string>();
 
+  // Pattern 1: file: ./path/to/file.csv
+  const filePattern = /file:\s*([^\s\n]+)/gi;
+  let match;
+
+  const fileMatches = description.match(filePattern);
+  if (fileMatches) {
+    console.log(
+      `[file] Found ${fileMatches.length} file: pattern(s) in description`
+    );
+  }
+
   while ((match = filePattern.exec(description)) !== null) {
-    let filePath = match[1].trim();
-    // Remove trailing punctuation that might be part of the sentence
-    filePath = filePath.replace(/[.,;:!?]+$/, "");
+    let filePath = match[1].trim().replace(/[.,;:!?]+$/, "");
     if (processedPaths.has(filePath)) continue;
     processedPaths.add(filePath);
 
     const resolvedPath = path.resolve(filePath);
     const exists = await fileExists(resolvedPath);
+
+    console.log(
+      `[file] Checking: ${filePath} -> ${resolvedPath} (exists: ${exists})`
+    );
 
     if (exists) {
       const fileName = path.basename(resolvedPath);
@@ -59,7 +66,6 @@ export async function parseFileReferences(
         type: "input",
       });
 
-      // Replace in description with sandbox path
       updatedDescription = updatedDescription.replace(
         match[0],
         `file: ${sandboxPath}`
@@ -91,7 +97,6 @@ export async function parseFileReferences(
 
           if (exists) {
             const sandboxPath = `/home/user/input/${file}`;
-
             files.push({
               localPath: resolvedPath,
               sandboxPath,
@@ -101,44 +106,51 @@ export async function parseFileReferences(
         }
       }
 
-      // Replace pattern in description
       updatedDescription = updatedDescription.replace(
         match[0],
         `files: /home/user/input/`
       );
-    } catch (error) {
+    } catch {
       console.log(`[file] Warning: Could not read directory: ${dir}`);
     }
   }
 
-  // Pattern 3: output: ./results.json (output file specification)
-  const outputPattern = /output:\s*([^\s]+)/gi;
-  while ((match = outputPattern.exec(description)) !== null) {
-    const filePath = match[1].trim();
-    const resolvedPath = path.resolve(filePath);
-    const fileName = path.basename(resolvedPath);
-    const sandboxPath = `/home/user/output/${fileName}`;
+  // Pattern 3: output: ./results.json
+  const outputPattern = /output:\s*([^\s\n]+)/gi;
+  const textsToParse = [description];
+  if (context) textsToParse.push(context);
 
-    files.push({
-      localPath: resolvedPath,
-      sandboxPath,
-      type: "output",
-    });
+  const processedOutputPaths = new Set<string>();
 
-    // Replace in description with sandbox path
-    updatedDescription = updatedDescription.replace(
-      match[0],
-      `output: ${sandboxPath}`
-    );
+  for (const text of textsToParse) {
+    let outputMatch;
+    while ((outputMatch = outputPattern.exec(text)) !== null) {
+      let filePath = outputMatch[1].trim().replace(/[.,;:!?]+$/, "");
+
+      if (processedOutputPaths.has(filePath)) continue;
+      processedOutputPaths.add(filePath);
+
+      const resolvedPath = path.resolve(filePath);
+      const fileName = path.basename(resolvedPath);
+      const sandboxPath = `/home/user/output/${fileName}`;
+
+      files.push({
+        localPath: resolvedPath,
+        sandboxPath,
+        type: "output",
+      });
+
+      if (text === description) {
+        updatedDescription = updatedDescription.replace(
+          outputMatch[0],
+          `output: ${sandboxPath}`
+        );
+      }
+    }
+    outputPattern.lastIndex = 0;
   }
 
-  // Note: Context file parsing removed to avoid infinite recursion
-  // Files should be specified in the main task description
-
-  return {
-    files,
-    updatedDescription,
-  };
+  return { files, updatedDescription };
 }
 
 /**

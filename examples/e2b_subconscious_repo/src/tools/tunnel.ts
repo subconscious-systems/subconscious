@@ -1,5 +1,4 @@
-import { spawn, ChildProcess } from "child_process";
-import * as readline from "readline";
+import { spawn, type ChildProcess } from "child_process";
 import { verbose } from "../config";
 
 /** Log only when verbose mode is enabled */
@@ -9,12 +8,11 @@ function log(message: string) {
 
 /**
  * Cloudflare Tunnel Support
- * 
+ *
  * Handles tunnel setup for exposing local HTTP server to Subconscious.
  * Supports:
  * - Using existing tunnel URL from env var
  * - Auto-starting cloudflared tunnel
- * - Manual tunnel setup instructions
  */
 
 export interface TunnelConfig {
@@ -41,10 +39,7 @@ export async function setupTunnel(
   const existingTunnelUrl = process.env.TUNNEL_URL;
   if (existingTunnelUrl) {
     log(`[tunnel] Using existing tunnel URL: ${existingTunnelUrl}`);
-    return {
-      url: existingTunnelUrl,
-      autoStarted: false,
-    };
+    return { url: existingTunnelUrl, autoStarted: false };
   }
 
   // If tunnel is not enabled, return local URL (won't work but user will see error)
@@ -55,30 +50,29 @@ export async function setupTunnel(
     console.warn(
       "[tunnel] Set TUNNEL_URL environment variable or enable auto-start in config."
     );
-    return {
-      url: localUrl,
-      autoStarted: false,
-    };
+    return { url: localUrl, autoStarted: false };
   }
 
-  // Auto-start tunnel if configured (default behavior)
+  // Auto-start tunnel if configured
   if (config.autoStart) {
     try {
-      const { url: tunnelUrl, process: tunnelProcess } = await startCloudflaredTunnel(
+      const { url, process } = await startCloudflaredTunnel(
         localUrl,
         config.cloudflaredPath
       );
-      return {
-        url: tunnelUrl,
-        process: tunnelProcess,
-        autoStarted: true,
-      };
+      return { url, process, autoStarted: true };
     } catch (error: any) {
-      // If cloudflared is not installed, provide helpful error
-      if (error.message.includes("not found") || error.message.includes("ENOENT")) {
+      if (
+        error.message.includes("not found") ||
+        error.message.includes("ENOENT")
+      ) {
         console.error("\n[tunnel] ❌ cloudflared is not installed.");
-        console.error("[tunnel] Install it with: brew install cloudflare/cloudflare/cloudflared");
-        console.error("[tunnel] Or set TUNNEL_URL environment variable to use an existing tunnel.\n");
+        console.error(
+          "[tunnel] Install it with: brew install cloudflare/cloudflare/cloudflared"
+        );
+        console.error(
+          "[tunnel] Or set TUNNEL_URL environment variable to use an existing tunnel.\n"
+        );
         throw new Error(
           "cloudflared not installed. Install with: brew install cloudflare/cloudflare/cloudflared"
         );
@@ -88,7 +82,6 @@ export async function setupTunnel(
     }
   }
 
-  // If auto-start is disabled, check for manual tunnel URL
   log("\n[tunnel] Tunnel required for Subconscious to reach local server.");
   log(`[tunnel] Start tunnel with: cloudflared tunnel --url ${localUrl}`);
   log("[tunnel] Then set TUNNEL_URL environment variable with the tunnel URL.\n");
@@ -100,7 +93,6 @@ export async function setupTunnel(
 
 /**
  * Start cloudflared tunnel automatically.
- * Returns both the URL and the process for cleanup.
  */
 async function startCloudflaredTunnel(
   localUrl: string,
@@ -108,7 +100,6 @@ async function startCloudflaredTunnel(
 ): Promise<{ url: string; process: ChildProcess }> {
   const cloudflared = cloudflaredPath || "cloudflared";
 
-  // Check if cloudflared is available
   try {
     await checkCloudflaredInstalled(cloudflared);
   } catch (error: any) {
@@ -120,22 +111,17 @@ async function startCloudflaredTunnel(
   log("[tunnel] Starting cloudflared tunnel...");
 
   return new Promise((resolve, reject) => {
-    // Spawn cloudflared process
     const tunnelProcess = spawn(cloudflared, ["tunnel", "--url", localUrl], {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
     let tunnelUrl: string | null = null;
     let stderr = "";
-    let stdout = "";
     let timeoutId: NodeJS.Timeout | null = null;
 
-    // Parse tunnel URL from both stdout and stderr (cloudflared may use either)
-    const checkForUrl = (output: string) => {
-      if (tunnelUrl) return true; // Already found
-      
-      // Look for tunnel URL pattern: "https://xxxx-xxxx.trycloudflare.com"
-      // Cloudflared outputs URLs in various formats, including in formatted boxes
+    const checkForUrl = (output: string): boolean => {
+      if (tunnelUrl) return true;
+
       const urlMatch = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
       if (urlMatch) {
         tunnelUrl = urlMatch[0];
@@ -149,49 +135,28 @@ async function startCloudflaredTunnel(
 
     tunnelProcess.stdout?.on("data", (data: Buffer) => {
       const output = data.toString();
-      stdout += output;
-      
-      // Check for URL immediately
-      if (checkForUrl(output)) {
-        return; // URL found, done
-      }
-
-      // Log important messages (filter verbose output)
-      const lines = output.split("\n");
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed && trimmed.includes("https://") && trimmed.includes("trycloudflare.com")) {
-          // This might be the URL line, check it
-          checkForUrl(trimmed);
-        }
-      }
+      checkForUrl(output);
     });
 
     tunnelProcess.stderr?.on("data", (data: Buffer) => {
       const output = data.toString();
       stderr += output;
-      
-      // Check stderr for URL too (cloudflared sometimes outputs URL to stderr)
-      if (checkForUrl(output)) {
-        return; // URL found, done
-      }
+      checkForUrl(output);
 
-      // Log errors and important messages
+      // Log real errors (not normal startup messages)
       const lines = output.split("\n");
       for (const line of lines) {
         const trimmed = line.trim();
-        if (trimmed.includes("error") || trimmed.includes("Error") || trimmed.includes("FATAL") || trimmed.includes("ERR")) {
-          // Filter out connection errors that are normal during startup
-          const isNormalError =
-            trimmed.includes("Connection terminated") ||
-            trimmed.includes("Retrying connection") ||
-            trimmed.includes("originCertPath");
-          if (!isNormalError) {
-            console.error(`[tunnel] ${trimmed}`);
-          }
-        } else if (trimmed.includes("https://") && trimmed.includes("trycloudflare.com")) {
-          // Check this line for URL
-          checkForUrl(trimmed);
+        if (
+          (trimmed.includes("error") ||
+            trimmed.includes("Error") ||
+            trimmed.includes("FATAL") ||
+            trimmed.includes("ERR")) &&
+          !trimmed.includes("Connection terminated") &&
+          !trimmed.includes("Retrying connection") &&
+          !trimmed.includes("originCertPath")
+        ) {
+          console.error(`[tunnel] ${trimmed}`);
         }
       }
     });
@@ -210,7 +175,7 @@ async function startCloudflaredTunnel(
       }
     });
 
-    // Timeout after 45 seconds (cloudflared can take a moment to establish)
+    // Timeout after 45 seconds
     timeoutId = setTimeout(() => {
       if (!tunnelUrl) {
         tunnelProcess.kill();
@@ -229,11 +194,9 @@ async function startCloudflaredTunnel(
  */
 function checkCloudflaredInstalled(cloudflared: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const process = spawn(cloudflared, ["--version"], {
-      stdio: "ignore",
-    });
+    const proc = spawn(cloudflared, ["--version"], { stdio: "ignore" });
 
-    process.on("error", (error: any) => {
+    proc.on("error", (error: any) => {
       if (error.code === "ENOENT") {
         reject(new Error("cloudflared not found in PATH"));
       } else {
@@ -241,7 +204,7 @@ function checkCloudflaredInstalled(cloudflared: string): Promise<void> {
       }
     });
 
-    process.on("exit", (code) => {
+    proc.on("exit", (code) => {
       if (code === 0) {
         resolve();
       } else {

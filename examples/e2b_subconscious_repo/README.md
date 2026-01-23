@@ -1,14 +1,22 @@
 # CLI Agent: Subconscious + E2B
 
-A developer-first autonomous agent that reasons and executes code, inspired by Claude Code. This agent uses **Subconscious** for reasoning and tool orchestration, and **E2B** as the execution environment via FunctionTool.
+A developer-first autonomous agent that reasons and executes code in a secure cloud sandbox. This agent uses **Subconscious** for long-horizon reasoning and **E2B** for isolated code execution.
 
-## Mental Model
+```
+  ┌─┐┬ ┬┌┐ ┌─┐┌─┐┌┐┌┌─┐┌─┐┬┌─┐┬ ┬┌─┐
+  └─┐│ │├┴┐│  │ ││││└─┐│  ││ ││ │└─┐
+  └─┘└─┘└─┘└─┘└─┘┘└┘└─┘└─┘┴└─┘└─┘└─┘  + E2B Sandbox
+```
 
-- **Subconscious** = Brain (reasoning, planning, tool orchestration)
-- **E2B** = Execution environment (isolated code sandbox exposed as FunctionTool)
-- **Agent Flow** = Subconscious streams reasoning → calls E2B tool → continues based on results
+## What it does
 
-This differs from hardcoded workflows: Subconscious handles all reasoning, planning, and tool orchestration natively. The agent streams its reasoning in real-time and calls tools as needed.
+- **Long-horizon reasoning**: Subconscious handles complex multi-step tasks with planning and self-correction
+- **Secure execution**: All code runs in isolated E2B cloud sandboxes
+- **File I/O**: Upload local files, download generated outputs (charts, reports, data)
+- **Multi-language**: Python, JavaScript, TypeScript, Go, Rust, C++, Ruby, Java, Bash
+- **Data science ready**: numpy, pandas, matplotlib pre-installed
+- **Command history**: Arrow keys navigate previous commands
+- **Auto-tunneling**: Cloudflare tunnel starts automatically
 
 ## Quick Start
 
@@ -16,202 +24,193 @@ This differs from hardcoded workflows: Subconscious handles all reasoning, plann
 # Install dependencies
 bun install
 
-# Configure environment variables
-cp .env.example .env
-
-# Edit .env and add your API keys:
-# - SUBCONSCIOUS_API_KEY: Get it at https://www.subconscious.dev/platform
-# - E2B_API_KEY: Get it at https://e2b.dev (optional)
+# Set your API keys
+export SUBCONSCIOUS_API_KEY=your_key_here  # Get at https://subconscious.dev/platform
+export E2B_API_KEY=your_key_here           # Get at https://e2b.dev
 
 # Run the agent
 bun run agent
 ```
 
-> **Note**: Bun automatically loads `.env` files, so no additional configuration is needed.
+## Example Usage
 
-## Cloudflare Tunnel
-
-The agent automatically starts a Cloudflare tunnel to expose the local tool server to Subconscious. No manual setup required!
-
-**Requirements:**
-- `cloudflared` must be installed: `brew install cloudflare/cloudflare/cloudflared`
-- If not installed, the agent will show clear installation instructions
-
-**Optional:** If you want to use an existing tunnel URL instead, set:
-```bash
-export TUNNEL_URL=https://your-existing-tunnel-url.trycloudflare.com
+### Simple task (no files)
+```
+▸ Task › Calculate the first 50 Fibonacci numbers and identify which ones are prime
+▸ Context ›
 ```
 
-The tunnel is automatically cleaned up when the agent finishes.
-
-## Example
-
-**Input:**
+### Analyze a file
 ```
-Task: Create a Python script that generates Fibonacci numbers up to 100
-Context: Use a simple iterative approach
+▸ Task › Analyze file: ./sales_data.csv and tell me the top 3 products by revenue
+▸ Context ›
 ```
 
-**Output:**
+### Generate a chart
 ```
-🤖 CLI Agent (Subconscious + E2B)
-==================================
-
-This agent uses:
-  • Subconscious = reasoning & tool orchestration
-  • E2B = code execution environment (via FunctionTool)
-
-[server] Tool server running at http://localhost:3001
-[tunnel] Using tunnel: https://xxxx-xxxx.trycloudflare.com
-
-[agent] Starting Subconscious agent...
-
-💭 I need to create a Python script that generates Fibonacci numbers up to 100 using an iterative approach.
-
-🔧 Calling tool: execute_code
-   Code: def fibonacci(n):...
-
-[result] Execution succeeded
-
-📋 Final Answer:
-
-I've created a Python script that generates Fibonacci numbers up to 100. The sequence is: 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89.
-
-[done] Agent finished
+▸ Task › Read file: ./metrics.csv and create a line chart of MRR over time. Save to output: ./mrr_chart.png
+▸ Context ›
 ```
+
+### Full analysis with multiple outputs
+```
+▸ Task › Analyze file: /Users/me/Desktop/startup_metrics.csv and do the following:
+1. Create a dual-axis chart of MRR and Customers over time. Save to output: /Users/me/Desktop/growth.png
+2. Write a markdown report with key insights. Save to output: /Users/me/Desktop/analysis.md
+▸ Context › Use pandas and matplotlib
+```
+
+## File Handling
+
+The agent supports file upload and download:
+
+| Syntax | Description | Example |
+|--------|-------------|---------|
+| `file: ./path` | Upload a file to the sandbox | `Analyze file: ./data.csv` |
+| `files: ./dir/*.csv` | Upload multiple files (glob) | `Process files: ./reports/*.csv` |
+| `output: ./path` | Download output when done | `Save chart to output: ./chart.png` |
+
+**Supported output formats:**
+
+- Images: `.png`, `.jpg`, `.gif`, `.webp`, `.svg`
+- Documents: `.md`, `.txt`, `.html`, `.pdf`
+- Data: `.json`, `.csv`, `.xml`
+- Archives: `.zip`, `.tar`, `.gz`
+
+### How it works
+
+1. Input files are uploaded to `/home/user/input/` in the sandbox
+2. Output files are saved to `/home/user/output/` in the sandbox
+3. When the agent completes, outputs are automatically downloaded to your specified local paths
+
+## Supported Languages
+
+| Language | Runtime | Notes |
+|----------|---------|-------|
+| Python | `python3` | numpy, pandas, matplotlib pre-installed |
+| JavaScript | `node` | Node.js runtime |
+| TypeScript | `ts-node` | Via npx |
+| Bash | `bash` | Shell scripts |
+| Go | `go run` | Single file execution |
+| Rust | `rustc` | Compiled before execution |
+| C++ | `g++` | Compiled with -O2 |
+| C | `gcc` | Compiled with -O2 |
+| Ruby | `ruby` | Standard runtime |
+| Java | `javac` + `java` | Compiled and run |
 
 ## Architecture
 
 ```
-/src
-  /cli
-    run.ts              # CLI entrypoint with streaming
-    fileParser.ts       # File reference parsing
-  /tools
-    e2bServer.ts        # HTTP server for E2B FunctionTool
-    tunnel.ts           # Cloudflare tunnel management
-  /e2b
-    sandbox.ts          # E2B sandbox wrapper
-  /types
-    agent.ts            # Type definitions
-  /config.ts            # Configuration management
-  index.ts              # Main entrypoint
+┌─────────────────────────────────────────────────────────────────┐
+│                         CLI Agent                                │
+├─────────────────────────────────────────────────────────────────┤
+│  User Input  ->  File Parser  ->  Subconscious API  ->  Display │
+│                      |                  |                        │
+│               Upload Files      Stream Reasoning                 │
+│                      |                  |                        │
+│              E2B Sandbox  <---  Tool Calls (execute_code)       │
+│                      |                                           │
+│              Download Outputs  ->  Local Filesystem              │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Design Principles
+### Source Structure
 
-1. **Subconscious-native**: Uses Subconscious's built-in tool orchestration
-2. **Streaming**: Real-time reasoning and output display
-3. **FunctionTool-based**: E2B exposed as HTTP endpoint for Subconscious
-4. **Minimal dependencies**: Bun native tooling where possible
-5. **Inspectable**: Every reasoning step and tool call is visible
-6. **Type-safe**: Full TypeScript
-
-## How It Works
-
-1. **User provides task** via CLI prompt
-2. **Tool server starts** on localhost (default: port 3001)
-3. **Tunnel exposes server** to Subconscious (Cloudflare Tunnel)
-4. **Subconscious streams** reasoning and tool calls
-5. **E2B tool executes** code when Subconscious calls it
-6. **Subconscious continues** based on tool results
-7. **Final answer** is displayed when complete
+```
+src/
+  cli/
+    run.ts              # Interactive CLI with command history
+    fileParser.ts       # Parses file:/output: references
+  e2b/
+    sandbox.ts          # E2B sandbox wrapper with multi-language support
+  tools/
+    e2bServer.ts        # HTTP server exposing execute_code tool
+    tunnel.ts           # Cloudflare tunnel management
+  types/
+    agent.ts            # TypeScript definitions
+  config.ts             # Configuration loading
+  index.ts              # Entry point
+```
 
 ## Configuration
 
 ### Environment Variables
 
-Create a `.env` file in the project root (copy from `.env.example`):
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUBCONSCIOUS_API_KEY` | Yes | Your Subconscious API key |
+| `E2B_API_KEY` | Yes | Your E2B API key |
+| `TUNNEL_URL` | No | Use existing tunnel instead of auto-start |
+| `VERBOSE` | No | Enable verbose logging (`true`/`false`) |
 
-```bash
-cp .env.example .env
-```
+### Config file (optional)
 
-Required variables:
-
-- `SUBCONSCIOUS_API_KEY` (required): Your Subconscious API key
-  - Get it at: https://www.subconscious.dev/platform
-  
-- `E2B_API_KEY` (optional): E2B API key (SDK may use default authentication)
-  - Get it at: https://e2b.dev
-
-- `TUNNEL_URL` (optional): Cloudflare tunnel URL (if not using auto-start)
-  - Format: `https://xxxx-xxxx.trycloudflare.com`
-
-### Configuration File
-
-Create `agent.config.json` to customize behavior:
+Create `agent.config.json` to customize:
 
 ```json
 {
   "tunnel": {
     "enabled": true,
-    "autoStart": false,
-    "port": 3001,
-    "cloudflaredPath": "cloudflared"
+    "autoStart": true,
+    "port": 3001
   },
   "tools": {
     "port": 3001,
     "host": "localhost"
   },
-  "timeouts": {
-    "defaultExecution": 300000,
-    "maxExecution": 1800000,
-    "perStep": 600000
+  "environment": {
+    "filterSensitive": true,
+    "sensitivePatterns": ["KEY", "SECRET", "TOKEN", "PASSWORD"]
   }
 }
 ```
 
-## File Handling
+## Testing
 
-The agent supports file uploads and downloads:
+Run the test suite to verify everything works:
 
-- **Upload files**: Use `file: ./path/to/file` in your task description
-- **Specify outputs**: Use `output: ./path/to/output` in your task description
-- **Multiple files**: Use `files: ./dir/*.csv` for multiple files
+```bash
+# Run all tests
+bun test
 
-Example:
-```
-Task: Process file: ./data.csv and save results to output: ./results.json
+# Run specific test suites
+bun test tests/output_files.test.ts     # Test file output (PNG, MD, JSON)
+bun test tests/comprehensive.test.ts    # Full integration tests
+bun test tests/fibonacci.test.ts        # Simple code execution
+bun test tests/file_upload.test.ts      # File upload functionality
 ```
 
 ## Troubleshooting
 
-### "Tunnel required but not started"
-
-- Set `TUNNEL_URL` environment variable, or
-- Enable `tunnel.autoStart` in config, or
-- Start tunnel manually: `cloudflared tunnel --url http://localhost:3001`
-
-### "cloudflared not found"
+### cloudflared not found
 
 Install Cloudflare Tunnel:
+
 ```bash
+# macOS
 brew install cloudflare/cloudflare/cloudflared
+
+# Linux
+curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+chmod +x cloudflared
+sudo mv cloudflared /usr/local/bin/
 ```
 
-### "Sandbox not initialized"
+### Output files not appearing
 
-- Ensure E2B SDK is properly installed
-- Check E2B API key if required
-- Verify network connectivity
+1. Make sure you use the `output:` prefix in your task
+2. Check that the agent says `[file] Downloaded:` at the end
+3. Verify the path is accessible (not a protected system directory)
 
-### Tool calls not working
+### Sandbox timeout or slow startup
 
-- Verify tunnel URL is accessible
-- Check tool server is running (should see `[server] Tool server running`)
-- Ensure Subconscious can reach the tunnel URL
+The first run may take 30-60 seconds as E2B provisions the sandbox and installs packages. Subsequent runs are faster.
 
-## Migration from Old Architecture
+## Links
 
-The old hardcoded workflow (Plan → Execute → Evaluate) has been replaced with Subconscious-native tool orchestration. Old components (`planner.ts`, `executor.ts`, `evaluator.ts`, `termination.ts`) are deprecated but kept for reference.
-
-## Learn More
-
-- **Subconscious Docs**: https://docs.subconscious.dev
-- **E2B Docs**: https://e2b.dev/docs
-- **Bun Docs**: https://bun.sh/docs
-- **Cloudflare Tunnel**: https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/
+- [Subconscious](https://subconscious.dev) - Long-horizon AI reasoning
+- [E2B](https://e2b.dev) - Secure code sandboxes
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
 
 ## License
 

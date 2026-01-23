@@ -9,7 +9,7 @@ function log(message: string) {
 
 /**
  * E2B Tool Server
- * 
+ *
  * HTTP server that exposes E2B sandbox execution as a FunctionTool endpoint.
  * Subconscious calls this server when it needs to execute code.
  */
@@ -34,23 +34,10 @@ export interface E2BToolResponse {
   error?: string;
 }
 
-export interface FileUploadRequest {
-  tool_name?: string;
-  parameters?: {
-    localPath: string;
-    sandboxPath: string;
-    content?: string; // Base64 encoded content
-  };
-  request_id?: string;
-}
+let sandboxInstance: E2BSandbox | null = null;
 
-export interface FileDownloadRequest {
-  tool_name?: string;
-  parameters?: {
-    sandboxPath: string;
-    localPath?: string; // Optional, for reference
-  };
-  request_id?: string;
+function setSandboxInstance(sandbox: E2BSandbox) {
+  sandboxInstance = sandbox;
 }
 
 export class E2BToolServer {
@@ -59,7 +46,11 @@ export class E2BToolServer {
   private port: number;
   private host: string;
 
-  constructor(sandbox: E2BSandbox, port: number = 3001, host: string = "localhost") {
+  constructor(
+    sandbox: E2BSandbox,
+    port: number = 3001,
+    host: string = "localhost"
+  ) {
     this.sandbox = sandbox;
     this.port = port;
     this.host = host;
@@ -73,10 +64,7 @@ export class E2BToolServer {
       throw new Error("Server is already running");
     }
 
-    // Initialize sandbox if not already initialized
     await this.sandbox.initialize();
-
-    // Set sandbox instance for handlers
     setSandboxInstance(this.sandbox);
 
     this.server = Bun.serve({
@@ -86,7 +74,6 @@ export class E2BToolServer {
         const url = new URL(req.url);
         const method = req.method;
 
-        // CORS headers
         const corsHeaders = {
           "Access-Control-Allow-Origin": "*",
           "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -98,22 +85,10 @@ export class E2BToolServer {
         }
 
         try {
-          // Execute endpoint
           if (url.pathname === "/execute" && method === "POST") {
             return await handleExecute(req, corsHeaders);
           }
 
-          // Upload file endpoint
-          if (url.pathname === "/upload" && method === "POST") {
-            return await handleUpload(req, corsHeaders);
-          }
-
-          // Download file endpoint
-          if (url.pathname === "/download" && method === "POST") {
-            return await handleDownload(req, corsHeaders);
-          }
-
-          // Health check
           if (url.pathname === "/health" && method === "GET") {
             return new Response(
               JSON.stringify({ status: "ok", service: "e2b-tool-server" }),
@@ -129,7 +104,7 @@ export class E2BToolServer {
             headers: corsHeaders,
           });
         } catch (error: any) {
-          console.error(`[e2b-server] Error handling request: ${error.message}`);
+          console.error(`[e2b-server] Error: ${error.message}`);
           return new Response(
             JSON.stringify({ error: error.message || "Internal server error" }),
             {
@@ -161,18 +136,9 @@ export class E2BToolServer {
    * Get the server URL.
    */
   getUrl(): string {
-    if (!this.server) {
-      throw new Error("Server is not running");
-    }
+    if (!this.server) throw new Error("Server is not running");
     return `http://${this.host}:${this.port}`;
   }
-}
-
-// Handler functions (need access to sandbox instance)
-let sandboxInstance: E2BSandbox | null = null;
-
-export function setSandboxInstance(sandbox: E2BSandbox) {
-  sandboxInstance = sandbox;
 }
 
 async function handleExecute(
@@ -180,23 +146,16 @@ async function handleExecute(
   corsHeaders: Record<string, string>
 ): Promise<Response> {
   if (!sandboxInstance) {
-    return new Response(
-      JSON.stringify({ error: "Sandbox not initialized" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return new Response(JSON.stringify({ error: "Sandbox not initialized" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   const body = (await req.json()) as E2BToolRequest;
-  const params = (body.parameters || {}) as {
-    code?: string;
-    language?: SupportedLanguage;
-    timeout?: number;
-  };
+  const params = body.parameters;
 
-  if (!params.code) {
+  if (!params?.code) {
     return new Response(
       JSON.stringify({ error: "Missing required parameter: code" }),
       {
@@ -206,22 +165,23 @@ async function handleExecute(
     );
   }
 
+  const code = params.code;
   const language = params.language || "python";
-  const timeout = params.timeout ? params.timeout * 1000 : undefined; // Convert to milliseconds
+  const timeout = params.timeout ? params.timeout * 1000 : undefined;
 
-  // Log code preview
-  const codePreview = params.code.slice(0, 150).replace(/\n/g, "\\n");
+  const codePreview = code.slice(0, 150).replace(/\n/g, "\\n");
   log(`[e2b-server] Executing ${language} code (request_id: ${body.request_id || "none"})`);
-  log(`[e2b-server] Code: ${codePreview}${params.code.length > 150 ? "..." : ""}`);
+  log(`[e2b-server] Code: ${codePreview}${code.length > 150 ? "..." : ""}`);
 
   const startTime = Date.now();
   let result: ExecutionResult;
 
   try {
-    result = await sandboxInstance.executeCode(params.code, language, timeout);
+    result = await sandboxInstance.executeCode(code, language, timeout);
   } catch (error: any) {
     const duration = Date.now() - startTime;
     log(`[e2b-server] Execution failed: ${error.message}`);
+
     const response: E2BToolResponse = {
       success: false,
       stdout: "",
@@ -232,18 +192,23 @@ async function handleExecute(
     };
 
     return new Response(JSON.stringify(response), {
-      status: 200, // Return 200 even on error, let Subconscious handle it
+      status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 
-  // Log execution results
-  log(`[e2b-server] Result: success=${result.success}, exitCode=${result.exitCode}, duration=${result.duration}ms`);
+  log(
+    `[e2b-server] Result: success=${result.success}, exitCode=${result.exitCode}, duration=${result.duration}ms`
+  );
   if (result.stdout) {
-    log(`[e2b-server] stdout: ${result.stdout.slice(0, 200)}${result.stdout.length > 200 ? "..." : ""}`);
+    log(
+      `[e2b-server] stdout: ${result.stdout.slice(0, 200)}${result.stdout.length > 200 ? "..." : ""}`
+    );
   }
   if (result.stderr) {
-    log(`[e2b-server] stderr: ${result.stderr.slice(0, 200)}${result.stderr.length > 200 ? "..." : ""}`);
+    log(
+      `[e2b-server] stderr: ${result.stderr.slice(0, 200)}${result.stderr.length > 200 ? "..." : ""}`
+    );
   }
 
   const response: E2BToolResponse = {
@@ -259,133 +224,4 @@ async function handleExecute(
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
-}
-
-async function handleUpload(
-  req: Request,
-  corsHeaders: Record<string, string>
-): Promise<Response> {
-  if (!sandboxInstance) {
-    return new Response(
-      JSON.stringify({ error: "Sandbox not initialized" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  const body = (await req.json()) as FileUploadRequest;
-  const params = (body.parameters || {}) as {
-    localPath?: string;
-    sandboxPath?: string;
-    content?: string;
-  };
-
-  if (!params.sandboxPath) {
-    return new Response(
-      JSON.stringify({ error: "Missing required parameter: sandboxPath" }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  try {
-    // If content is provided (base64), write directly
-    if (params.content) {
-      const content = Buffer.from(params.content, "base64").toString("utf-8");
-      await sandboxInstance.writeFile(params.sandboxPath, content);
-    } else if (params.localPath) {
-      // Otherwise, read from local path
-      await sandboxInstance.uploadFile(params.localPath, params.sandboxPath);
-    } else {
-      return new Response(
-        JSON.stringify({
-          error: "Either 'content' or 'localPath' must be provided",
-        }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: `File uploaded to ${params.sandboxPath}`,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  } catch (error: any) {
-    return new Response(
-      JSON.stringify({ error: error.message || "Upload failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
-}
-
-async function handleDownload(
-  req: Request,
-  corsHeaders: Record<string, string>
-): Promise<Response> {
-  if (!sandboxInstance) {
-    return new Response(
-      JSON.stringify({ error: "Sandbox not initialized" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  const body = (await req.json()) as FileDownloadRequest;
-  const params = (body.parameters || {}) as {
-    sandboxPath?: string;
-    localPath?: string;
-  };
-
-  if (!params.sandboxPath) {
-    return new Response(
-      JSON.stringify({ error: "Missing required parameter: sandboxPath" }),
-      {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
-
-  try {
-    // Read file from sandbox and return as base64
-    const content = await sandboxInstance.readFile(params.sandboxPath);
-    const base64Content = Buffer.from(content, "utf-8").toString("base64");
-
-    return new Response(
-      JSON.stringify({
-        success: true,
-        content: base64Content,
-        sandboxPath: params.sandboxPath,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  } catch (error: any) {
-    return new Response(
-      JSON.stringify({ error: error.message || "Download failed" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
 }

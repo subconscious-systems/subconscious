@@ -1,16 +1,15 @@
 /**
  * Configuration
- * 
+ *
  * Default settings for the agent. Can be overridden via environment variables
  * or an optional agent.config.json file.
  */
 
 export interface AgentConfig {
-  verbose: boolean; // Show detailed logs
+  verbose: boolean;
   timeouts: {
     defaultExecution: number; // milliseconds
     maxExecution: number;
-    perStep: number;
   };
   files: {
     maxSizeMB: number;
@@ -20,10 +19,6 @@ export interface AgentConfig {
   environment: {
     filterSensitive: boolean;
     sensitivePatterns: string[];
-  };
-  limits: {
-    maxSteps: number;
-    maxRefinements: number;
   };
   tunnel: {
     enabled: boolean;
@@ -37,15 +32,14 @@ export interface AgentConfig {
   };
 }
 
-// Global verbose flag - can be accessed anywhere
-export let verbose = process.env.VERBOSE === "true";
+/** Global verbose flag */
+export const verbose = process.env.VERBOSE === "true";
 
 export const defaultConfig: AgentConfig = {
-  verbose: process.env.VERBOSE === "true", // Default false unless VERBOSE=true
+  verbose: process.env.VERBOSE === "true",
   timeouts: {
     defaultExecution: 5 * 60 * 1000, // 5 minutes
     maxExecution: 30 * 60 * 1000, // 30 minutes
-    perStep: 10 * 60 * 1000, // 10 minutes per step
   },
   files: {
     maxSizeMB: 10,
@@ -76,15 +70,11 @@ export const defaultConfig: AgentConfig = {
       "API_KEY",
     ],
   },
-  limits: {
-    maxSteps: 10,
-    maxRefinements: 3,
-  },
   tunnel: {
     enabled: true,
-    autoStart: true, // Automatically start cloudflared tunnel
-    port: 3001, // Port for tool server
-    cloudflaredPath: undefined, // Auto-detect from PATH
+    autoStart: true,
+    port: 3001,
+    cloudflaredPath: undefined,
   },
   tools: {
     port: 3001,
@@ -93,7 +83,7 @@ export const defaultConfig: AgentConfig = {
 };
 
 /**
- * Load configuration from file if it exists.
+ * Load configuration from file if it exists, otherwise use defaults.
  */
 export async function loadConfig(): Promise<AgentConfig> {
   const { promises: fs } = await import("fs");
@@ -106,7 +96,6 @@ export async function loadConfig(): Promise<AgentConfig> {
     const userConfig = JSON.parse(content);
     return { ...defaultConfig, ...userConfig };
   } catch {
-    // Config file doesn't exist, use defaults
     return defaultConfig;
   }
 }

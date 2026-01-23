@@ -5,53 +5,66 @@ import { E2BToolServer } from "../tools/e2bServer";
 import { setupTunnel, stopTunnel, type TunnelResult } from "../tools/tunnel";
 import { parseFileReferences } from "./fileParser";
 import { loadConfig, verbose } from "../config";
+import type { AgentTask } from "../types/agent";
 
 /** Log only when verbose mode is enabled */
 function log(message: string) {
   if (verbose) console.log(message);
 }
-import type { AgentTask } from "../types/agent";
 
-/**
- * CLI Entrypoint: Subconscious-Orchestrated Agent
- * 
- * Design: Subconscious handles all reasoning and tool orchestration
- * - User provides task
- * - Subconscious streams reasoning and tool calls
- * - E2B execution happens via FunctionTool HTTP endpoint
- * - Subconscious continues based on tool results
- */
+/** Spinner frames for loading animation */
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-/**
- * Extract tool calls from streamed content.
- * Pattern matching similar to school_scheduler implementation.
- */
-function extractToolCalls(
-  content: string
-): Array<{ tool: string; args: Record<string, unknown> }> {
-  const toolCalls: Array<{ tool: string; args: Record<string, unknown> }> = [];
+/** ANSI color codes for terminal output */
+const COLORS = {
+  reset: "\x1b[0m",
+  bold: "\x1b[1m",
+  dim: "\x1b[2m",
+  cyan: "\x1b[36m",
+  magenta: "\x1b[35m",
+  yellow: "\x1b[33m",
+  green: "\x1b[32m",
+  blue: "\x1b[34m",
+  white: "\x1b[37m",
+  gray: "\x1b[90m",
+} as const;
 
-  // Look for tool call patterns in the content
-  // Pattern: "name": "...", "arguments": {...}
-  const toolCallPattern =
-    /"name"\s*:\s*"([^"]+)".*?"arguments"\s*:\s*(\{[^}]+\})/g;
-  let match;
+/** Simple loading spinner for setup phase */
+class Spinner {
+  private interval: ReturnType<typeof setInterval> | null = null;
+  private frameIndex = 0;
+  private message: string;
 
-  while ((match = toolCallPattern.exec(content)) !== null) {
-    try {
-      const tool = match[1];
-      const args = JSON.parse(match[2]);
-      toolCalls.push({ tool, args });
-    } catch {
-      // Skip malformed tool calls
-    }
+  constructor(message: string) {
+    this.message = message;
   }
 
-  return toolCalls;
+  start(): void {
+    this.stop();
+    process.stdout.write("\x1b[?25l"); // Hide cursor
+
+    this.interval = setInterval(() => {
+      const frame = SPINNER_FRAMES[this.frameIndex];
+      process.stdout.write(`\r\x1b[36m${frame}\x1b[0m ${this.message}`);
+      this.frameIndex = (this.frameIndex + 1) % SPINNER_FRAMES.length;
+    }, 80);
+  }
+
+  update(message: string): void {
+    this.message = message;
+  }
+
+  stop(): void {
+    if (this.interval) {
+      clearInterval(this.interval);
+      this.interval = null;
+      process.stdout.write("\r\x1b[K\x1b[?25h"); // Clear line and show cursor
+    }
+  }
 }
 
 /**
- * Extract thoughts from streamed content.
+ * Extract thoughts from Subconscious streamed content.
  */
 function extractThoughts(content: string): string[] {
   const thoughts: string[] = [];
@@ -76,6 +89,62 @@ function extractThoughts(content: string): string[] {
 }
 
 /**
+ * Extract tool calls from Subconscious streamed content.
+ */
+function extractToolCalls(
+  content: string
+): Array<{ tool: string; args: Record<string, unknown> }> {
+  const toolCalls: Array<{ tool: string; args: Record<string, unknown> }> = [];
+  const toolCallPattern =
+    /"name"\s*:\s*"([^"]+)".*?"arguments"\s*:\s*(\{[^}]+\})/g;
+  let match;
+
+  while ((match = toolCallPattern.exec(content)) !== null) {
+    try {
+      const tool = match[1];
+      const args = JSON.parse(match[2]);
+      toolCalls.push({ tool, args });
+    } catch {
+      // Skip malformed tool calls
+    }
+  }
+
+  return toolCalls;
+}
+
+/**
+ * Extract the final answer from Subconscious response content.
+ */
+function extractFinalAnswer(content: string): string | null {
+  const answerStart = content.indexOf('"answer"');
+  if (answerStart === -1) return null;
+
+  const colonPos = content.indexOf(":", answerStart);
+  if (colonPos === -1) return null;
+
+  let openQuote = content.indexOf('"', colonPos + 1);
+  if (openQuote === -1) return null;
+
+  // Find closing quote (handle escaped quotes)
+  let closeQuote = openQuote + 1;
+  while (closeQuote < content.length) {
+    if (content[closeQuote] === '"' && content[closeQuote - 1] !== "\\") {
+      break;
+    }
+    closeQuote++;
+  }
+
+  if (closeQuote >= content.length) return null;
+
+  const rawAnswer = content.slice(openQuote + 1, closeQuote);
+  return rawAnswer
+    .replace(/\\n/g, "\n")
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, "\\")
+    .replace(/\\t/g, "\t");
+}
+
+/**
  * Run agent with provided task and context (non-interactive).
  * Used for testing and programmatic access.
  */
@@ -83,7 +152,6 @@ export async function runAgentWithTask(
   taskDescription: string,
   context?: string
 ): Promise<void> {
-  // Check for required environment variables
   const apiKey = process.env.SUBCONSCIOUS_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -92,7 +160,6 @@ export async function runAgentWithTask(
     );
   }
 
-  // Load configuration
   const config = await loadConfig();
 
   // Parse file references from task description and context
@@ -101,9 +168,17 @@ export async function runAgentWithTask(
     context || undefined
   );
 
-  // Collect environment variables from .env (filter sensitive ones)
-  const envVars: Record<string, string> = {};
+  if (fileParseResult.files.length > 0) {
+    console.log(
+      `[file] Parsed ${fileParseResult.files.length} file reference(s):`
+    );
+    for (const f of fileParseResult.files) {
+      console.log(`  ${f.type}: ${f.localPath} → ${f.sandboxPath}`);
+    }
+  }
 
+  // Collect environment variables (filter sensitive ones)
+  const envVars: Record<string, string> = {};
   if (config.environment.filterSensitive) {
     for (const [key, value] of Object.entries(process.env)) {
       if (
@@ -116,7 +191,6 @@ export async function runAgentWithTask(
       }
     }
   } else {
-    // Include all env vars if filtering is disabled
     for (const [key, value] of Object.entries(process.env)) {
       if (value) {
         envVars[key] = value;
@@ -131,7 +205,6 @@ export async function runAgentWithTask(
     environmentVariables: Object.keys(envVars).length > 0 ? envVars : undefined,
   };
 
-  // Initialize components
   const sandbox = new E2BSandbox();
   const toolServer = new E2BToolServer(
     sandbox,
@@ -140,20 +213,26 @@ export async function runAgentWithTask(
   );
   let tunnelResult: TunnelResult | null = null;
 
+  const spinner = new Spinner("Initializing sandbox...");
+  spinner.start();
+
   try {
-    // Initialize E2B sandbox
     await sandbox.initialize();
 
     // Upload input files to sandbox
     if (task.files && task.files.length > 0) {
       const inputFiles = task.files.filter((f) => f.type === "input");
       if (inputFiles.length > 0) {
+        spinner.update(`Uploading ${inputFiles.length} file(s)...`);
         log(`[file] Uploading ${inputFiles.length} file(s)...`);
         for (const file of inputFiles) {
           try {
             await sandbox.uploadFile(file.localPath, file.sandboxPath);
           } catch (error: any) {
-            console.error(`[file] Failed to upload ${file.localPath}: ${error.message}`);
+            spinner.stop();
+            console.error(
+              `[file] Failed to upload ${file.localPath}: ${error.message}`
+            );
             throw error;
           }
         }
@@ -167,19 +246,23 @@ export async function runAgentWithTask(
     }
 
     // Start tool server
+    spinner.update("Starting tool server...");
     const localUrl = await toolServer.start();
     log(`[server] Tool server running at ${localUrl}`);
 
     // Setup tunnel
+    spinner.update("Setting up tunnel...");
     try {
       tunnelResult = await setupTunnel(localUrl, config.tunnel);
       log(`[tunnel] Using tunnel: ${tunnelResult.url}`);
     } catch (error: any) {
+      spinner.stop();
       console.error(`[tunnel] ${error.message}`);
       throw error;
     }
 
-    // First verify local server is responding
+    // Verify local server
+    spinner.update("Verifying server connectivity...");
     log("[server] Verifying local server...");
     try {
       const localHealthResponse = await fetch(`${localUrl}/health`, {
@@ -189,28 +272,26 @@ export async function runAgentWithTask(
         log("[server] ✓ Local server responding");
       }
     } catch (error: any) {
+      spinner.stop();
       console.error(`[server] ✗ Local server not responding: ${error.message}`);
       throw new Error("Local tool server is not responding");
     }
 
-    // Quick tunnel check - Subconscious calls from their servers, so local verification
-    // often fails even when the tunnel works. Do a quick check but proceed regardless.
+    // Quick tunnel check
+    spinner.update("Checking tunnel connectivity...");
     log("[tunnel] Quick connectivity check...");
-    await new Promise((r) => setTimeout(r, 1000)); // Brief pause for DNS
-    
-    let tunnelVerified = false;
+    await new Promise((r) => setTimeout(r, 1000));
+
     try {
       const healthUrl = `${tunnelResult.url}/health`;
-      const response = await fetch(healthUrl, { 
+      const response = await fetch(healthUrl, {
         method: "GET",
         signal: AbortSignal.timeout(5000),
       });
       if (response.ok) {
         log("[tunnel] ✓ Tunnel verified");
-        tunnelVerified = true;
       }
     } catch {
-      // Local verification often fails, but Subconscious can still reach the tunnel
       log("[tunnel] Local check failed (normal - Subconscious uses different route)");
     }
 
@@ -220,13 +301,27 @@ export async function runAgentWithTask(
       instructions += `\n\nContext: ${task.context}`;
     }
 
-    // Add file context if files were uploaded
+    // Add file context
     if (task.files && task.files.length > 0) {
-      const fileList = task.files
-        .filter((f) => f.type === "input")
-        .map((f) => `- ${f.sandboxPath} (from ${f.localPath})`)
-        .join("\n");
-      instructions += `\n\nUploaded files:\n${fileList}`;
+      const inputFiles = task.files.filter((f) => f.type === "input");
+      const outputFiles = task.files.filter((f) => f.type === "output");
+
+      if (inputFiles.length > 0) {
+        const inputList = inputFiles
+          .map((f) => `- ${f.sandboxPath}`)
+          .join("\n");
+        instructions += `\n\nInput files (already uploaded to sandbox):\n${inputList}`;
+      }
+
+      if (outputFiles.length > 0) {
+        const outputList = outputFiles
+          .map((f) => `- Save to: ${f.sandboxPath}`)
+          .join("\n");
+        instructions += `\n\nOUTPUT FILES - Save to these EXACT paths:\n${outputList}`;
+        instructions +=
+          "\n\nIMPORTANT: Use these exact sandbox paths. " +
+          "For images use plt.savefig(), for text/JSON use open() with write mode.";
+      }
     }
 
     // Register FunctionTool with multi-language support
@@ -234,12 +329,12 @@ export async function runAgentWithTask(
       type: "function" as const,
       name: "execute_code",
       description:
-        "Execute code in an isolated E2B sandbox. Supports Python, JavaScript, TypeScript, " +
-        "C++, C, Go, Rust, Ruby, Java, and Bash. Compiled languages (C++, C, Rust, Java) " +
-        "are automatically compiled before execution. Returns stdout, stderr, exit code, and duration.",
+        "Execute code in an isolated E2B sandbox. Supports Python, JavaScript, " +
+        "TypeScript, C++, C, Go, Rust, Ruby, Java, and Bash. Returns stdout, " +
+        "stderr, exit code, and duration.",
       url: `${tunnelResult.url}/execute`,
       method: "POST" as const,
-      timeout: 300, // 5 minutes
+      timeout: 300,
       parameters: {
         type: "object",
         properties: {
@@ -249,7 +344,18 @@ export async function runAgentWithTask(
           },
           language: {
             type: "string",
-            enum: ["python", "bash", "javascript", "typescript", "cpp", "c", "go", "rust", "ruby", "java"],
+            enum: [
+              "python",
+              "bash",
+              "javascript",
+              "typescript",
+              "cpp",
+              "c",
+              "go",
+              "rust",
+              "ruby",
+              "java",
+            ],
             description: "Programming language. Use 'cpp' for C++. Default: python",
           },
           timeout: {
@@ -261,9 +367,10 @@ export async function runAgentWithTask(
       },
     };
 
-    // Initialize Subconscious client
     const client = new Subconscious({ apiKey });
 
+    spinner.stop();
+    console.log("\x1b[32m✓\x1b[0m Setup complete\n");
     console.log("[agent] Starting Subconscious agent...\n");
     console.log("=".repeat(60) + "\n");
 
@@ -272,15 +379,13 @@ export async function runAgentWithTask(
       engine: "tim-gpt",
       input: {
         instructions,
-        // Type assertion needed for FunctionTool with URL
         tools: [e2bTool] as any,
       },
     });
 
     let fullContent = "";
-    let lastSentThoughts: string[] = [];
-    let lastSentToolCalls: string[] = [];
-    let answerStarted = false;
+    const displayedThoughts: string[] = [];
+    const displayedToolCalls: string[] = [];
 
     for await (const event of stream) {
       if (event.type === "delta") {
@@ -288,98 +393,37 @@ export async function runAgentWithTask(
 
         // Extract and display new thoughts
         const thoughts = extractThoughts(fullContent);
-        const newThoughts = thoughts.filter(
-          (t) => !lastSentThoughts.includes(t)
-        );
-
-        for (const thought of newThoughts) {
-          console.log(`💭 ${thought}\n`);
-          lastSentThoughts.push(thought);
+        for (const thought of thoughts) {
+          if (!displayedThoughts.includes(thought)) {
+            console.log(`💭 ${thought}\n`);
+            displayedThoughts.push(thought);
+          }
         }
 
         // Extract and display tool calls
         const toolCalls = extractToolCalls(fullContent);
         for (const tc of toolCalls) {
           const key = `${tc.tool}:${JSON.stringify(tc.args)}`;
-          if (!lastSentToolCalls.includes(key)) {
+          if (!displayedToolCalls.includes(key)) {
             console.log(`🔧 Calling tool: ${tc.tool}`);
             if (tc.tool === "execute_code" && tc.args.code) {
+              const codeStr = String(tc.args.code);
               const codePreview =
-                typeof tc.args.code === "string"
-                  ? tc.args.code.slice(0, 100) +
-                    (tc.args.code.length > 100 ? "..." : "")
-                  : String(tc.args.code);
+                codeStr.slice(0, 100) + (codeStr.length > 100 ? "..." : "");
               console.log(`   Code: ${codePreview}\n`);
             }
-            lastSentToolCalls.push(key);
+            displayedToolCalls.push(key);
           }
-        }
-
-        // Extract and display answer as it streams
-        try {
-          const jsonMatch = fullContent.match(/"answer"\s*:\s*"([^"]*)"/);
-          if (jsonMatch) {
-            const answerText = jsonMatch[1]
-              .replace(/\\n/g, "\n")
-              .replace(/\\"/g, '"')
-              .replace(/\\\\/g, "\\");
-
-            if (answerText && !answerStarted) {
-              console.log("\n📋 Answer:\n");
-              answerStarted = true;
-            }
-
-            // Display new answer content (simple approach - could be improved)
-            if (answerStarted) {
-              // For now, we'll display the full answer at the end
-              // Real-time answer streaming would require more sophisticated parsing
-            }
-          }
-        } catch {
-          // Ignore parse errors during streaming
         }
       } else if (event.type === "done") {
         console.log("\n" + "=".repeat(60));
         console.log("[agent] Agent completed\n");
 
-        // Try to extract final answer - handle escaped quotes properly
-        try {
-          // Look for "answer": " and then capture everything until unescaped "
-          const answerStart = fullContent.indexOf('"answer"');
-          if (answerStart !== -1) {
-            // Find the colon and opening quote
-            const colonPos = fullContent.indexOf(':', answerStart);
-            if (colonPos !== -1) {
-              // Find opening quote after colon
-              let openQuote = fullContent.indexOf('"', colonPos + 1);
-              if (openQuote !== -1) {
-                // Find closing quote (handle escaped quotes)
-                let closeQuote = openQuote + 1;
-                while (closeQuote < fullContent.length) {
-                  if (fullContent[closeQuote] === '"' && fullContent[closeQuote - 1] !== '\\') {
-                    break;
-                  }
-                  closeQuote++;
-                }
-                
-                if (closeQuote < fullContent.length) {
-                  const rawAnswer = fullContent.slice(openQuote + 1, closeQuote);
-                  const answer = rawAnswer
-                    .replace(/\\n/g, "\n")
-                    .replace(/\\"/g, '"')
-                    .replace(/\\\\/g, "\\")
-                    .replace(/\\t/g, "\t");
-                  
-                  if (answer.trim()) {
-                    console.log("📋 Final Answer:\n");
-                    console.log(answer + "\n");
-                  }
-                }
-              }
-            }
-          }
-        } catch {
-          // If answer extraction fails, show raw content
+        const answer = extractFinalAnswer(fullContent);
+        if (answer?.trim()) {
+          console.log("📋 Final Answer:\n");
+          console.log(answer + "\n");
+        } else {
           console.log("📋 Response received\n");
         }
 
@@ -397,11 +441,12 @@ export async function runAgentWithTask(
     if (task.files && task.files.length > 0) {
       const outputFiles = task.files.filter((f) => f.type === "output");
       if (outputFiles.length > 0) {
-        console.log(`\n[file] Downloading ${outputFiles.length} output file(s)...`);
+        console.log(
+          `\n[file] Downloading ${outputFiles.length} output file(s)...`
+        );
         let downloadedCount = 0;
         for (const file of outputFiles) {
           try {
-            // Check if file exists in sandbox before downloading
             const files = await sandbox.listFiles("/home/user/output");
             const fileExists = files.some(
               (f: any) => f.name === file.sandboxPath.split("/").pop()
@@ -410,29 +455,33 @@ export async function runAgentWithTask(
             if (fileExists) {
               await sandbox.downloadFile(file.sandboxPath, file.localPath);
               downloadedCount++;
-              log(`[file] ✓ Downloaded: ${file.localPath}`);
+              console.log(`[file] ✓ Downloaded: ${file.localPath}`);
             } else {
-              log(`[file] ⚠ Output file not found in sandbox: ${file.sandboxPath}`);
+              console.log(
+                `[file] ⚠ Output file not found in sandbox: ${file.sandboxPath}`
+              );
             }
           } catch (error: any) {
-            console.error(`[file] ✗ Failed to download ${file.sandboxPath}: ${error.message}`);
+            console.error(
+              `[file] ✗ Failed to download ${file.sandboxPath}: ${error.message}`
+            );
           }
         }
         if (downloadedCount > 0) {
-          log(`[file] Downloaded ${downloadedCount} file(s) successfully`);
+          console.log(`[file] ✓ ${downloadedCount} file(s) saved successfully`);
         }
       }
     }
 
     log("\n[done] Agent finished");
   } catch (error: any) {
+    spinner.stop();
     console.error("\n❌ Error:", error.message);
     if (error.stack) {
       console.error(error.stack);
     }
     throw error;
   } finally {
-    // Cleanup
     if (tunnelResult?.process) {
       stopTunnel(tunnelResult.process);
     }
@@ -442,50 +491,127 @@ export async function runAgentWithTask(
 }
 
 /**
- * Interactive CLI entrypoint.
+ * Interactive CLI entrypoint with command history support.
  */
 export async function runAgent(): Promise<void> {
-  // Check for required environment variables
   const apiKey = process.env.SUBCONSCIOUS_API_KEY;
   if (!apiKey) {
-    console.error("❌ Error: SUBCONSCIOUS_API_KEY environment variable is not set");
+    console.error(
+      "❌ Error: SUBCONSCIOUS_API_KEY environment variable is not set"
+    );
     console.error("   Get your API key at: https://www.subconscious.dev/platform");
     process.exit(1);
   }
 
-  // Setup readline for interactive input
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout,
+    terminal: true,
+    historySize: 100,
   });
 
-  const question = (prompt: string): Promise<string> => {
+  const history: string[] = [];
+  const c = COLORS;
+
+  const question = (prompt: string, multiLine = false): Promise<string> => {
     return new Promise((resolve) => {
-      rl.question(prompt, (answer) => {
-        resolve(answer.trim());
-      });
+      (rl as any).history = [...history];
+
+      if (multiLine) {
+        console.log(`${c.dim}(press Enter twice on empty line to submit)${c.reset}`);
+        const lines: string[] = [];
+        let lastLineEmpty = false;
+
+        const lineHandler = (line: string) => {
+          const isEmpty = line.trim() === "";
+
+          if (isEmpty && lastLineEmpty) {
+            rl.removeListener("line", lineHandler);
+            if (lines.length > 0 && lines[lines.length - 1].trim() === "") {
+              lines.pop();
+            }
+            const fullText = lines.join("\n").trim();
+            if (fullText && !history.includes(fullText)) {
+              history.unshift(fullText);
+              if (history.length > 100) history.pop();
+            }
+            resolve(fullText);
+          } else {
+            lines.push(line);
+            lastLineEmpty = isEmpty;
+          }
+        };
+
+        process.stdout.write(prompt);
+        rl.on("line", lineHandler);
+      } else {
+        rl.question(prompt, (answer) => {
+          const trimmed = answer.trim();
+          if (trimmed && !history.includes(trimmed)) {
+            history.unshift(trimmed);
+            if (history.length > 100) history.pop();
+          }
+          resolve(trimmed);
+        });
+      }
     });
   };
 
-  // Welcome message
-  console.log("\n🤖 CLI Agent (Subconscious + E2B)");
-  console.log("==================================\n");
-  console.log("This agent uses:");
-  console.log("  • Subconscious = reasoning & tool orchestration");
-  console.log("  • E2B = code execution environment (via FunctionTool)");
-  console.log("\nTip: Use 'file: ./path' to upload files, 'output: ./path' to specify output files\n");
+  // ASCII art intro
+  console.log(`
+${c.cyan}${c.bold}  ┌─┐┬ ┬┌┐ ┌─┐┌─┐┌┐┌┌─┐┌─┐┬┌─┐┬ ┬┌─┐
+  └─┐│ │├┴┐│  │ ││││└─┐│  ││ ││ │└─┐
+  └─┘└─┘└─┘└─┘└─┘┘└┘└─┘└─┘┴└─┘└─┘└─┘${c.reset}  ${c.dim}+ E2B Sandbox${c.reset}
 
-  // Get task from user
-  const taskDescription = await question("Enter task: ");
-  if (!taskDescription) {
-    console.error("❌ Task description is required");
-    rl.close();
-    process.exit(1);
+${c.dim}──────────────────────────────────────────────────${c.reset}
+
+  ${c.green}▸${c.reset} ${c.bold}Powered by${c.reset}
+    ${c.cyan}Subconscious${c.reset} ${c.dim}─${c.reset} Long-horizon reasoning & tool orchestration
+    ${c.yellow}E2B Sandbox${c.reset}  ${c.dim}─${c.reset} Secure cloud code execution
+
+  ${c.green}▸${c.reset} ${c.bold}Quick Tips${c.reset}
+    ${c.dim}•${c.reset} Include ${c.cyan}file: ./data.csv${c.reset} in your task to upload a file
+    ${c.dim}•${c.reset} Include ${c.cyan}output: ./result.json${c.reset} to download output when done
+    ${c.dim}•${c.reset} Multi-line: type task, then ${c.white}2 blank lines${c.reset} to submit
+    ${c.dim}•${c.reset} Type ${c.white}exit${c.reset} to quit
+
+  ${c.green}▸${c.reset} ${c.bold}Example${c.reset}
+    ${c.dim}"Analyze file: ./sales.csv and save a chart to output: ./chart.png"${c.reset}
+
+${c.dim}──────────────────────────────────────────────────${c.reset}
+`);
+
+  // REPL loop
+  while (true) {
+    const taskDescription = await question(
+      `${c.green}${c.bold}▸${c.reset} ${c.bold}Task${c.reset} ${c.dim}›${c.reset} `,
+      true
+    );
+
+    if (
+      !taskDescription ||
+      taskDescription.toLowerCase() === "exit" ||
+      taskDescription.toLowerCase() === "quit"
+    ) {
+      console.log(`\n${c.dim}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
+      console.log(`${c.cyan}${c.bold}  👋 Until next time!${c.reset}`);
+      console.log(`${c.dim}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
+      break;
+    }
+
+    const contextInput = await question(
+      `${c.blue}${c.bold}▸${c.reset} ${c.bold}Context${c.reset} ${c.dim}(optional)${c.reset} ${c.dim}›${c.reset} `,
+      false
+    );
+
+    try {
+      await runAgentWithTask(taskDescription, contextInput);
+    } catch (error: any) {
+      console.error(`\n${c.bold}❌ Task failed:${c.reset} ${error.message}\n`);
+    }
+
+    console.log(`\n${c.dim}${"─".repeat(50)}${c.reset}\n`);
   }
 
-  const contextInput = await question("Context (optional, press Enter to skip): ");
   rl.close();
-
-  // Call the non-interactive version
-  await runAgentWithTask(taskDescription, contextInput);
 }
