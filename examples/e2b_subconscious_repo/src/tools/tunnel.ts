@@ -143,7 +143,7 @@ async function startCloudflaredTunnel(
       stderr += output;
       checkForUrl(output);
 
-      // Log real errors (not normal startup messages)
+      // Log real errors (not normal startup/shutdown messages)
       const lines = output.split("\n");
       for (const line of lines) {
         const trimmed = line.trim();
@@ -154,7 +154,13 @@ async function startCloudflaredTunnel(
             trimmed.includes("ERR")) &&
           !trimmed.includes("Connection terminated") &&
           !trimmed.includes("Retrying connection") &&
-          !trimmed.includes("originCertPath")
+          !trimmed.includes("originCertPath") &&
+          // Filter out normal shutdown messages
+          !trimmed.includes("context canceled") &&
+          !trimmed.includes("accept stream listener") &&
+          !trimmed.includes("no more connections active") &&
+          !trimmed.includes("Application error 0x0") &&
+          !trimmed.includes("failed to run the datagram handler")
         ) {
           console.error(`[tunnel] ${trimmed}`);
         }

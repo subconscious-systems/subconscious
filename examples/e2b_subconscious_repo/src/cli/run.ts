@@ -114,16 +114,18 @@ function extractToolCalls(
 
 /**
  * Extract the final answer from Subconscious response content.
+ * Returns { finalAnswer, rawAnswer } where finalAnswer is the cleaned "Final_answer:" 
+ * portion if found, otherwise null. rawAnswer is the full answer text.
  */
-function extractFinalAnswer(content: string): string | null {
+function extractFinalAnswer(content: string): { finalAnswer: string | null; rawAnswer: string | null } {
   const answerStart = content.indexOf('"answer"');
-  if (answerStart === -1) return null;
+  if (answerStart === -1) return { finalAnswer: null, rawAnswer: null };
 
   const colonPos = content.indexOf(":", answerStart);
-  if (colonPos === -1) return null;
+  if (colonPos === -1) return { finalAnswer: null, rawAnswer: null };
 
   let openQuote = content.indexOf('"', colonPos + 1);
-  if (openQuote === -1) return null;
+  if (openQuote === -1) return { finalAnswer: null, rawAnswer: null };
 
   // Find closing quote (handle escaped quotes)
   let closeQuote = openQuote + 1;
@@ -134,14 +136,28 @@ function extractFinalAnswer(content: string): string | null {
     closeQuote++;
   }
 
-  if (closeQuote >= content.length) return null;
+  if (closeQuote >= content.length) return { finalAnswer: null, rawAnswer: null };
 
-  const rawAnswer = content.slice(openQuote + 1, closeQuote);
-  return rawAnswer
+  const rawAnswer = content.slice(openQuote + 1, closeQuote)
     .replace(/\\n/g, "\n")
     .replace(/\\"/g, '"')
     .replace(/\\\\/g, "\\")
     .replace(/\\t/g, "\t");
+
+  // Try to extract just the "Final_answer:" or "final_answer:" portion
+  const finalAnswerPatterns = [
+    /Final[_\s]?[Aa]nswer\s*:\s*([\s\S]*)/i,
+    /final[_\s]?answer\s*:\s*([\s\S]*)/i,
+  ];
+
+  for (const pattern of finalAnswerPatterns) {
+    const match = rawAnswer.match(pattern);
+    if (match && match[1]?.trim()) {
+      return { finalAnswer: match[1].trim(), rawAnswer };
+    }
+  }
+
+  return { finalAnswer: null, rawAnswer };
 }
 
 /**
@@ -419,12 +435,17 @@ export async function runAgentWithTask(
         console.log("\n" + "=".repeat(60));
         console.log("[agent] Agent completed\n");
 
-        const answer = extractFinalAnswer(fullContent);
-        if (answer?.trim()) {
-          console.log("📋 Final Answer:\n");
-          console.log(answer + "\n");
+        const { finalAnswer, rawAnswer } = extractFinalAnswer(fullContent);
+        if (finalAnswer) {
+          // Show just the clean final answer
+          console.log(`${COLORS.magenta}${COLORS.bold}📋 Final Answer:${COLORS.reset}\n`);
+          console.log(`${COLORS.cyan}${finalAnswer}${COLORS.reset}\n`);
+        } else if (rawAnswer?.trim()) {
+          // Fallback: show the full raw answer
+          console.log(`${COLORS.magenta}${COLORS.bold}📋 Final Answer:${COLORS.reset}\n`);
+          console.log(`${COLORS.cyan}${rawAnswer}${COLORS.reset}\n`);
         } else {
-          console.log("📋 Response received\n");
+          console.log(`${COLORS.magenta}${COLORS.bold}📋 Response received${COLORS.reset}\n`);
         }
 
         break;
