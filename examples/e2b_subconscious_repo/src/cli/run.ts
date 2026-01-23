@@ -421,10 +421,10 @@ export async function runAgentWithTask(
 
         const answer = extractFinalAnswer(fullContent);
         if (answer?.trim()) {
-          console.log("📋 Final Answer:\n");
-          console.log(answer + "\n");
+          console.log(`${COLORS.magenta}${COLORS.bold}📋 Final Answer:${COLORS.reset}\n`);
+          console.log(`${COLORS.cyan}${answer}${COLORS.reset}\n`);
         } else {
-          console.log("📋 Response received\n");
+          console.log(`${COLORS.magenta}${COLORS.bold}📋 Response received${COLORS.reset}\n`);
         }
 
         break;
