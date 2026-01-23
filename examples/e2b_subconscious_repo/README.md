@@ -165,21 +165,6 @@ Create `agent.config.json` to customize:
 }
 ```
 
-## Testing
-
-Run the test suite to verify everything works:
-
-```bash
-# Run all tests
-bun test
-
-# Run specific test suites
-bun test tests/output_files.test.ts     # Test file output (PNG, MD, JSON)
-bun test tests/comprehensive.test.ts    # Full integration tests
-bun test tests/fibonacci.test.ts        # Simple code execution
-bun test tests/file_upload.test.ts      # File upload functionality
-```
-
 ## Troubleshooting
 
 ### cloudflared not found

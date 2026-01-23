@@ -3,3 +3,9 @@ dist/
 .env
 *.log
 .DS_Store
+
+# Tests
+tests/
+
+# Data files
+*.csv
