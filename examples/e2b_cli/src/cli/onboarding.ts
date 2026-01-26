@@ -56,14 +56,17 @@ async function saveKeys(config: StoredConfig): Promise<void> {
 }
 
 /**
- * Open URL in default browser
+ * Open URL in default browser (works on macOS, Windows, and Linux)
  */
 function openBrowser(url: string): void {
   const { exec } = require("child_process");
+  // Windows: `start` treats first quoted arg as window title, so we pass empty title ""
+  // macOS: `open` works directly
+  // Linux: `xdg-open` is the standard
   const cmd = process.platform === "darwin" 
     ? `open "${url}"` 
     : process.platform === "win32" 
-      ? `start "${url}"` 
+      ? `start "" "${url}"` 
       : `xdg-open "${url}"`;
   exec(cmd);
 }
