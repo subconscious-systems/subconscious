@@ -1,0 +1,107 @@
+[
+  {
+    "name":"Alice Chen",
+    "country":"USA",
+    "plan":"Enterprise",
+    "total_spend":10300.0,
+    "ticket_count":3
+  },
+  {
+    "name":"Carol Williams",
+    "country":"USA",
+    "plan":"Enterprise",
+    "total_spend":6500.0,
+    "ticket_count":3
+  },
+  {
+    "name":"Frank Johnson",
+    "country":"USA",
+    "plan":"Enterprise",
+    "total_spend":6300.0,
+    "ticket_count":2
+  },
+  {
+    "name":"James Wilson",
+    "country":"Australia",
+    "plan":"Enterprise",
+    "total_spend":6000.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Maria Garcia",
+    "country":"Spain",
+    "plan":"Enterprise",
+    "total_spend":4200.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Grace Liu",
+    "country":"China",
+    "plan":"Pro",
+    "total_spend":2090.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Bob Martinez",
+    "country":"Mexico",
+    "plan":"Pro",
+    "total_spend":1340.0,
+    "ticket_count":2
+  },
+  {
+    "name":"Olivia Martin",
+    "country":"France",
+    "plan":"Pro",
+    "total_spend":890.0,
+    "ticket_count":0
+  },
+  {
+    "name":"Emma Schmidt",
+    "country":"Germany",
+    "plan":"Pro",
+    "total_spend":890.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Leo Tanaka",
+    "country":"Japan",
+    "plan":"Pro",
+    "total_spend":890.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Isabella Rossi",
+    "country":"Italy",
+    "plan":"Pro",
+    "total_spend":890.0,
+    "ticket_count":1
+  },
+  {
+    "name":"David Kim",
+    "country":"South Korea",
+    "plan":"Basic",
+    "total_spend":290.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Henry Brown",
+    "country":"UK",
+    "plan":"Basic",
+    "total_spend":290.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Karen Taylor",
+    "country":"Canada",
+    "plan":"Basic",
+    "total_spend":290.0,
+    "ticket_count":1
+  },
+  {
+    "name":"Nathan Lee",
+    "country":"South Korea",
+    "plan":"Basic",
+    "total_spend":290.0,
+    "ticket_count":1
+  }
+]

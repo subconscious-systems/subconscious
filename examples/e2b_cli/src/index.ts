@@ -1,5 +1,3 @@
-#!/usr/bin/env bun
-
 /**
  * Main entrypoint for the CLI agent.
  * 

@@ -2,21 +2,9 @@
  * Core type definitions for the agent system.
  *
  * Design: Subconscious orchestrates tool calls directly.
- * - Task: User input with optional file references
+ * - The agent handles file operations through upload_local_file and download_file tools
  * - ExecutionResult: E2B sandbox output (used by tool server)
  */
-
-export interface AgentTask {
-  description: string;
-  context?: string;
-  files?: Array<{
-    localPath: string;
-    sandboxPath: string;
-    type: "input" | "output";
-  }>;
-  environmentVariables?: Record<string, string>;
-  maxExecutionTime?: number;
-}
 
 /**
  * Execution result from E2B sandbox.
