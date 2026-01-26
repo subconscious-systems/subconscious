@@ -1,6 +1,15 @@
 import { E2BSandbox, type SupportedLanguage } from "../e2b/sandbox";
 import type { ExecutionResult } from "../types/agent";
-import { verbose } from "../config";
+import { verbose, defaultConfig } from "../config";
+import { promises as fs } from "fs";
+import * as path from "path";
+import * as os from "os";
+import * as http from "http";
+import {
+  sanitizeSandboxPath,
+  validateSandboxPath,
+  type ValidationConfig,
+} from "../utils/validation";
 
 /** Log only when verbose mode is enabled */
 function log(message: string) {
@@ -10,39 +19,65 @@ function log(message: string) {
 /**
  * E2B Tool Server
  *
- * HTTP server that exposes E2B sandbox execution as a FunctionTool endpoint.
- * Subconscious calls this server when it needs to execute code.
+ * HTTP server that exposes E2B sandbox tools as FunctionTool endpoints.
+ * Subconscious calls these endpoints when it needs to:
+ * - Execute code in the sandbox
+ * - Upload files from user's machine to the sandbox
+ * - Download files from the sandbox to user's machine
+ * - Check if local files exist
+ *
+ * Includes path sanitization for security.
  */
 
 export interface E2BToolRequest {
   tool_name?: string;
-  parameters?: {
-    code: string;
-    language?: SupportedLanguage;
-    timeout?: number; // in seconds
-  };
+  parameters?: Record<string, unknown>;
   request_id?: string;
 }
 
 export interface E2BToolResponse {
   success: boolean;
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  duration: number;
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+  duration?: number;
   timeout?: boolean;
   error?: string;
+  message?: string;
+  exists?: boolean;
+  size?: number;
+  is_file?: boolean;
+  is_directory?: boolean;
+  sandbox_path?: string;
+  local_path?: string;
+  path_sanitized?: boolean;
 }
 
 let sandboxInstance: E2BSandbox | null = null;
+let validationConfig: ValidationConfig = defaultConfig.validation;
 
 function setSandboxInstance(sandbox: E2BSandbox) {
   sandboxInstance = sandbox;
 }
 
+function setValidationConfig(config: ValidationConfig) {
+  validationConfig = config;
+}
+
+/** Expand ~ to home directory */
+function expandPath(filePath: string): string {
+  if (filePath.startsWith("~/")) {
+    return path.join(os.homedir(), filePath.slice(2));
+  }
+  if (filePath.startsWith("~")) {
+    return path.join(os.homedir(), filePath.slice(1));
+  }
+  return filePath;
+}
+
 export class E2BToolServer {
   private sandbox: E2BSandbox;
-  private server: ReturnType<typeof Bun.serve> | null = null;
+  private server: http.Server | null = null;
   private port: number;
   private host: string;
 
@@ -67,58 +102,98 @@ export class E2BToolServer {
     await this.sandbox.initialize();
     setSandboxInstance(this.sandbox);
 
-    this.server = Bun.serve({
-      port: this.port,
-      hostname: this.host,
-      async fetch(req) {
-        const url = new URL(req.url);
-        const method = req.method;
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
 
-        const corsHeaders = {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-        };
+    this.server = http.createServer(async (nodeReq, nodeRes) => {
+      // Collect request body
+      const chunks: Buffer[] = [];
+      for await (const chunk of nodeReq) {
+        chunks.push(chunk);
+      }
+      const bodyText = Buffer.concat(chunks).toString();
 
-        if (method === "OPTIONS") {
-          return new Response(null, { status: 204, headers: corsHeaders });
+      const url = new URL(nodeReq.url || "/", `http://${this.host}:${this.port}`);
+      const method = nodeReq.method || "GET";
+
+      // Helper to send response
+      const sendResponse = (status: number, body: string | null, headers: Record<string, string>) => {
+        nodeRes.writeHead(status, headers);
+        nodeRes.end(body);
+      };
+
+      if (method === "OPTIONS") {
+        sendResponse(204, null, corsHeaders);
+        return;
+      }
+
+      // Create a fetch-compatible Request object
+      const req = {
+        json: async () => bodyText ? JSON.parse(bodyText) : {},
+      } as Request;
+
+      try {
+        let response: Response;
+
+        // Code execution endpoint
+        if (url.pathname === "/execute" && method === "POST") {
+          response = await handleExecute(req, corsHeaders);
         }
-
-        try {
-          if (url.pathname === "/execute" && method === "POST") {
-            return await handleExecute(req, corsHeaders);
-          }
-
-          if (url.pathname === "/health" && method === "GET") {
-            return new Response(
-              JSON.stringify({ status: "ok", service: "e2b-tool-server" }),
-              {
-                status: 200,
-                headers: { ...corsHeaders, "Content-Type": "application/json" },
-              }
-            );
-          }
-
-          return new Response("Not Found", {
-            status: 404,
-            headers: corsHeaders,
-          });
-        } catch (error: any) {
-          console.error(`[e2b-server] Error: ${error.message}`);
-          return new Response(
-            JSON.stringify({ error: error.message || "Internal server error" }),
+        // Upload file from local machine to sandbox
+        else if (url.pathname === "/upload" && method === "POST") {
+          response = await handleUpload(req, corsHeaders);
+        }
+        // Download file from sandbox to local machine
+        else if (url.pathname === "/download" && method === "POST") {
+          response = await handleDownload(req, corsHeaders);
+        }
+        // Check if local file exists
+        else if (url.pathname === "/check-file" && method === "POST") {
+          response = await handleCheckFile(req, corsHeaders);
+        }
+        // Health check
+        else if (url.pathname === "/health" && method === "GET") {
+          response = new Response(
+            JSON.stringify({ status: "ok", service: "e2b-tool-server" }),
             {
-              status: 500,
+              status: 200,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             }
           );
+        } else {
+          response = new Response("Not Found", {
+            status: 404,
+            headers: corsHeaders,
+          });
         }
-      },
+
+        // Convert Response to node response
+        const responseBody = await response.text();
+        const responseHeaders: Record<string, string> = {};
+        response.headers.forEach((value, key) => {
+          responseHeaders[key] = value;
+        });
+        sendResponse(response.status, responseBody, responseHeaders);
+      } catch (error: any) {
+        console.error(`[e2b-server] Error: ${error.message}`);
+        sendResponse(500, JSON.stringify({ error: error.message || "Internal server error" }), {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        });
+      }
     });
 
-    const serverUrl = `http://${this.host}:${this.port}`;
-    log(`[e2b-server] Server started on ${serverUrl}`);
-    return serverUrl;
+    return new Promise((resolve, reject) => {
+      this.server!.listen(this.port, this.host, () => {
+        const serverUrl = `http://${this.host}:${this.port}`;
+        log(`[e2b-server] Server started on ${serverUrl}`);
+        resolve(serverUrl);
+      });
+      this.server!.on("error", reject);
+    });
   }
 
   /**
@@ -126,9 +201,13 @@ export class E2BToolServer {
    */
   async stop(): Promise<void> {
     if (this.server) {
-      this.server.stop();
-      this.server = null;
-      log("[e2b-server] Server stopped");
+      return new Promise((resolve) => {
+        this.server!.close(() => {
+          this.server = null;
+          log("[e2b-server] Server stopped");
+          resolve();
+        });
+      });
     }
   }
 
@@ -141,6 +220,9 @@ export class E2BToolServer {
   }
 }
 
+/**
+ * Handle code execution requests.
+ */
 async function handleExecute(
   req: Request,
   corsHeaders: Record<string, string>
@@ -153,7 +235,11 @@ async function handleExecute(
   }
 
   const body = (await req.json()) as E2BToolRequest;
-  const params = body.parameters;
+  const params = body.parameters as {
+    code?: string;
+    language?: SupportedLanguage;
+    timeout?: number;
+  };
 
   if (!params?.code) {
     return new Response(
@@ -225,3 +311,402 @@ async function handleExecute(
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
+/**
+ * Handle file upload requests (local → sandbox).
+ * Includes path sanitization for security.
+ */
+async function handleUpload(
+  req: Request,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  if (!sandboxInstance) {
+    return new Response(JSON.stringify({ error: "Sandbox not initialized" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const body = (await req.json()) as E2BToolRequest;
+  const params = body.parameters as {
+    local_path?: string;
+    sandbox_path?: string;
+  };
+
+  if (!params?.local_path) {
+    return new Response(
+      JSON.stringify({ error: "Missing required parameter: local_path" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // Expand ~ and resolve the local path
+  const requestedLocalPath = path.resolve(expandPath(params.local_path));
+  
+  // Use fuzzy matching to find the actual file
+  const fuzzyResult = await fuzzyFindFile(requestedLocalPath);
+  
+  if (!fuzzyResult) {
+    log(`[e2b-server] Upload failed: file not found (even with fuzzy matching)`);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: `File not found: ${params.local_path}`,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  const { matchedPath: localPath, stats, fuzzyMatch } = fuzzyResult;
+
+  if (!stats.isFile()) {
+    return new Response(
+      JSON.stringify({ 
+        success: false, 
+        error: `Path is not a file: ${localPath}` 
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  if (fuzzyMatch) {
+    console.log(`[file] 🔍 Fuzzy match: "${params.local_path}" → "${path.basename(localPath)}"`);
+  }
+  
+  // Default sandbox path if not provided - use the actual matched filename
+  const fileName = path.basename(localPath);
+  const rawSandboxPath = params.sandbox_path || `/home/user/input/${fileName}`;
+
+  // Sanitize the sandbox path for security
+  const sanitizedSandboxPath = sanitizeSandboxPath(rawSandboxPath, validationConfig);
+  const pathWasSanitized = sanitizedSandboxPath !== rawSandboxPath;
+
+  if (pathWasSanitized) {
+    log(`[security] Sandbox path sanitized: ${rawSandboxPath} → ${sanitizedSandboxPath}`);
+  }
+
+  // Validate the sandbox path
+  const validation = validateSandboxPath(sanitizedSandboxPath, validationConfig);
+  if (!validation.valid) {
+    log(`[security] Sandbox path validation failed: ${validation.errors.join(", ")}`);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: `Invalid sandbox path: ${validation.errors.join(", ")}`,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  try {
+    const fileSize = Number(stats.size);
+    const fileSizeMB = fileSize / (1024 * 1024);
+    const fileSizeStr = fileSizeMB > 1 
+      ? `${fileSizeMB.toFixed(1)} MB` 
+      : `${(fileSize / 1024).toFixed(1)} KB`;
+    
+    log(`[e2b-server] Uploading: ${localPath} → ${sanitizedSandboxPath} (${fileSizeStr})`);
+    
+    if (fileSizeMB > 5) {
+      console.log(`[file] Uploading large file (${fileSizeStr}), please wait...`);
+    }
+
+    // Upload to sandbox
+    await sandboxInstance.uploadFile(localPath, sanitizedSandboxPath);
+
+    const displayPath = fuzzyMatch ? path.basename(localPath) : params.local_path;
+    console.log(`[file] ✓ Uploaded: ${displayPath} → ${sanitizedSandboxPath} (${fileSizeStr})`);
+
+    const response: E2BToolResponse & { fuzzy_match?: boolean; original_path?: string } = {
+      success: true,
+      message: `File uploaded successfully to ${sanitizedSandboxPath}`,
+      sandbox_path: sanitizedSandboxPath,
+      local_path: localPath,
+      size: fileSize,
+      path_sanitized: pathWasSanitized,
+    };
+
+    if (fuzzyMatch) {
+      response.fuzzy_match = true;
+      response.original_path = params.local_path;
+    }
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    log(`[e2b-server] Upload failed: ${error.message}`);
+    
+    const response: E2BToolResponse = {
+      success: false,
+      error: error.message,
+    };
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+}
+
+/**
+ * Handle file download requests (sandbox → local).
+ * Includes path sanitization for security.
+ */
+async function handleDownload(
+  req: Request,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  if (!sandboxInstance) {
+    return new Response(JSON.stringify({ error: "Sandbox not initialized" }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  const body = (await req.json()) as E2BToolRequest;
+  const params = body.parameters as {
+    sandbox_path?: string;
+    local_path?: string;
+  };
+
+  if (!params?.sandbox_path) {
+    return new Response(
+      JSON.stringify({ error: "Missing required parameter: sandbox_path" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  if (!params?.local_path) {
+    return new Response(
+      JSON.stringify({ error: "Missing required parameter: local_path" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // Sanitize the sandbox path for security
+  const rawSandboxPath = params.sandbox_path;
+  const sanitizedSandboxPath = sanitizeSandboxPath(rawSandboxPath, validationConfig);
+  const pathWasSanitized = sanitizedSandboxPath !== rawSandboxPath;
+
+  if (pathWasSanitized) {
+    log(`[security] Sandbox path sanitized: ${rawSandboxPath} → ${sanitizedSandboxPath}`);
+  }
+
+  // Validate the sandbox path
+  const validation = validateSandboxPath(sanitizedSandboxPath, validationConfig);
+  if (!validation.valid) {
+    log(`[security] Sandbox path validation failed: ${validation.errors.join(", ")}`);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: `Invalid sandbox path: ${validation.errors.join(", ")}`,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // Expand ~ and resolve the local path
+  const localPath = path.resolve(expandPath(params.local_path));
+
+  log(`[e2b-server] Downloading: ${sanitizedSandboxPath} → ${localPath}`);
+
+  try {
+    // Download from sandbox
+    await sandboxInstance.downloadFile(sanitizedSandboxPath, localPath);
+
+    console.log(`[file] ✓ Downloaded: ${sanitizedSandboxPath} → ${params.local_path}`);
+
+    const stats = await fs.stat(localPath);
+
+    const response: E2BToolResponse = {
+      success: true,
+      message: `File downloaded successfully to ${params.local_path}`,
+      local_path: params.local_path,
+      sandbox_path: sanitizedSandboxPath,
+      size: stats.size,
+      path_sanitized: pathWasSanitized,
+    };
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: any) {
+    log(`[e2b-server] Download failed: ${error.message}`);
+
+    const response: E2BToolResponse = {
+      success: false,
+      error: error.message,
+    };
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+}
+
+/** Common extensions to try when doing fuzzy file matching */
+const FUZZY_EXTENSIONS = [
+  ".md", ".txt", ".csv", ".json", ".py", ".js", ".ts", ".html",
+  ".xml", ".yaml", ".yml", ".pdf", ".png", ".jpg", ".jpeg", ".gif",
+];
+
+/**
+ * Try to find a file with fuzzy matching.
+ * 1. First tries exact path
+ * 2. Then tries adding common extensions
+ * 3. Then looks for files in the same directory that start with the basename
+ * 
+ * Returns the matched path and stats, or null if not found.
+ */
+async function fuzzyFindFile(
+  filePath: string
+): Promise<{ matchedPath: string; stats: Awaited<ReturnType<typeof fs.stat>>; fuzzyMatch: boolean } | null> {
+  // 1. Try exact path first
+  try {
+    const stats = await fs.stat(filePath);
+    return { matchedPath: filePath, stats, fuzzyMatch: false };
+  } catch {
+    // Continue to fuzzy matching
+  }
+
+  // 2. Check if the path already has an extension - if so, don't try adding more
+  const hasExtension = path.extname(filePath).length > 0;
+  
+  if (!hasExtension) {
+    // Try adding common extensions
+    for (const ext of FUZZY_EXTENSIONS) {
+      const pathWithExt = filePath + ext;
+      try {
+        const stats = await fs.stat(pathWithExt);
+        if (stats.isFile()) {
+          log(`[e2b-server] Fuzzy match: ${filePath} → ${pathWithExt}`);
+          return { matchedPath: pathWithExt, stats, fuzzyMatch: true };
+        }
+      } catch {
+        // Continue trying other extensions
+      }
+    }
+  }
+
+  // 3. Look for files in the directory that start with the basename
+  const dirname = path.dirname(filePath);
+  const basename = path.basename(filePath);
+  
+  try {
+    const files = await fs.readdir(dirname);
+    // Sort to get consistent results (prefer exact prefix matches)
+    const matches = files
+      .filter(f => f.startsWith(basename) && f !== basename)
+      .sort((a, b) => a.length - b.length); // Prefer shorter names
+    
+    if (matches.length > 0) {
+      const matchedPath = path.join(dirname, matches[0]);
+      try {
+        const stats = await fs.stat(matchedPath);
+        if (stats.isFile()) {
+          log(`[e2b-server] Fuzzy prefix match: ${filePath} → ${matchedPath}`);
+          return { matchedPath, stats, fuzzyMatch: true };
+        }
+      } catch {
+        // Continue
+      }
+    }
+  } catch {
+    // Directory doesn't exist or can't be read
+  }
+
+  return null;
+}
+
+/**
+ * Handle file check requests (check if local file exists).
+ * Supports fuzzy matching - if exact path not found, tries common extensions
+ * and prefix matching.
+ */
+async function handleCheckFile(
+  req: Request,
+  corsHeaders: Record<string, string>
+): Promise<Response> {
+  const body = (await req.json()) as E2BToolRequest;
+  const params = body.parameters as {
+    path?: string;
+  };
+
+  if (!params?.path) {
+    return new Response(
+      JSON.stringify({ error: "Missing required parameter: path" }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
+  }
+
+  // Expand ~ and resolve the path
+  const filePath = path.resolve(expandPath(params.path));
+
+  log(`[e2b-server] Checking file: ${params.path} → ${filePath}`);
+
+  // Use fuzzy matching to find the file
+  const result = await fuzzyFindFile(filePath);
+
+  if (result) {
+    const { matchedPath, stats, fuzzyMatch } = result;
+    
+    const response: E2BToolResponse & { matched_path?: string; fuzzy_match?: boolean } = {
+      success: true,
+      exists: true,
+      is_file: stats.isFile(),
+      is_directory: stats.isDirectory(),
+      size: Number(stats.size),
+    };
+
+    // If we did a fuzzy match, include the actual matched path
+    if (fuzzyMatch) {
+      response.matched_path = matchedPath;
+      response.fuzzy_match = true;
+      console.log(`[file] 🔍 Fuzzy match: "${params.path}" → "${path.basename(matchedPath)}"`);
+    }
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } else {
+    const response: E2BToolResponse = {
+      success: true,
+      exists: false,
+    };
+
+    return new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+}
+

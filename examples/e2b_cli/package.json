@@ -1,13 +1,23 @@
 {
-    "name": "e2b-subconscious-agent",
-    "version": "1.0.0",
+    "name": "@subcon/e2b-cli",
+    "version": "0.1.10",
+    "private": false,
     "type": "module",
     "description": "CLI-first autonomous agent using Subconscious + E2B",
-    "main": "src/index.ts",
+    "main": "dist/index.js",
+    "bin": {
+        "e2b-cli": "dist/index.js",
+        "subcon-e2b": "dist/index.js"
+    },
+    "files": [
+        "dist"
+    ],
     "scripts": {
         "agent": "bun run src/index.ts",
         "dev": "bun run src/index.ts",
-        "build": "bun build src/index.ts --outdir dist --target bun",
+        "build": "bun build src/index.ts --outdir dist --target node --minify",
+        "postbuild": "node scripts/postbuild.cjs",
+        "prepublishOnly": "bun run build",
         "typecheck": "tsc --noEmit",
         "test": "bun test tests"
     },
@@ -30,6 +40,6 @@
         "typescript": "^5.9.3"
     },
     "engines": {
-        "bun": ">=1.0.0"
+        "node": ">=18.0.0"
     }
 }

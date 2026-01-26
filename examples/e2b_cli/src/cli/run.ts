@@ -3,9 +3,10 @@ import { Subconscious } from "subconscious";
 import { E2BSandbox } from "../e2b/sandbox";
 import { E2BToolServer } from "../tools/e2bServer";
 import { setupTunnel, stopTunnel, type TunnelResult } from "../tools/tunnel";
-import { parseFileReferences } from "./fileParser";
+import { runOnboarding, loadKeysIntoEnv } from "./onboarding";
 import { loadConfig, verbose } from "../config";
-import type { AgentTask } from "../types/agent";
+import { getSessionManager, type Session } from "../session/manager";
+import { validateTaskInputs, type ValidationResult } from "../utils/validation";
 
 /** Log only when verbose mode is enabled */
 function log(message: string) {
@@ -27,6 +28,7 @@ const COLORS = {
   blue: "\x1b[34m",
   white: "\x1b[37m",
   gray: "\x1b[90m",
+  red: "\x1b[31m",
 } as const;
 
 /** Simple loading spinner for setup phase */
@@ -161,13 +163,197 @@ function extractFinalAnswer(content: string): { finalAnswer: string | null; rawA
 }
 
 /**
+ * Build the tools array for the agent.
+ */
+function buildTools(tunnelUrl: string) {
+  return [
+    // Code execution tool
+    {
+      type: "function" as const,
+      name: "execute_code",
+      description:
+        "Execute code in an isolated E2B sandbox. Supports Python, JavaScript, " +
+        "TypeScript, C++, C, Go, Rust, Ruby, Java, and Bash. Returns stdout, " +
+        "stderr, exit code, and duration. Files can be read/written at paths like " +
+        "/home/user/input/ (for uploaded files) and /home/user/output/ (for generated files).",
+      url: `${tunnelUrl}/execute`,
+      method: "POST" as const,
+      timeout: 300,
+      parameters: {
+        type: "object",
+        properties: {
+          code: {
+            type: "string",
+            description: "Code to execute",
+          },
+          language: {
+            type: "string",
+            enum: [
+              "python",
+              "bash",
+              "javascript",
+              "typescript",
+              "cpp",
+              "c",
+              "go",
+              "rust",
+              "ruby",
+              "java",
+            ],
+            description: "Programming language. Use 'cpp' for C++. Default: python",
+          },
+          timeout: {
+            type: "number",
+            description: "Timeout in seconds (default: 300)",
+          },
+        },
+        required: ["code"],
+      },
+    },
+    // Upload file tool (local → sandbox)
+    {
+      type: "function" as const,
+      name: "upload_local_file",
+      description:
+        "Upload a file from the user's local machine to the sandbox. Use this when " +
+        "the user mentions a file path (like /Users/name/data.csv or ~/Desktop/file.txt) " +
+        "that needs to be analyzed or processed. The file will be available in the sandbox " +
+        "at the specified sandbox_path (defaults to /home/user/input/<filename>). " +
+        "For multiple files, upload them one at a time.",
+      url: `${tunnelUrl}/upload`,
+      method: "POST" as const,
+      timeout: 180,
+      parameters: {
+        type: "object",
+        properties: {
+          local_path: {
+            type: "string",
+            description:
+              "Path to the file on the user's local machine. Supports absolute paths " +
+              "(e.g., /Users/name/data.csv) and ~ for home directory (e.g., ~/Desktop/file.txt)",
+          },
+          sandbox_path: {
+            type: "string",
+            description:
+              "Optional. Destination path in the sandbox. Defaults to /home/user/input/<filename>",
+          },
+        },
+        required: ["local_path"],
+      },
+    },
+    // Download file tool (sandbox → local)
+    {
+      type: "function" as const,
+      name: "download_file",
+      description:
+        "Download a file from the sandbox to the user's local machine. Use this to save " +
+        "outputs like charts, reports, processed data, etc. that the user wants to keep. " +
+        "Call this after generating files in the sandbox that the user requested.",
+      url: `${tunnelUrl}/download`,
+      method: "POST" as const,
+      timeout: 180,
+      parameters: {
+        type: "object",
+        properties: {
+          sandbox_path: {
+            type: "string",
+            description:
+              "Path to the file in the sandbox (e.g., /home/user/output/chart.png)",
+          },
+          local_path: {
+            type: "string",
+            description:
+              "Destination path on the user's local machine. Supports absolute paths " +
+              "and ~ for home directory. Relative paths save to current working directory.",
+          },
+        },
+        required: ["sandbox_path", "local_path"],
+      },
+    },
+    // Check local file tool
+    {
+      type: "function" as const,
+      name: "check_local_file",
+      description:
+        "Check if a file exists on the user's local machine and get its info. Use this " +
+        "to verify file paths before attempting to upload them.",
+      url: `${tunnelUrl}/check-file`,
+      method: "POST" as const,
+      timeout: 60,
+      parameters: {
+        type: "object",
+        properties: {
+          path: {
+            type: "string",
+            description:
+              "Path to check on the user's local machine. Supports ~ for home directory.",
+          },
+        },
+        required: ["path"],
+      },
+    },
+  ];
+}
+
+/**
+ * Build instructions for the agent based on user input.
+ */
+function buildInstructions(taskDescription: string, context?: string): string {
+  let instructions = taskDescription;
+
+  if (context) {
+    instructions += `\n\nAdditional Context: ${context}`;
+  }
+
+  // Add guidance about file handling
+  instructions += `
+
+IMPORTANT - File Handling Instructions:
+- If the user mentions any file paths (like /path/to/file.csv, ~/Desktop/data.txt, etc.), 
+  use the upload_local_file tool to upload them to the sandbox BEFORE trying to read/process them.
+- After uploading, the file will be available at the sandbox_path (usually /home/user/input/<filename>).
+- When you create output files (charts, reports, processed data), save them to /home/user/output/.
+- If the user asks to save/create/output a file, use download_file to save it to their local machine 
+  after generating it in the sandbox.
+- For charts/images, use matplotlib with: import matplotlib; matplotlib.use('Agg') before importing pyplot.`;
+
+  return instructions;
+}
+
+/**
+ * Display validation results to the user.
+ */
+function displayValidationResult(validation: ValidationResult, c: typeof COLORS): boolean {
+  if (validation.warnings.length > 0) {
+    for (const warning of validation.warnings) {
+      console.log(`${c.yellow}⚠ Warning:${c.reset} ${warning}`);
+    }
+  }
+
+  if (!validation.valid) {
+    console.log(`\n${c.red}${c.bold}✗ Validation failed:${c.reset}`);
+    for (const error of validation.errors) {
+      console.log(`  ${c.red}•${c.reset} ${error}`);
+    }
+    console.log();
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Run agent with provided task and context (non-interactive).
  * Used for testing and programmatic access.
+ * This version creates a fresh sandbox for each call (no session reuse).
  */
 export async function runAgentWithTask(
   taskDescription: string,
   context?: string
 ): Promise<void> {
+  // Load any saved keys
+  await loadKeysIntoEnv();
+  
   const apiKey = process.env.SUBCONSCIOUS_API_KEY;
   if (!apiKey) {
     throw new Error(
@@ -178,50 +364,13 @@ export async function runAgentWithTask(
 
   const config = await loadConfig();
 
-  // Parse file references from task description and context
-  const fileParseResult = await parseFileReferences(
-    taskDescription,
-    context || undefined
-  );
-
-  if (fileParseResult.files.length > 0) {
-    console.log(
-      `[file] Parsed ${fileParseResult.files.length} file reference(s):`
-    );
-    for (const f of fileParseResult.files) {
-      console.log(`  ${f.type}: ${f.localPath} → ${f.sandboxPath}`);
-    }
+  // Validate input before starting
+  const validation = await validateTaskInputs(taskDescription, config.validation);
+  if (!displayValidationResult(validation, COLORS)) {
+    throw new Error("Input validation failed");
   }
 
-  // Collect environment variables (filter sensitive ones)
-  const envVars: Record<string, string> = {};
-  if (config.environment.filterSensitive) {
-    for (const [key, value] of Object.entries(process.env)) {
-      if (
-        value &&
-        !config.environment.sensitivePatterns.some((pattern: string) =>
-          key.toUpperCase().includes(pattern.toUpperCase())
-        )
-      ) {
-        envVars[key] = value;
-      }
-    }
-  } else {
-    for (const [key, value] of Object.entries(process.env)) {
-      if (value) {
-        envVars[key] = value;
-      }
-    }
-  }
-
-  const task: AgentTask = {
-    description: fileParseResult.updatedDescription,
-    context: context || undefined,
-    files: fileParseResult.files,
-    environmentVariables: Object.keys(envVars).length > 0 ? envVars : undefined,
-  };
-
-  const sandbox = new E2BSandbox();
+  const sandbox = new E2BSandbox(config);
   const toolServer = new E2BToolServer(
     sandbox,
     config.tools.port,
@@ -234,32 +383,6 @@ export async function runAgentWithTask(
 
   try {
     await sandbox.initialize();
-
-    // Upload input files to sandbox
-    if (task.files && task.files.length > 0) {
-      const inputFiles = task.files.filter((f) => f.type === "input");
-      if (inputFiles.length > 0) {
-        spinner.update(`Uploading ${inputFiles.length} file(s)...`);
-        log(`[file] Uploading ${inputFiles.length} file(s)...`);
-        for (const file of inputFiles) {
-          try {
-            await sandbox.uploadFile(file.localPath, file.sandboxPath);
-          } catch (error: any) {
-            spinner.stop();
-            console.error(
-              `[file] Failed to upload ${file.localPath}: ${error.message}`
-            );
-            throw error;
-          }
-        }
-        log(`[file] Upload complete\n`);
-      }
-    }
-
-    // Set environment variables in sandbox
-    if (task.environmentVariables) {
-      await sandbox.setEnvironmentVariables(task.environmentVariables);
-    }
 
     // Start tool server
     spinner.update("Starting tool server...");
@@ -311,77 +434,9 @@ export async function runAgentWithTask(
       log("[tunnel] Local check failed (normal - Subconscious uses different route)");
     }
 
-    // Build instructions for Subconscious
-    let instructions = task.description;
-    if (task.context) {
-      instructions += `\n\nContext: ${task.context}`;
-    }
-
-    // Add file context
-    if (task.files && task.files.length > 0) {
-      const inputFiles = task.files.filter((f) => f.type === "input");
-      const outputFiles = task.files.filter((f) => f.type === "output");
-
-      if (inputFiles.length > 0) {
-        const inputList = inputFiles
-          .map((f) => `- ${f.sandboxPath}`)
-          .join("\n");
-        instructions += `\n\nInput files (already uploaded to sandbox):\n${inputList}`;
-      }
-
-      if (outputFiles.length > 0) {
-        const outputList = outputFiles
-          .map((f) => `- Save to: ${f.sandboxPath}`)
-          .join("\n");
-        instructions += `\n\nOUTPUT FILES - Save to these EXACT paths:\n${outputList}`;
-        instructions +=
-          "\n\nIMPORTANT: Use these exact sandbox paths. " +
-          "For images use plt.savefig(), for text/JSON use open() with write mode.";
-      }
-    }
-
-    // Register FunctionTool with multi-language support
-    const e2bTool = {
-      type: "function" as const,
-      name: "execute_code",
-      description:
-        "Execute code in an isolated E2B sandbox. Supports Python, JavaScript, " +
-        "TypeScript, C++, C, Go, Rust, Ruby, Java, and Bash. Returns stdout, " +
-        "stderr, exit code, and duration.",
-      url: `${tunnelResult.url}/execute`,
-      method: "POST" as const,
-      timeout: 300,
-      parameters: {
-        type: "object",
-        properties: {
-          code: {
-            type: "string",
-            description: "Code to execute",
-          },
-          language: {
-            type: "string",
-            enum: [
-              "python",
-              "bash",
-              "javascript",
-              "typescript",
-              "cpp",
-              "c",
-              "go",
-              "rust",
-              "ruby",
-              "java",
-            ],
-            description: "Programming language. Use 'cpp' for C++. Default: python",
-          },
-          timeout: {
-            type: "number",
-            description: "Timeout in seconds (default: 300)",
-          },
-        },
-        required: ["code"],
-      },
-    };
+    // Build tools and instructions
+    const tools = buildTools(tunnelResult.url);
+    const instructions = buildInstructions(taskDescription, context);
 
     const client = new Subconscious({ apiKey });
 
@@ -395,7 +450,7 @@ export async function runAgentWithTask(
       engine: "tim-gpt",
       input: {
         instructions,
-        tools: [e2bTool] as any,
+        tools: tools as any,
       },
     });
 
@@ -421,12 +476,19 @@ export async function runAgentWithTask(
         for (const tc of toolCalls) {
           const key = `${tc.tool}:${JSON.stringify(tc.args)}`;
           if (!displayedToolCalls.includes(key)) {
-            console.log(`🔧 Calling tool: ${tc.tool}`);
             if (tc.tool === "execute_code" && tc.args.code) {
               const codeStr = String(tc.args.code);
               const codePreview =
                 codeStr.slice(0, 100) + (codeStr.length > 100 ? "..." : "");
-              console.log(`   Code: ${codePreview}\n`);
+              console.log(`🔧 Executing code: ${codePreview}\n`);
+            } else if (tc.tool === "upload_local_file") {
+              console.log(`📤 Uploading: ${tc.args.local_path}\n`);
+            } else if (tc.tool === "download_file") {
+              console.log(`📥 Downloading: ${tc.args.sandbox_path} → ${tc.args.local_path}\n`);
+            } else if (tc.tool === "check_local_file") {
+              console.log(`🔍 Checking file: ${tc.args.path}\n`);
+            } else {
+              console.log(`🔧 Calling tool: ${tc.tool}\n`);
             }
             displayedToolCalls.push(key);
           }
@@ -458,42 +520,6 @@ export async function runAgentWithTask(
       }
     }
 
-    // Download output files from sandbox
-    if (task.files && task.files.length > 0) {
-      const outputFiles = task.files.filter((f) => f.type === "output");
-      if (outputFiles.length > 0) {
-        console.log(
-          `\n[file] Downloading ${outputFiles.length} output file(s)...`
-        );
-        let downloadedCount = 0;
-        for (const file of outputFiles) {
-          try {
-            const files = await sandbox.listFiles("/home/user/output");
-            const fileExists = files.some(
-              (f: any) => f.name === file.sandboxPath.split("/").pop()
-            );
-
-            if (fileExists) {
-              await sandbox.downloadFile(file.sandboxPath, file.localPath);
-              downloadedCount++;
-              console.log(`[file] ✓ Downloaded: ${file.localPath}`);
-            } else {
-              console.log(
-                `[file] ⚠ Output file not found in sandbox: ${file.sandboxPath}`
-              );
-            }
-          } catch (error: any) {
-            console.error(
-              `[file] ✗ Failed to download ${file.sandboxPath}: ${error.message}`
-            );
-          }
-        }
-        if (downloadedCount > 0) {
-          console.log(`[file] ✓ ${downloadedCount} file(s) saved successfully`);
-        }
-      }
-    }
-
     log("\n[done] Agent finished");
   } catch (error: any) {
     spinner.stop();
@@ -512,17 +538,124 @@ export async function runAgentWithTask(
 }
 
 /**
- * Interactive CLI entrypoint with command history support.
+ * Run a task with an existing session (for session persistence).
  */
-export async function runAgent(): Promise<void> {
+async function runTaskWithSession(
+  session: Session,
+  taskDescription: string,
+  context?: string
+): Promise<void> {
   const apiKey = process.env.SUBCONSCIOUS_API_KEY;
   if (!apiKey) {
-    console.error(
-      "❌ Error: SUBCONSCIOUS_API_KEY environment variable is not set"
-    );
-    console.error("   Get your API key at: https://www.subconscious.dev/platform");
-    process.exit(1);
+    throw new Error("SUBCONSCIOUS_API_KEY environment variable is not set.");
   }
+
+  // Mark session as active
+  const sessionManager = getSessionManager();
+  sessionManager.markActive();
+
+  // Build tools and instructions
+  const tools = buildTools(session.tunnelUrl);
+  const instructions = buildInstructions(taskDescription, context);
+
+  const client = new Subconscious({ apiKey });
+
+  console.log("[agent] Starting Subconscious agent...\n");
+  console.log("=".repeat(60) + "\n");
+
+  // Stream Subconscious events
+  const stream = client.stream({
+    engine: "tim-gpt",
+    input: {
+      instructions,
+      tools: tools as any,
+    },
+  });
+
+  let fullContent = "";
+  const displayedThoughts: string[] = [];
+  const displayedToolCalls: string[] = [];
+
+  for await (const event of stream) {
+    if (event.type === "delta") {
+      fullContent += event.content;
+
+      // Extract and display new thoughts
+      const thoughts = extractThoughts(fullContent);
+      for (const thought of thoughts) {
+        if (!displayedThoughts.includes(thought)) {
+          console.log(`💭 ${thought}\n`);
+          displayedThoughts.push(thought);
+        }
+      }
+
+      // Extract and display tool calls
+      const toolCalls = extractToolCalls(fullContent);
+      for (const tc of toolCalls) {
+        const key = `${tc.tool}:${JSON.stringify(tc.args)}`;
+        if (!displayedToolCalls.includes(key)) {
+          if (tc.tool === "execute_code" && tc.args.code) {
+            const codeStr = String(tc.args.code);
+            const codePreview =
+              codeStr.slice(0, 100) + (codeStr.length > 100 ? "..." : "");
+            console.log(`🔧 Executing code: ${codePreview}\n`);
+          } else if (tc.tool === "upload_local_file") {
+            console.log(`📤 Uploading: ${tc.args.local_path}\n`);
+          } else if (tc.tool === "download_file") {
+            console.log(`📥 Downloading: ${tc.args.sandbox_path} → ${tc.args.local_path}\n`);
+          } else if (tc.tool === "check_local_file") {
+            console.log(`🔍 Checking file: ${tc.args.path}\n`);
+          } else {
+            console.log(`🔧 Calling tool: ${tc.tool}\n`);
+          }
+          displayedToolCalls.push(key);
+        }
+      }
+    } else if (event.type === "done") {
+      console.log("\n" + "=".repeat(60));
+      console.log("[agent] Agent completed\n");
+
+      const { finalAnswer, rawAnswer } = extractFinalAnswer(fullContent);
+      if (finalAnswer) {
+        console.log(`${COLORS.magenta}${COLORS.bold}📋 Final Answer:${COLORS.reset}\n`);
+        console.log(`${COLORS.cyan}${finalAnswer}${COLORS.reset}\n`);
+      } else if (rawAnswer?.trim()) {
+        console.log(`${COLORS.magenta}${COLORS.bold}📋 Final Answer:${COLORS.reset}\n`);
+        console.log(`${COLORS.cyan}${rawAnswer}${COLORS.reset}\n`);
+      } else {
+        console.log(`${COLORS.magenta}${COLORS.bold}📋 Response received${COLORS.reset}\n`);
+      }
+
+      break;
+    } else if (event.type === "error") {
+      console.error(`\n❌ Error: ${event.message}`);
+      if (event.code) {
+        console.error(`   Code: ${event.code}`);
+      }
+      throw new Error(event.message);
+    }
+  }
+
+  log("\n[done] Agent finished");
+}
+
+/**
+ * Interactive CLI entrypoint with command history support and session persistence.
+ */
+export async function runAgent(): Promise<void> {
+  // Load any saved keys from ~/.subcon/config.json
+  await loadKeysIntoEnv();
+
+  // Check if keys are set, run onboarding if not
+  if (!process.env.SUBCONSCIOUS_API_KEY || !process.env.E2B_API_KEY) {
+    const success = await runOnboarding();
+    if (!success) {
+      process.exit(1);
+    }
+  }
+
+  const config = await loadConfig();
+  const sessionManager = getSessionManager();
 
   const rl = readline.createInterface({
     input: process.stdin,
@@ -560,24 +693,45 @@ ${c.dim}────────────────────────
     ${c.cyan}Subconscious${c.reset} ${c.dim}─${c.reset} Long-horizon reasoning & tool orchestration
     ${c.yellow}E2B Sandbox${c.reset}  ${c.dim}─${c.reset} Secure cloud code execution
 
-  ${c.green}▸${c.reset} ${c.bold}Quick Tips${c.reset}
-    ${c.dim}•${c.reset} Include ${c.cyan}file: ./data.csv${c.reset} in your task to upload a file
-    ${c.dim}•${c.reset} Include ${c.cyan}output: ./result.json${c.reset} to download output when done
-    ${c.dim}•${c.reset} Add details in the optional ${c.white}Context${c.reset} prompt
-    ${c.dim}•${c.reset} Type ${c.white}exit${c.reset} to quit
+  ${c.green}▸${c.reset} ${c.bold}What You Can Do${c.reset}
+    ${c.dim}•${c.reset} Reference local files naturally: ${c.cyan}~/Desktop/data.csv${c.reset}
+    ${c.dim}•${c.reset} Ask for outputs: ${c.cyan}"save a chart to chart.png"${c.reset}
+    ${c.dim}•${c.reset} The AI will handle file uploads and downloads automatically
+
+  ${c.green}▸${c.reset} ${c.bold}Commands${c.reset}
+    ${c.dim}•${c.reset} ${c.white}reset${c.reset}  ${c.dim}─${c.reset} Reset the sandbox session
+    ${c.dim}•${c.reset} ${c.white}status${c.reset} ${c.dim}─${c.reset} Show session status
+    ${c.dim}•${c.reset} ${c.white}clear${c.reset}  ${c.dim}─${c.reset} Clear the screen
+    ${c.dim}•${c.reset} ${c.white}exit${c.reset}   ${c.dim}─${c.reset} Exit the CLI
 
   ${c.green}▸${c.reset} ${c.bold}Example${c.reset}
-    ${c.dim}"Analyze file: ./sales.csv and save a chart to output: ./chart.png"${c.reset}
+    ${c.dim}"Analyze ~/Desktop/sales.csv and create a bar chart, save it to chart.png"${c.reset}
 
 ${c.dim}──────────────────────────────────────────────────${c.reset}
 `);
 
-  // REPL loop
+  // Handle cleanup on exit
+  const cleanup = async () => {
+    console.log(`\n${c.dim}Cleaning up...${c.reset}`);
+    await sessionManager.cleanup();
+    rl.close();
+  };
+
+  process.on("SIGINT", async () => {
+    await cleanup();
+    process.exit(0);
+  });
+
+  // REPL loop with session persistence
+  let session: Session | null = null;
+  let sessionInitialized = false;
+
   while (true) {
     const taskDescription = await question(
       `${c.green}${c.bold}▸${c.reset} ${c.bold}Task${c.reset} ${c.dim}›${c.reset} `
     );
 
+    // Handle exit
     if (
       !taskDescription ||
       taskDescription.toLowerCase() === "exit" ||
@@ -586,7 +740,49 @@ ${c.dim}────────────────────────
       console.log(`\n${c.dim}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}`);
       console.log(`${c.cyan}${c.bold}  👋 Until next time!${c.reset}`);
       console.log(`${c.dim}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${c.reset}\n`);
+      await cleanup();
       break;
+    }
+
+    // Handle clear command
+    if (taskDescription.toLowerCase() === "clear") {
+      process.stdout.write("\x1b[2J\x1b[H");
+      continue;
+    }
+
+    // Handle reset command
+    if (taskDescription.toLowerCase() === "reset") {
+      console.log(`${c.yellow}Resetting session...${c.reset}`);
+      try {
+        session = await sessionManager.reset();
+        console.log(`${c.green}✓ Session reset successfully${c.reset}\n`);
+      } catch (error: any) {
+        console.error(`${c.red}✗ Failed to reset session: ${error.message}${c.reset}\n`);
+      }
+      continue;
+    }
+
+    // Handle status command
+    if (taskDescription.toLowerCase() === "status") {
+      const status = sessionManager.getStatus();
+      console.log(`\n${c.bold}Session Status:${c.reset}`);
+      console.log(`  ${c.dim}Active:${c.reset} ${status.active ? c.green + "Yes" : c.yellow + "No"}${c.reset}`);
+      if (status.active) {
+        console.log(`  ${c.dim}Sandbox ID:${c.reset} ${status.sandboxId?.slice(0, 12)}...`);
+        console.log(`  ${c.dim}Tunnel:${c.reset} ${status.tunnelUrl}`);
+        const healthStr = status.tunnelHealthy ? c.green + "Yes" : c.red + "No";
+        console.log(`  ${c.dim}Tunnel Healthy:${c.reset} ${healthStr}${c.reset}`);
+        console.log(`  ${c.dim}Idle Time:${c.reset} ${Math.round((status.idleTimeMs || 0) / 1000)}s`);
+        console.log(`  ${c.dim}Total Duration:${c.reset} ${Math.round((status.totalDurationMs || 0) / 1000)}s`);
+      }
+      console.log();
+      continue;
+    }
+
+    // Validate input before proceeding
+    const validation = await validateTaskInputs(taskDescription, config.validation);
+    if (!displayValidationResult(validation, c)) {
+      continue;
     }
 
     const contextInput = await question(
@@ -594,13 +790,33 @@ ${c.dim}────────────────────────
     );
 
     try {
-      await runAgentWithTask(taskDescription, contextInput);
+      // Initialize or get session
+      if (!sessionInitialized || !session) {
+        const spinner = new Spinner("Initializing session...");
+        spinner.start();
+        try {
+          session = await sessionManager.getOrCreateSession();
+          sessionInitialized = true;
+          spinner.stop();
+          console.log(`${c.green}✓${c.reset} Session ready\n`);
+        } catch (error: any) {
+          spinner.stop();
+          throw error;
+        }
+      }
+
+      // Run task with session
+      await runTaskWithSession(session, taskDescription, contextInput);
     } catch (error: any) {
       console.error(`\n${c.bold}❌ Task failed:${c.reset} ${error.message}\n`);
+      
+      // If session failed, mark as needing reinitialization
+      if (error.message.includes("Sandbox") || error.message.includes("tunnel")) {
+        sessionInitialized = false;
+        session = null;
+      }
     }
 
     console.log(`\n${c.dim}${"─".repeat(50)}${c.reset}\n`);
   }
-
-  rl.close();
 }

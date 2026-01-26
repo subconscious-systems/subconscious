@@ -20,6 +20,23 @@ A developer-first autonomous agent that reasons and executes code in a secure cl
 
 ## Quick Start
 
+### Option 1: Use npx (easiest)
+
+```bash
+npx @subcon/e2b-cli
+```
+
+The CLI will prompt you for API keys on first run and save them for future sessions.
+
+### Option 2: Install globally
+
+```bash
+npm install -g @subcon/e2b-cli
+e2b-cli
+```
+
+### Option 3: Run from source (for development)
+
 ```bash
 # Install dependencies
 bun install
