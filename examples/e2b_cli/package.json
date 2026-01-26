@@ -1,6 +1,6 @@
 {
     "name": "@subcon/e2b-cli",
-    "version": "0.1.9",
+    "version": "0.1.10",
     "private": false,
     "type": "module",
     "description": "CLI-first autonomous agent using Subconscious + E2B",
@@ -16,7 +16,7 @@
         "agent": "bun run src/index.ts",
         "dev": "bun run src/index.ts",
         "build": "bun build src/index.ts --outdir dist --target node --minify",
-        "postbuild": "echo '#!/usr/bin/env node' | cat - dist/index.js > dist/temp && mv dist/temp dist/index.js && chmod +x dist/index.js",
+        "postbuild": "node scripts/postbuild.cjs",
         "prepublishOnly": "bun run build",
         "typecheck": "tsc --noEmit",
         "test": "bun test tests"
