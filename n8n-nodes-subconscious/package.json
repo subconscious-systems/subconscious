@@ -1,0 +1,40 @@
+{
+  "name": "n8n-nodes-subconscious",
+  "version": "0.1.0",
+  "description": "n8n community node for Subconscious AI agents with web search and reasoning capabilities",
+  "license": "MIT",
+  "homepage": "https://subconscious.dev",
+  "keywords": ["n8n-community-node-package", "ai", "agent", "llm", "subconscious"],
+  "author": {
+    "name": "Owen Stepan",
+    "email": "106773727+ostepan8@users.noreply.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/subconscious-ai/n8n-nodes-subconscious.git"
+  },
+  "scripts": {
+    "build": "n8n-node build",
+    "build:watch": "tsc --watch",
+    "dev": "n8n-node dev",
+    "lint": "n8n-node lint",
+    "lint:fix": "n8n-node lint --fix",
+    "release": "n8n-node release",
+    "prepublishOnly": "n8n-node prerelease"
+  },
+  "files": ["dist"],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "strict": true,
+    "credentials": ["dist/credentials/SubconsciousApi.credentials.js"],
+    "nodes": ["dist/nodes/Subconscious/Subconscious.node.js"]
+  },
+  "devDependencies": {
+    "@n8n/node-cli": "*",
+    "eslint": "9.32.0",
+    "prettier": "3.6.2",
+    "release-it": "^19.0.4",
+    "typescript": "5.9.2"
+  },
+  "peerDependencies": { "n8n-workflow": "*" }
+}
