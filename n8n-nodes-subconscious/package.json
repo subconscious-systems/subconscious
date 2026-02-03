@@ -11,7 +11,8 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/subconscious-ai/n8n-nodes-subconscious.git"
+    "url": "https://github.com/subconscious-systems/subconscious.git",
+    "directory": "n8n-nodes-subconscious"
   },
   "scripts": {
     "build": "n8n-node build",
