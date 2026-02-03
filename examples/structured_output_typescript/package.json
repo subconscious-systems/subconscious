@@ -1,7 +1,8 @@
 {
   "name": "structured_output_typescript",
   "version": "1.0.0",
-  "description": "",
+  "displayName": "Structured Output (TypeScript)",
+  "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

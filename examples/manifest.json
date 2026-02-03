@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "generated": "2026-02-03T20:53:01.061Z",
+  "examples": [
+    {
+      "name": "e2b_cli",
+      "displayName": "E2B CLI Agent",
+      "description": "CLI-first autonomous agent using Subconscious + E2B cloud sandboxes"
+    },
+    {
+      "name": "search_agent_cli",
+      "displayName": "Search Agent CLI",
+      "description": "CLI agent with web search capabilities powered by Subconscious"
+    },
+    {
+      "name": "structured_output_python",
+      "displayName": "Structured Output (Python)",
+      "description": "Get type-safe structured responses from Subconscious agents using Pydantic models"
+    },
+    {
+      "name": "structured_output_typescript",
+      "displayName": "Structured Output (TypeScript)",
+      "description": "Get type-safe structured responses from Subconscious agents using Zod schemas"
+    }
+  ]
+}

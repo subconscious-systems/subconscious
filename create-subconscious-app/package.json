@@ -1,0 +1,35 @@
+{
+    "name": "create-subconscious-app",
+    "version": "0.1.0",
+    "description": "Create a new Subconscious agent project from examples",
+    "bin": {
+        "create-subconscious-app": "./bin/cli.js"
+    },
+    "files": [
+        "bin"
+    ],
+    "type": "module",
+    "engines": {
+        "node": ">=18"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/subconscious-systems/subconscious.git",
+        "directory": "create-subconscious-app"
+    },
+    "keywords": [
+        "subconscious",
+        "agent",
+        "ai",
+        "cli",
+        "scaffolding",
+        "template"
+    ],
+    "author": "Subconscious Systems",
+    "license": "MIT",
+    "dependencies": {
+        "giget": "^1.2.3",
+        "prompts": "^2.4.2",
+        "picocolors": "^1.1.1"
+    }
+}

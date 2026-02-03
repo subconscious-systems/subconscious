@@ -1,9 +1,10 @@
 {
     "name": "@subcon/e2b-cli",
     "version": "0.1.10",
+    "displayName": "E2B CLI Agent",
     "private": false,
     "type": "module",
-    "description": "CLI-first autonomous agent using Subconscious + E2B",
+    "description": "CLI-first autonomous agent using Subconscious + E2B cloud sandboxes",
     "main": "dist/index.js",
     "bin": {
         "e2b-cli": "dist/index.js",
