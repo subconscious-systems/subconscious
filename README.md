@@ -81,7 +81,17 @@
 
 ## 🚀 Quick Start
 
-### Subconscous Python SDK
+### Create a New Project
+
+The fastest way to get started is with our CLI:
+
+```bash
+npx create-subconscious-app
+```
+
+This will guide you through creating a new project from our example templates.
+
+### Subconscious Python SDK
 
 Install the package using pip:
 
