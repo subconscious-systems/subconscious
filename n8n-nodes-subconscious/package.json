@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-subconscious",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "n8n community node for Subconscious AI agents with web search and reasoning capabilities",
   "license": "MIT",
   "homepage": "https://subconscious.dev",
@@ -20,8 +20,7 @@
     "dev": "n8n-node dev",
     "lint": "n8n-node lint",
     "lint:fix": "n8n-node lint --fix",
-    "release": "n8n-node release",
-    "prepublishOnly": "n8n-node prerelease"
+    "test": "npm run lint && npm run build"
   },
   "files": ["dist"],
   "n8n": {
