@@ -1,0 +1,81 @@
+/*
+ * Global styles.
+ * Color palette defined in tailwind.config.js.
+ */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background-color: #0a0a0f;
+    color: #f0f0f5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #2a2a3a;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3a3a4a;
+}
+
+/* Card glow */
+.card-glow {
+    box-shadow: 0 0 40px rgba(255, 107, 74, 0.05);
+}
+
+/* Gradient border animation */
+@keyframes gradient-shift {
+    0% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.gradient-border {
+    background: linear-gradient(135deg, #ff6b4a, #ff8066, #4ade80, #ff6b4a);
+    background-size: 300% 300%;
+    animation: gradient-shift 8s ease infinite;
+}
+
+/* Pulse animation */
+@keyframes pulse-subtle {
+
+    0%,
+    100% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+}
+
+.pulse-subtle {
+    animation: pulse-subtle 1.5s ease-in-out infinite;
+}
