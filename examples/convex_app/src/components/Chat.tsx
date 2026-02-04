@@ -39,19 +39,35 @@ export function Chat() {
             if (!convexUrlRaw) {
                 console.error("VITE_CONVEX_URL is not set. Check your .env.local file.");
                 alert("Error: VITE_CONVEX_URL not configured. See console for details.");
+                setIsLoading(false);
                 return;
             }
 
             const convexUrl = convexUrlRaw.replace(".cloud", ".site");
 
-            await fetch(`${convexUrl}/chat`, {
+            const response = await fetch(`${convexUrl}/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: userMessage }),
             });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+                console.error("Server error:", errorData);
+
+                let errorMessage = errorData.error || "Failed to send message";
+                if (errorData.hint) {
+                    errorMessage += `\n\nHint: ${errorData.hint}`;
+                }
+                if (errorData.details) {
+                    errorMessage += `\n\nDetails: ${errorData.details}`;
+                }
+
+                alert(errorMessage);
+            }
         } catch (error) {
             console.error("Failed to send message:", error);
-            alert("Failed to send message. Check console for details.");
+            alert(`Failed to send message: ${error instanceof Error ? error.message : String(error)}`);
         } finally {
             setIsLoading(false);
         }
@@ -110,8 +126,8 @@ export function Chat() {
                     >
                         <div
                             className={`max-w-[85%] rounded-2xl px-4 py-3 ${msg.role === "user"
-                                    ? "bg-gradient-to-br from-ember to-coral text-white"
-                                    : "bg-slate text-white/90"
+                                ? "bg-gradient-to-br from-ember to-coral text-white"
+                                : "bg-slate text-white/90"
                                 }`}
                         >
                             <p className="text-sm leading-relaxed">{msg.content}</p>
