@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-02-04T16:09:53.248Z",
+  "generated": "2026-02-04T16:23:18.148Z",
   "examples": [
     {
       "name": "convex_app",
@@ -8,10 +8,10 @@
       "description": "AI todo assistant with real-time updates using Subconscious + Convex",
       "setup": [
         "npm install",
-        "npx convex dev",
-        "# Set VITE_CONVEX_URL in .env.local",
-        "# Set SUBCONSCIOUS_API_KEY and CONVEX_URL in Convex Dashboard",
-        "npm run dev"
+        "npx convex dev (keep this terminal running and note your .cloud URL)",
+        "Create .env.local with VITE_CONVEX_URL=<your .cloud URL>",
+        "Set SUBCONSCIOUS_API_KEY and CONVEX_URL in Convex Dashboard",
+        "npm run dev (new terminal)"
       ]
     },
     {
