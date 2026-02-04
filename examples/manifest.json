@@ -1,7 +1,12 @@
 {
   "version": 1,
-  "generated": "2026-02-03T21:00:07.818Z",
+  "generated": "2026-02-04T15:51:42.095Z",
   "examples": [
+    {
+      "name": "convex_app",
+      "displayName": "Convex Real-time App",
+      "description": "AI todo assistant with real-time updates using Subconscious + Convex"
+    },
     {
       "name": "e2b_cli",
       "displayName": "E2B CLI Agent",
