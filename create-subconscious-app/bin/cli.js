@@ -17,7 +17,6 @@ const MANIFEST_URL =
 
 const REPO_BASE = 'github:subconscious-systems/subconscious/examples';
 
-// Parse CLI arguments
 function parseArgs(args) {
   const result = {
     projectName: null,
@@ -182,16 +181,25 @@ function detectProjectType(projectPath) {
   return 'unknown';
 }
 
-function printNextSteps(projectName, projectType) {
+function getDefaultSetup(projectType) {
+  if (projectType === 'node') {
+    return ['npm install', 'npm run dev'];
+  }
+  if (projectType === 'python') {
+    return ['pip install -r requirements.txt', 'python main.py'];
+  }
+  return [];
+}
+
+function printNextSteps(projectName, projectType, exampleData) {
   console.log(`\n  ${pc.green('Done!')} Created ${pc.cyan(projectName)}\n`);
   console.log(`  ${pc.dim('cd')} ${projectName}`);
 
-  if (projectType === 'node') {
-    console.log(`  ${pc.dim('npm install')}`);
-    console.log(`  ${pc.dim('npm run dev')}`);
-  } else if (projectType === 'python') {
-    console.log(`  ${pc.dim('pip install -r requirements.txt')}`);
-    console.log(`  ${pc.dim('python main.py')}`);
+  // Use custom setup if provided, otherwise fall back to defaults
+  const setup = exampleData?.setup || getDefaultSetup(projectType);
+
+  for (const cmd of setup) {
+    console.log(`  ${pc.dim(cmd)}`);
   }
 
   console.log();
@@ -229,9 +237,10 @@ async function main() {
 
   // Validate and get example
   let exampleName = args.example;
+  let exampleData = null;
   if (exampleName) {
-    const validExample = examples.find((ex) => ex.name === exampleName);
-    if (!validExample) {
+    exampleData = examples.find((ex) => ex.name === exampleName);
+    if (!exampleData) {
       console.error(
         pc.red(
           `Unknown example: ${exampleName}. Run with --list to see available examples.`
@@ -241,6 +250,7 @@ async function main() {
     }
   } else {
     exampleName = await promptExample(examples);
+    exampleData = examples.find((ex) => ex.name === exampleName);
   }
 
   const targetDir = path.resolve(process.cwd(), projectName);
@@ -274,7 +284,7 @@ async function main() {
 
   // Detect project type and print next steps
   const projectType = detectProjectType(targetDir);
-  printNextSteps(projectName, projectType);
+  printNextSteps(projectName, projectType, exampleData);
 }
 
 main().catch((error) => {

@@ -3,6 +3,12 @@
   "version": "1.0.0",
   "displayName": "Structured Output (TypeScript)",
   "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
+  "type": "module",
+  "setup": [
+    "npm install",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "npx tsx main.ts"
+  ],
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -10,7 +16,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "module",
   "dependencies": {
     "subconscious": "^0.2.0",
     "zod": "^4.3.6"

@@ -5,6 +5,13 @@
     "description": "AI todo assistant with real-time updates using Subconscious + Convex",
     "private": true,
     "type": "module",
+    "setup": [
+        "npm install",
+        "npx convex dev",
+        "# Set VITE_CONVEX_URL in .env.local",
+        "# Set SUBCONSCIOUS_API_KEY and CONVEX_URL in Convex Dashboard",
+        "npm run dev"
+    ],
     "scripts": {
         "dev": "vite",
         "build": "tsc && vite build",
