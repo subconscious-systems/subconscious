@@ -1,31 +1,59 @@
 {
   "version": 1,
-  "generated": "2026-02-04T15:51:42.095Z",
+  "generated": "2026-02-04T16:09:53.248Z",
   "examples": [
     {
       "name": "convex_app",
       "displayName": "Convex Real-time App",
-      "description": "AI todo assistant with real-time updates using Subconscious + Convex"
+      "description": "AI todo assistant with real-time updates using Subconscious + Convex",
+      "setup": [
+        "npm install",
+        "npx convex dev",
+        "# Set VITE_CONVEX_URL in .env.local",
+        "# Set SUBCONSCIOUS_API_KEY and CONVEX_URL in Convex Dashboard",
+        "npm run dev"
+      ]
     },
     {
       "name": "e2b_cli",
       "displayName": "E2B CLI Agent",
-      "description": "CLI-first autonomous agent using Subconscious + E2B cloud sandboxes"
+      "description": "CLI-first autonomous agent using Subconscious + E2B cloud sandboxes",
+      "setup": [
+        "bun install",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "export E2B_API_KEY=your_key",
+        "bun run agent"
+      ]
     },
     {
       "name": "search_agent_cli",
       "displayName": "Search Agent CLI",
-      "description": "CLI agent with web search capabilities powered by Subconscious"
+      "description": "CLI agent with web search capabilities powered by Subconscious",
+      "setup": [
+        "pip install -r requirements.txt",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "python cli.py"
+      ]
     },
     {
       "name": "structured_output_python",
       "displayName": "Structured Output (Python)",
-      "description": "Get type-safe structured responses from Subconscious agents using Pydantic models"
+      "description": "Get type-safe structured responses from Subconscious agents using Pydantic models",
+      "setup": [
+        "pip install -r requirements.txt",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "python main.py"
+      ]
     },
     {
       "name": "structured_output_typescript",
       "displayName": "Structured Output (TypeScript)",
-      "description": "Get type-safe structured responses from Subconscious agents using Zod schemas"
+      "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
+      "setup": [
+        "npm install",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "npx tsx main.ts"
+      ]
     }
   ]
 }
