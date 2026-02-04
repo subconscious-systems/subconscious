@@ -22,11 +22,13 @@ This creates a Convex project and generates `convex/_generated/`. Keep this runn
 
 ### 3. Create `.env.local`
 
+Create a file named `.env.local` in the project root with:
+
 ```
-VITE_CONVEX_URL=https://your-project.convex.cloud
+VITE_CONVEX_URL=https://your-project-name.convex.cloud
 ```
 
-Use the URL from step 2.
+**Important:** Use the exact URL from step 2. It should end with `.convex.cloud` (not `.convex.site` or `dashboard.convex.dev`).
 
 ### 4. Set Convex Dashboard environment variables
 
