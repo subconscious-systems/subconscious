@@ -229,13 +229,7 @@ async function main() {
     process.exit(0);
   }
 
-  // Get project name
-  let projectName = args.projectName;
-  if (!projectName) {
-    projectName = await promptProjectName();
-  }
-
-  // Validate and get example
+  // Validate and get example (prompt first in interactive mode)
   let exampleName = args.example;
   let exampleData = null;
   if (exampleName) {
@@ -251,6 +245,12 @@ async function main() {
   } else {
     exampleName = await promptExample(examples);
     exampleData = examples.find((ex) => ex.name === exampleName);
+  }
+
+  // Get project name
+  let projectName = args.projectName;
+  if (!projectName) {
+    projectName = await promptProjectName();
   }
 
   const targetDir = path.resolve(process.cwd(), projectName);
