@@ -14,11 +14,16 @@ for (const folder of fs.readdirSync(examplesDir)) {
   const packageJsonPath = path.join(folderPath, 'package.json');
   if (fs.existsSync(packageJsonPath)) {
     const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-    examples.push({
+    const example = {
       name: folder,
       displayName: pkg.displayName || pkg.name || folder,
       description: pkg.description || ''
-    });
+    };
+    // Include setup instructions if provided
+    if (pkg.setup && Array.isArray(pkg.setup)) {
+      example.setup = pkg.setup;
+    }
+    examples.push(example);
     continue;
   }
   
@@ -28,11 +33,25 @@ for (const folder of fs.readdirSync(examplesDir)) {
     const content = fs.readFileSync(pyprojectPath, 'utf-8');
     const nameMatch = content.match(/^name\s*=\s*"([^"]+)"/m);
     const descMatch = content.match(/^description\s*=\s*"([^"]+)"/m);
-    examples.push({
+    
+    const example = {
       name: folder,
       displayName: nameMatch?.[1] || folder,
       description: descMatch?.[1] || ''
-    });
+    };
+    
+    // Parse setup array from pyproject.toml if present
+    // Format: setup = ["cmd1", "cmd2"]
+    const setupMatch = content.match(/^setup\s*=\s*\[([\s\S]*?)\]/m);
+    if (setupMatch) {
+      const setupStr = setupMatch[1];
+      const cmds = setupStr.match(/"([^"]+)"/g);
+      if (cmds) {
+        example.setup = cmds.map(s => s.replace(/"/g, ''));
+      }
+    }
+    
+    examples.push(example);
     continue;
   }
   

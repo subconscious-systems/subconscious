@@ -9,6 +9,13 @@ dependencies = [
     "subconscious-sdk",
 ]
 
+# Setup instructions for create-subconscious-app
+setup = [
+    "pip install -r requirements.txt",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "python main.py"
+]
+
 [project.optional-dependencies]
 dev = []
 
