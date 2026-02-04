@@ -1,6 +1,6 @@
 {
     "name": "create-subconscious-app",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Create a new Subconscious agent project from examples",
     "bin": {
         "create-subconscious-app": "./bin/cli.js"
