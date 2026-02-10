@@ -1,4 +1,4 @@
-# TIMRUN: Efficient Engine for Long-horizon Reasoning
+# Subconscious: Long-Horizon Reasoning Engine
 
 <div align="center">
 
@@ -8,15 +8,13 @@
 
 <h3 style="margin: 8px 0;">
   <a href="https://www.subconscious.dev/" style="text-decoration: none; color: inherit;">
-    Try on Subconscious Systems
-  </a>
-  <a href="https://www.subconscious.dev/" style="text-decoration: none; color: #007acc; font-size: 0.8em; margin-left: 4px;">
-    [link]
+    Subconscious Systems
   </a>
 </h3>
 
 [![Paper](https://img.shields.io/badge/paper-arXiv-red.svg)](https://arxiv.org/pdf/2507.16784)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Models-yellow)](https://huggingface.co/SubconsciousDev/TIM-8b-preview)
+[![Documentation](https://img.shields.io/badge/docs-subconscious.dev-blue)](https://docs.subconscious.dev)
 
 *Enabling efficient multi-hop reasoning and tool use for extended problem-solving*
 
@@ -24,20 +22,20 @@
 
 ## 🚀 Overview
 
-**TIMRUN** (TIM Runtime) is a high-performance inference engine that orchestrates the **TIM (Thread Inference Model)** for unprecedented long-horizon reasoning capabilities. TIMRUN manages the entire inference pipeline, using TIM to predict next tokens while performing intelligent structure checks to extract tool calls and identify prunable subtasks. This enables efficient end-to-end multi-hop tool use and makes complex problem-solving tasks more scalable.
+**Subconscious** is a high-performance inference engine that orchestrates the **TIM (Thread Inference Model)** for unprecedented long-horizon reasoning capabilities. Subconscious manages the entire inference pipeline, using TIM to predict next tokens while performing intelligent structure checks to extract tool calls and identify prunable subtasks. This enables efficient end-to-end multi-hop tool use and makes complex problem-solving tasks more scalable.
 
 ### Key Features
 
 - 🔗 **Multi-hop Reasoning**: Chain complex reasoning steps across extended contexts
 - 🛠️ **End-to-End Tool Integration**: Seamlessly incorporate external tools and APIs
 - 🎯 **Long-horizon Planning**: Handle tasks requiring extended planning and execution
-- 🧠 **Generative Orchestration**: Intelligent context engineering learned by the TIM model and handled by TIMRUN with efficient KV cache pruning
+- 🧠 **Generative Orchestration**: Intelligent context engineering learned by the TIM model with efficient KV cache pruning
 
 ## 🏗️ Architecture
 
 ```
 ┌─────────────────┐    ┌─────────────────────────────────────────┐
-│   Input Query   │───▶│              TIMRUN Engine              │
+│   Input Query   │───▶│         Subconscious Engine            │
 │                 │    │                                         │
 └─────────────────┘    │  ┌─────────────────┐                    │
                        │  │ Structure Check │                    │
@@ -67,8 +65,8 @@
                        │           │                      │      │
                        │           ▼                      ▼      │
                        │  ┌─────────────────────────────────────┐│
-                       │  │         Continue Decoding           ││
-                       │  │      (with updated context)         ││
+                       │  │         Continue Decoding             ││
+                       │  │      (with updated context)          ││
                        │  └─────────────────────────────────────┘│
                        └─────────────────────────────────────────┘
                                         │
@@ -81,134 +79,132 @@
 
 ## 🚀 Quick Start
 
-### Create a New Project
+### Python SDK
 
-The fastest way to get started is with our CLI:
-
-```bash
-npx create-subconscious-app
-```
-
-This will guide you through creating a new project from our example templates.
-
-### Subconscious Python SDK
-
-Install the package using pip:
+Install the package:
 
 ```bash
-pip install subconscious-python
+pip install subconscious-sdk
 ```
 
-> **Note**: The package name is `subconscious-python` but you import it as `subconscious`:
-> ```python
-> import subconscious  # Import name remains clean and simple
-> ```
+> **Note**: The package name is `subconscious-sdk` but you import it as `subconscious`.
 
 Run your first agent:
-```python
-from subconscious import Client
-
-# Initialize the client
-client = Client(
-    base_url="https://api.subconscious.dev/v1", # can be omitted
-    api_key="your-api-key" # get it from https://subconscious.dev
-)
-
-# Define tools
-tools = [
-    {
-        "type": "function",
-        "name": "calculator",
-        "url": "https://URL_TO_CALCULATOR_TOOL/ENDPOINT", # the server url of your own tool
-        "method": "POST",
-        "timeout": 5, # seconds
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "operation": {"type": "string"},
-                "a": {"type": "number"},
-                "b": {"type": "number"}
-            },
-            "required": ["operation", "a", "b"]
-        }
-    }
-]
-
-# Build toolkit
-client.build_toolkit(tools, agent_name="math_agent")
-
-# Run agent
-messages = [{"role": "user", "content": "What is 2 + 3?"}]
-response = client.agent.run(messages, agent_name="math_agent")
-print(response)
-```
-
-The TIM language model will call the `calculator` tool as many times as necessary, handle excepts, compute the answer, and return the result. The agent is completed with one language model API call!
-
-We also provide fine-grained control over the reasoning structure, tool use, and memory management. Check out the [deep research agent example](examples/deep_research) for more advanced usage.
-
-### OpenAI Compatible API
-
-> Note: The OpenAI compatible API does not support fine-grained reasoning structure control. For advanced performance tuning, please use the Subconscious Python SDK.
 
 ```python
-client = OpenAI(
-    base_url = "https://api.subconscious.dev/v1",
-    api_key = # get API KEY from https://subconscious.dev
+from subconscious import Subconscious
+
+client = Subconscious(api_key="your-api-key")
+
+run = client.run(
+    engine="tim-gpt",
+    input={
+        "instructions": "Search for the latest AI news and summarize the top 3 stories",
+        "tools": [{"type": "platform", "id": "parallel_search"}],
+    },
+    options={"await_completion": True},
 )
+
+print(run.result.answer)
 ```
 
-### Reasoning with Multi-hop Search Tool Calls
+### Node.js SDK
+
+Install the package:
+
+```bash
+npm install subconscious
+# or
+pnpm add subconscious
+# or
+yarn add subconscious
+```
+
+Run your first agent:
+
+```typescript
+import { Subconscious } from 'subconscious';
+
+const client = new Subconscious({
+  apiKey: process.env.SUBCONSCIOUS_API_KEY!,
+});
+
+const run = await client.run({
+  engine: 'tim-gpt',
+  input: {
+    instructions: 'Search for the latest AI news and summarize the top 3 stories',
+    tools: [{ type: 'platform', id: 'parallel_search', options: {} }],
+  },
+  options: { awaitCompletion: true },
+});
+
+console.log(run.result?.answer);
+```
+
+## 🎯 Available Engines
+
+| Engine | API Name | Type | Description |
+|--------|----------|------|-------------|
+| **TIM-Edge** | `tim-edge` | Unified | Highly efficient engine tuned for performance with search tools |
+| **TIM-GPT** | `tim-gpt` | Compound | Complex reasoning engine backed by OpenAI GPT-4.1 (Recommended) |
+| **TIM-GPT-Heavy** | `tim-gpt-heavy` | Compound | Maximum capability engine backed by OpenAI GPT-5.2 |
+
+## 🛠️ Tools
+
+Subconscious supports three types of tools:
+
+### Platform Tools
+
+Built-in tools hosted by Subconscious. No setup required:
+
+- `web_search` - Search the web using Google
+- `webpage_understanding` - Extract and summarize webpage content
+- `parallel_search` - Precision search from authoritative sources
+- `parallel_extract` - Extract specific content from webpages
+- `exa_search` - Semantic search for high-quality content
+- `exa_crawl` - Retrieve full webpage content
+- `exa_find_similar` - Find pages similar to a given URL
+
+### Function Tools
+
+Call your own HTTP endpoints:
 
 ```python
-resp = client.chat.completions.create(
-    model = "tim-large",
-    messages = [
-        {
-            'role': 'user',
-            'content': 'find 10 most influencial research papers in dog walking.'
-        }
-    ],
-    top_p = 0.95,
-    max_completion_tokens = 10000,
-    temperature = 0.6,
-    tools = [
-        {
-            "type": "function",
-            "name": "SearchTool",
-            "description": "a general search engine returns title, url, and desciription of 10 webpages",
-            "url": URL_TO_TOOL, # the server url of your own tool
-            "method": "POST",
-            "timeout": 10,
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "A natural language query for the search engine."
-                    }
-                },
-                "required": [
-                    "query"
-                ],
-                "additionalProperties": False
-            }
-        }
-    ]
-    stream = False # if true, same as OpenAI's streaming
-)
-print(json.loads(resp.choices[0].message.content)['answer'])
+tool = {
+    "type": "function",
+    "name": "get_weather",
+    "description": "Get current weather for a location",
+    "url": "https://api.example.com/weather",
+    "method": "POST",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "location": {"type": "string", "description": "City name"},
+        },
+        "required": ["location"],
+    },
+    # Optional: HTTP headers for authentication
+    "headers": {
+        "Authorization": "Bearer your-token",
+    },
+    # Optional: Default parameters hidden from model
+    "defaults": {
+        "apiVersion": "v2",
+    },
+}
 ```
 
-## 🤖 Showcase agents built with TIM
+### MCP Tools
 
-- [AP CS test assistant](https://github.com/aivyngo/public-ap-csa-agent)
-- [Arxiv podcast writer - coming soon]
-- [Legal research agent - coming soon]
+Connect to [Model Context Protocol](https://modelcontextprotocol.io/) servers:
 
-## 🛠️ Available Tools
-
-coming soon
+```python
+mcp_tool = {
+    "type": "mcp",
+    "url": "https://mcp.example.com",
+    "allow": ["read", "write"],
+}
+```
 
 ## 📊 Performance
 
@@ -222,13 +218,13 @@ coming soon
 ## 📚 Documentation
 
 - [Getting Started Guide](https://docs.subconscious.dev/quickstart)
-- [Available Models](https://docs.subconscious.dev/platform/models)
-- [Tool Development](https://docs.subconscious.dev/platform/tools)
-- [API Reference](https://docs.subconscious.dev/platform/using-subconscious)
+- [API Reference](https://docs.subconscious.dev/api-reference/introduction)
+- [Tools Documentation](https://docs.subconscious.dev/core-concepts/tools)
+- [Engines Guide](https://docs.subconscious.dev/core-concepts/engines)
 
 ## 🔬 Research & Papers
 
-If you use found our work helpful in your research, please cite:
+If you found our work helpful in your research, please cite:
 
 ```bibtex
 @article{tim-timrun,
@@ -246,11 +242,12 @@ This TIM-8b-preview model is licensed under the MIT License.
 ## 📞 Support
 
 - 📧 Email: hongyin OR jack AT subconscious DOT dev
-- 🐛 Issues: [GitHub Issues](https://github.com/subconscious-systems/TIMRUN/issues)
-- 📖 Documentation: [docs.subconscious.dev/](https://docs.subconscious.dev/)
+- 🐛 Issues: [GitHub Issues](https://github.com/subconscious-systems/subconscious-node/issues)
+- 📖 Documentation: [docs.subconscious.dev](https://docs.subconscious.dev/)
+- 🌐 Platform: [subconscious.dev/platform](https://www.subconscious.dev/platform)
 
 ---
 
 <div align="center">
-<strong>Ready to unlock the power of long-horizon reasoning? Get started with TIMRUN today!</strong>
+<strong>Ready to unlock the power of long-horizon reasoning? Get started with Subconscious today!</strong>
 </div>
