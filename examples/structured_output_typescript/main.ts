@@ -19,7 +19,7 @@ type SentimentAnalysis = z.infer<typeof SentimentAnalysis>;
 
 async function analyzeSentiment(text: string): Promise<SentimentAnalysis> {
   const run = await client.run({
-    engine: "tim-gpt",
+    engine: "tim",
     input: {
       instructions: `Analyze the sentiment of the following text: '${text}'`,
       tools: [{ type: "platform", id: "web_search", options: {} }],
