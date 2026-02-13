@@ -22,14 +22,14 @@
 
 ## 🚀 Overview
 
-**Subconscious** is a high-performance inference engine that orchestrates the **TIM (Thread Inference Model)** for unprecedented long-horizon reasoning capabilities. Subconscious manages the entire inference pipeline, using TIM to predict next tokens while performing intelligent structure checks to extract tool calls and identify prunable subtasks. This enables efficient end-to-end multi-hop tool use and makes complex problem-solving tasks more scalable.
+**TIMRUN** (TIM Runtime) is a high-performance inference engine that orchestrates the **TIM (Thread Inference Model)** for unprecedented long-horizon reasoning capabilities. Subconscious manages the entire inference pipeline, using TIM to predict next tokens while performing intelligent structure checks to extract tool calls and identify prunable subtasks. This enables efficient end-to-end multi-hop tool use and makes complex problem-solving tasks more scalable.
 
 ### Key Features
 
 - 🔗 **Multi-hop Reasoning**: Chain complex reasoning steps across extended contexts
 - 🛠️ **End-to-End Tool Integration**: Seamlessly incorporate external tools and APIs
 - 🎯 **Long-horizon Planning**: Handle tasks requiring extended planning and execution
-- 🧠 **Generative Orchestration**: Intelligent context engineering learned by the TIM model with efficient KV cache pruning
+- 🧠 **Generative Orchestration**: Intelligent context engineering learned by the TIM model and handled by TIMRUN with efficient KV cache pruning
 
 ## 🏗️ Architecture
 
@@ -65,8 +65,8 @@
                        │           │                      │      │
                        │           ▼                      ▼      │
                        │  ┌─────────────────────────────────────┐│
-                       │  │         Continue Decoding             ││
-                       │  │      (with updated context)          ││
+                       │  │         Continue Decoding           ││
+                       │  │      (with updated context)         ││
                        │  └─────────────────────────────────────┘│
                        └─────────────────────────────────────────┘
                                         │
@@ -87,7 +87,7 @@ Install the package:
 pip install subconscious-sdk
 ```
 
-> **Note**: The package name is `subconscious-sdk` but you import it as `subconscious`.
+> **Note**: The package name is `subconscious-python` but you import it as `subconscious`:
 
 Run your first agent:
 
