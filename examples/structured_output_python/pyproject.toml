@@ -1,5 +1,5 @@
 [project]
-name = "Structured Output (Python)"
+name = "structured-output-python"
 version = "0.1.0"
 description = "Get type-safe structured responses from Subconscious agents using Pydantic models"
 requires-python = ">=3.9"
@@ -7,13 +7,6 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "pydantic>=2.0.0",
     "subconscious-sdk",
-]
-
-# Setup instructions for create-subconscious-app
-setup = [
-    "pip install .",
-    "export SUBCONSCIOUS_API_KEY=your_key",
-    "python main.py"
 ]
 
 [project.optional-dependencies]
@@ -25,3 +18,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.subconscious]
+display_name = "Structured Output (Python)"
+setup = [
+    "pip install .",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "python main.py",
+]

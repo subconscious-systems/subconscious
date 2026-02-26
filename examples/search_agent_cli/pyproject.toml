@@ -1,5 +1,5 @@
 [project]
-name = "Search Agent CLI"
+name = "search-agent-cli"
 version = "0.1.0"
 description = "CLI agent with web search capabilities powered by Subconscious"
 requires-python = ">=3.9"
@@ -8,13 +8,6 @@ dependencies = [
     "rich>=13.0.0",
     "python-dotenv>=1.0.0",
     "subconscious-sdk",
-]
-
-# Setup instructions for create-subconscious-app
-setup = [
-    "pip install .",
-    "export SUBCONSCIOUS_API_KEY=your_key",
-    "python cli.py"
 ]
 
 [project.optional-dependencies]
@@ -26,3 +19,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.subconscious]
+display_name = "Search Agent CLI"
+setup = [
+    "pip install .",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "python cli.py",
+]
