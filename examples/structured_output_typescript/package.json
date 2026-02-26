@@ -17,6 +17,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "dotenv": "^16.4.0",
     "subconscious": "^0.2.0",
     "zod": "^4.3.6"
   }

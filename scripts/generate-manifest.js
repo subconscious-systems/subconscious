@@ -34,20 +34,30 @@ for (const folder of fs.readdirSync(examplesDir)) {
     const nameMatch = content.match(/^name\s*=\s*"([^"]+)"/m);
     const descMatch = content.match(/^description\s*=\s*"([^"]+)"/m);
     
+    // Parse [tool.subconscious] section for display_name and setup
+    let displayName = nameMatch?.[1] || folder;
+    const sectionMatch = content.match(/\[tool\.subconscious\]\s*\n([\s\S]*?)(?:\n\[|$)/);
+
     const example = {
       name: folder,
-      displayName: nameMatch?.[1] || folder,
+      displayName,
       description: descMatch?.[1] || ''
     };
-    
-    // Parse setup array from pyproject.toml if present
-    // Format: setup = ["cmd1", "cmd2"]
-    const setupMatch = content.match(/^setup\s*=\s*\[([\s\S]*?)\]/m);
-    if (setupMatch) {
-      const setupStr = setupMatch[1];
-      const cmds = setupStr.match(/"([^"]+)"/g);
-      if (cmds) {
-        example.setup = cmds.map(s => s.replace(/"/g, ''));
+
+    if (sectionMatch) {
+      const sectionContent = sectionMatch[1];
+
+      const displayNameMatch = sectionContent.match(/^display_name\s*=\s*"([^"]+)"/m);
+      if (displayNameMatch) {
+        example.displayName = displayNameMatch[1];
+      }
+
+      const setupMatch = sectionContent.match(/^setup\s*=\s*\[([\s\S]*?)\]/m);
+      if (setupMatch) {
+        const cmds = setupMatch[1].match(/"([^"]+)"/g);
+        if (cmds) {
+          example.setup = cmds.map(s => s.replace(/"/g, ''));
+        }
       }
     }
     

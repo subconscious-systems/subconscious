@@ -1,17 +1,10 @@
 [project]
-name = "Getting Started Notebook"
+name = "getting-started-notebook"
 version = "0.1.0"
 description = "Interactive Colab notebook to learn Subconscious from scratch — no experience required"
 requires-python = ">=3.9"
 dependencies = [
     "subconscious-sdk",
-]
-
-# Setup instructions for create-subconscious-app
-setup = [
-    "pip install .",
-    "export SUBCONSCIOUS_API_KEY=your_key",
-    "jupyter notebook getting_started.ipynb"
 ]
 
 [project.optional-dependencies]
@@ -23,3 +16,11 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
+
+[tool.subconscious]
+display_name = "Getting Started Notebook"
+setup = [
+    "pip install .",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "jupyter notebook getting_started.ipynb",
+]
