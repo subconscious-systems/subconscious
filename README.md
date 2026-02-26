@@ -100,7 +100,7 @@ run = client.run(
     engine="tim-gpt",
     input={
         "instructions": "Search for the latest AI news and summarize the top 3 stories",
-        "tools": [{"type": "platform", "id": "parallel_search"}],
+i         "tools": [{"type": "platform", "id": "fast_search"}],
     },
     options={"await_completion": True},
 )
@@ -133,7 +133,7 @@ const run = await client.run({
   engine: 'tim-gpt',
   input: {
     instructions: 'Search for the latest AI news and summarize the top 3 stories',
-    tools: [{ type: 'platform', id: 'parallel_search', options: {} }],
+    tools: [{ type: 'platform', id: 'fast_search', options: {} }],
   },
   options: { awaitCompletion: true },
 });
@@ -145,9 +145,11 @@ console.log(run.result?.answer);
 
 | Engine | API Name | Type | Description |
 |--------|----------|------|-------------|
+| **TIM** | `tim` | Unified | Our flagship unified agent engine for a wide range of tasks |
 | **TIM-Edge** | `tim-edge` | Unified | Highly efficient engine tuned for performance with search tools |
-| **TIM-GPT** | `tim-gpt` | Compound | Complex reasoning engine backed by OpenAI GPT-4.1 (Recommended) |
-| **TIM-GPT-Heavy** | `tim-gpt-heavy` | Compound | Maximum capability engine backed by OpenAI GPT-5.2 |
+| **TIMINI** | `timini` | Compound | Complex reasoning engine for long-context and tool use backed by Gemini-3 Flash |
+| **TIM-GPT** | `tim-gpt` | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-4.1 |
+| **TIM-GPT-Heavy** | `tim-gpt-heavy` | Compound | Complex reasoning engine for long-context and tool use backed by OpenAI GPT-5.2 |
 
 ## 🛠️ Tools
 
@@ -155,15 +157,21 @@ Subconscious supports three types of tools:
 
 ### Platform Tools
 
-Built-in tools hosted by Subconscious. No setup required:
+Built-in tools hosted by Subconscious. No setup required. Use with e.g. `{"type": "platform", "id": "fast_search"}`.
 
-- `web_search` - Search the web using Google
-- `webpage_understanding` - Extract and summarize webpage content
-- `parallel_search` - Precision search from authoritative sources
-- `parallel_extract` - Extract specific content from webpages
-- `exa_search` - Semantic search for high-quality content
-- `exa_crawl` - Retrieve full webpage content
-- `exa_find_similar` - Find pages similar to a given URL
+| Tool Name             | API Name                | Description                                                |
+| --------------------- | ----------------------- | ---------------------------------------------------------- |
+| Fast Search            | `fast_search`           | Extremely fast search for simple factual lookups           |
+| Web Search             | `web_search`            | Comprehensive web search for detailed research            |
+| Fresh Search           | `fresh_search`          | Search the web for content from the last 7 days            |
+| Page Reader            | `page_reader`           | Extract content from a specific webpage URL                |
+| Find Similar           | `find_similar`          | Find similar links to a given URL                           |
+| People Search          | `people_search`         | Search for people, profiles, and bios                      |
+| Company Search         | `company_search`        | Search for companies, funding info, and business details   |
+| News Search            | `news_search`           | Search for news articles and press coverage                |
+| Tweet Search           | `tweet_search`          | Search for tweets and Twitter/X discussions                |
+| Research Paper Search  | `research_paper_search` | Search for academic research papers and studies            |
+| Google Search          | `google_search`         | Search the web using Google                                 |
 
 ### Function Tools
 
@@ -205,6 +213,70 @@ mcp_tool = {
     "allow": ["read", "write"],
 }
 ```
+
+## 📦 Examples
+
+Scaffold a new project from any example using the CLI:
+
+```bash
+npx create-subconscious-app
+```
+
+This launches an interactive prompt that fetches the latest examples from this repo and downloads the one you pick. You can also skip the prompts:
+
+```bash
+npx create-subconscious-app my-agent -e e2b_cli    # fully non-interactive
+npx create-subconscious-app --list                  # print available examples
+```
+
+Browse all examples in the [`examples/`](examples/) directory.
+
+### Adding a New Example
+
+1. **Create a folder** under `examples/` with your project code (e.g. `examples/my_cool_agent/`).
+
+2. **Add metadata** so the manifest generator can pick it up:
+
+   - **JS/TS projects** — include a `package.json` with `name`, `description`, and an optional `displayName` and `setup` array:
+
+     ```json
+     {
+       "name": "my-cool-agent",
+       "displayName": "My Cool Agent",
+       "description": "Short description of what this example does",
+       "setup": [
+         "npm install",
+         "export SUBCONSCIOUS_API_KEY=your_key",
+         "npm run dev"
+       ]
+     }
+     ```
+
+   - **Python projects** — include a `pyproject.toml` with `name`, `description`, and an optional `setup` array:
+
+     ```toml
+     [project]
+     name = "My Cool Agent"
+     description = "Short description of what this example does"
+
+     setup = [
+         "pip install -r requirements.txt",
+         "export SUBCONSCIOUS_API_KEY=your_key",
+         "python main.py"
+     ]
+     ```
+
+   The `setup` array is shown to users as post-scaffold
+   next steps. If omitted, the CLI falls back to sensible
+   defaults (`npm install` / `pip install -r requirements.txt`).
+
+3. **Open a PR**. When it merges to `main`, a
+   [GitHub Action](.github/workflows/generate-manifest.yml)
+   runs `scripts/generate-manifest.js` to regenerate
+   `examples/manifest.json` automatically. The
+   `npx create-subconscious-app` CLI fetches this manifest
+   at runtime, so your new example becomes available
+   immediately — no package publish needed.
 
 ## 📊 Performance
 

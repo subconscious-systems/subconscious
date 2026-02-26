@@ -29,7 +29,7 @@ client = OpenAI(
 
 # Make a simple request without tools
 response = client.chat.completions.create(
-    model="tim-large",
+    model="tim-gpt",
     messages=[
         {
             "role": "user",
@@ -52,7 +52,7 @@ const client = new OpenAI({
 
 // Make a simple request without tools
 const response = await client.chat.completions.create({
-  model: 'tim-large',
+  model: 'tim-gpt',
   messages: [
     {
       role: 'user',
@@ -106,7 +106,7 @@ tools = [
 
 # Make request with one tool
 response = client.chat.completions.create(
-    model="tim-large",
+    model="tim-gpt",
     messages=[
         {
             "role": "user",
@@ -153,7 +153,7 @@ const tools = [
 
 // Make request with one tool
 const response = await client.chat.completions.create({
-  model: 'tim-large',
+  model: 'tim-gpt',
   messages: [
     {
       role: 'user',
@@ -238,7 +238,7 @@ tools = [
 
 # Make request with multiple tools
 response = client.chat.completions.create(
-    model="tim-large",
+    model="tim-gpt",
     messages=[
         {
             "role": "user",
@@ -313,7 +313,7 @@ const tools = [
 
 // Make request with multiple tools
 const response = await client.chat.completions.create({
-  model: 'tim-large',
+  model: 'tim-gpt',
   messages: [
     {
       role: 'user',

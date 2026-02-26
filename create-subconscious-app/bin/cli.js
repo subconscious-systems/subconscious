@@ -186,7 +186,7 @@ function getDefaultSetup(projectType) {
     return ['npm install', 'npm run dev'];
   }
   if (projectType === 'python') {
-    return ['pip install -r requirements.txt', 'python main.py'];
+    return ['pip install .', 'python main.py'];
   }
   return [];
 }
