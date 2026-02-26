@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-02-04T17:55:01.070Z",
+  "generated": "2026-02-26T17:37:08.205Z",
   "examples": [
     {
       "name": "convex_app",
@@ -25,11 +25,21 @@
       ]
     },
     {
+      "name": "getting_started_notebook",
+      "displayName": "Getting Started Notebook",
+      "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
+      "setup": [
+        "pip install .",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "jupyter notebook getting_started.ipynb"
+      ]
+    },
+    {
       "name": "search_agent_cli",
       "displayName": "Search Agent CLI",
       "description": "CLI agent with web search capabilities powered by Subconscious",
       "setup": [
-        "pip install -r requirements.txt",
+        "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "python cli.py"
       ]
@@ -39,7 +49,7 @@
       "displayName": "Structured Output (Python)",
       "description": "Get type-safe structured responses from Subconscious agents using Pydantic models",
       "setup": [
-        "pip install -r requirements.txt",
+        "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "python main.py"
       ]

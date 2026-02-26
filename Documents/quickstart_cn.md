@@ -29,7 +29,7 @@ client = OpenAI(
 
 # 进行无工具的简单请求
 response = client.chat.completions.create(
-    model="tim-large",
+    model="tim-gpt",
     messages=[
         {
             "role": "user",
@@ -52,7 +52,7 @@ const client = new OpenAI({
 
 // 进行无工具的简单请求
 const response = await client.chat.completions.create({
-  model: 'tim-large',
+  model: 'tim-gpt',
   messages: [
     {
       role: 'user',
@@ -107,7 +107,7 @@ tools = [
 
 # 使用一个工具进行请求
 response = client.chat.completions.create(
-    model="tim-large",
+    model="tim-gpt",
     messages=[
         {
             "role": "user",
@@ -155,7 +155,7 @@ const tools = [
 
 // 使用一个工具进行请求
 const response = await client.chat.completions.create({
-  model: 'tim-large',
+  model: 'tim-gpt',
   messages: [
     {
       role: 'user',
@@ -240,7 +240,7 @@ tools = [
 
 # 使用多个工具进行请求
 response = client.chat.completions.create(
-    model="tim-large",
+    model="tim-gpt",
     messages=[
         {
             "role": "user",
@@ -316,7 +316,7 @@ const tools = [
 
 // 使用多个工具进行请求
 const response = await client.chat.completions.create({
-  model: 'tim-large',
+  model: 'tim-gpt',
   messages: [
     {
       role: 'user',

@@ -199,7 +199,7 @@ For listing todos, you can either use the listTodos tool or just describe the cu
           Authorization: `Bearer ${SUBCONSCIOUS_API_KEY}`,
         },
         body: JSON.stringify({
-          engine: "tim-gpt",
+          engine: "tim",
           input: {
             instructions,
             tools,

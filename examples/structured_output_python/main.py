@@ -16,7 +16,7 @@ class SentimentAnalysis(BaseModel):
     
 def analyze_sentiment(text: str) -> SentimentAnalysis:
     run = client.run(
-        engine="tim-gpt",
+        engine="tim",
         input={
             "instructions": f"Analyze the sentiment of the following text: '{text}'",
             "tools": [

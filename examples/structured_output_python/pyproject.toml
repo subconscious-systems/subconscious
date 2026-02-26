@@ -11,7 +11,7 @@ dependencies = [
 
 # Setup instructions for create-subconscious-app
 setup = [
-    "pip install -r requirements.txt",
+    "pip install .",
     "export SUBCONSCIOUS_API_KEY=your_key",
     "python main.py"
 ]

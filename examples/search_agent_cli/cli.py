@@ -71,7 +71,7 @@ def stream(user_input_question: str, timeout: int = DEFAULT_TIMEOUT) -> None:
         )
 
         stream_agent_response = client.stream(
-            engine="tim-large", 
+            engine="tim", 
             input={
                 "instructions":  f"{user_input_question}\n\n{output_format_prompt}",
                 "tools": [

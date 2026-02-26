@@ -447,7 +447,7 @@ export async function runAgentWithTask(
 
     // Stream Subconscious events
     const stream = client.stream({
-      engine: "tim-gpt",
+      engine: "tim",
       input: {
         instructions,
         tools: tools as any,
@@ -565,7 +565,7 @@ async function runTaskWithSession(
 
   // Stream Subconscious events
   const stream = client.stream({
-    engine: "tim-gpt",
+    engine: "tim",
     input: {
       instructions,
       tools: tools as any,

@@ -1,12 +1,9 @@
 [project]
-name = "Search Agent CLI"
+name = "Getting Started Notebook"
 version = "0.1.0"
-description = "CLI agent with web search capabilities powered by Subconscious"
+description = "Interactive Colab notebook to learn Subconscious from scratch — no experience required"
 requires-python = ">=3.9"
 dependencies = [
-    "typer>=0.9.0",
-    "rich>=13.0.0",
-    "python-dotenv>=1.0.0",
     "subconscious-sdk",
 ]
 
@@ -14,7 +11,7 @@ dependencies = [
 setup = [
     "pip install .",
     "export SUBCONSCIOUS_API_KEY=your_key",
-    "python cli.py"
+    "jupyter notebook getting_started.ipynb"
 ]
 
 [project.optional-dependencies]

@@ -27,13 +27,13 @@ A Python command-line interface (CLI) that demonstrates how to use [Subconscious
 2. **Install dependencies**:
 
    ```bash
-   pip install -r requirements.txt
+   pip install .
    ```
 
    Or using `uv`:
 
    ```bash
-   uv pip install -r requirements.txt
+   uv pip install .
    ```
 
 3. **Set your API key**:

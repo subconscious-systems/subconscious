@@ -5,7 +5,7 @@ Shows how to use Pydantic models with the Subconscious SDK to get typed response
 ## Setup
 
 ```bash
-pip install subconscious pydantic python-dotenv
+pip install .
 ```
 
 Create a `.env` file:
