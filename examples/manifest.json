@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated": "2026-03-01T18:54:59.960Z",
+  "generated": "2026-03-02T19:39:07.717Z",
   "examples": [
     {
       "name": "convex_app",
@@ -66,14 +66,8 @@
     },
     {
       "name": "vercel-template",
-      "displayName": "Vercel Template",
-      "description": "Deploy a production-ready Subconscious agent app to Vercel in one click",
-      "setup": [
-        "npm install",
-        "cp .env.example .env.local",
-        "Set SUBCONSCIOUS_API_KEY in .env.local",
-        "npm run dev"
-      ]
+      "displayName": "subconscious-vercel-template",
+      "description": ""
     }
   ]
 }
