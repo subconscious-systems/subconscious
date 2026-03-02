@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="40" viewBox="0 0 200 40" fill="none">
+  <rect width="200" height="40" rx="6" fill="#000"/>
+  <rect x="0.5" y="0.5" width="199" height="39" rx="5.5" stroke="#333"/>
+  <path d="M24 14L17 26H31L24 14Z" fill="#fff"/>
+  <text x="42" y="24.5" fill="#fff" font-family="system-ui,-apple-system,sans-serif" font-size="13" font-weight="600">Deploy with Vercel</text>
+</svg>

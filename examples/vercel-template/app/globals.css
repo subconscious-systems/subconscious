@@ -1,0 +1,72 @@
+@import "tailwindcss";
+
+:root {
+  --color-primary-black: #101820;
+  --color-primary-orange: #FF5C28;
+  --color-secondary-orange: #FFC0A4;
+  --color-secondary-teal: #3ED0C3;
+  --color-accent-green: #B5E800;
+  --color-graphite: #5A5A5A;
+  --color-cream: #F0F3EF;
+
+  --background: var(--color-primary-black);
+  --foreground: var(--color-cream);
+  --accent: var(--color-primary-orange);
+  --accent-soft: var(--color-secondary-orange);
+  --teal: var(--color-secondary-teal);
+  --green: var(--color-accent-green);
+  --surface: #1a2632;
+  --surface-light: #243040;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.12);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.streaming-cursor::after {
+  content: "\25AE";
+  color: var(--accent);
+  animation: blink 0.8s step-end infinite;
+  margin-left: 1px;
+}

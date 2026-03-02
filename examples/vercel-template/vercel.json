@@ -1,0 +1,9 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "next build",
+  "devCommand": "next dev",
+  "installCommand": "npm install",
+  "env": {
+    "SUBCONSCIOUS_API_KEY": "@subconscious-api-key"
+  }
+}
