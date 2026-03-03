@@ -1,7 +1,14 @@
 {
   "name": "subconscious-vercel-template",
+  "displayName": "Vercel Agent Runner",
   "version": "1.0.0",
   "private": true,
+  "setup": [
+    "npm install",
+    "cp .env.example .env.local",
+    "Set SUBCONSCIOUS_API_KEY in .env.local",
+    "npm run dev"
+  ],
   "scripts": {
     "dev": "node scripts/dev-tunnel.mjs",
     "dev:no-tunnel": "next dev",

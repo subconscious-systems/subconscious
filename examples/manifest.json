@@ -66,8 +66,14 @@
     },
     {
       "name": "vercel-template",
-      "displayName": "subconscious-vercel-template",
-      "description": ""
+      "displayName": "Vercel Agent Runner",
+      "description": "",
+      "setup": [
+        "npm install",
+        "cp .env.example .env.local",
+        "Set SUBCONSCIOUS_API_KEY in .env.local",
+        "npm run dev"
+      ]
     }
   ]
 }
