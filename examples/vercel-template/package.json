@@ -1,6 +1,6 @@
 {
   "name": "subconscious-vercel-template",
-  "displayName": "Vercel Agent Runner",
+  "displayName": "Subconscious Vercel Template",
   "version": "1.0.0",
   "private": true,
   "setup": [
