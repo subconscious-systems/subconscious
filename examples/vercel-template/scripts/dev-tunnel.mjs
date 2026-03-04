@@ -112,7 +112,7 @@ async function main() {
   nextProcess = spawn(
     "npx",
     ["next", "dev", "--port", String(activePort)],
-    { stdio: "inherit", env },
+    { stdio: "inherit", env, shell: true },
   );
 
   function cleanup() {
