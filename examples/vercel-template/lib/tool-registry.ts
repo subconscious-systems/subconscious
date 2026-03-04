@@ -9,23 +9,23 @@
 export interface RegisteredTool {
   name: string;
   description: string;
-  type: "platform" | "self-hosted";
+  type: 'platform' | 'self-hosted';
 }
 
 export const TOOL_REGISTRY: RegisteredTool[] = [
   {
-    name: "web_search",
-    description: "Search the web for information",
-    type: "platform",
+    name: 'web_search',
+    description: 'Search the web for information',
+    type: 'platform',
   },
   {
-    name: "Calculator",
-    description: "Evaluate mathematical expressions",
-    type: "self-hosted",
+    name: 'Calculator',
+    description: 'Evaluate mathematical expressions',
+    type: 'self-hosted',
   },
   {
-    name: "WebReader",
-    description: "Fetch and read webpage content",
-    type: "self-hosted",
+    name: 'WebReader',
+    description: 'Fetch and read webpage content',
+    type: 'self-hosted',
   },
 ];
