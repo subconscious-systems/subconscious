@@ -23,14 +23,28 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    return new Response("Invalid JSON", { status: 400 });
+    return Response.json(
+      { error: "Invalid JSON in request body" },
+      { status: 400 },
+    );
   }
 
   if (!body.message?.trim()) {
-    return new Response("message is required", { status: 400 });
+    return Response.json(
+      { error: "message is required" },
+      { status: 400 },
+    );
   }
 
-  const client = getClient();
+  let client;
+  try {
+    client = getClient();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[agent] Client error:", msg);
+    return Response.json({ error: msg }, { status: 500 });
+  }
+
   const instructions = buildInstructions(
     body.message,
     body.conversationHistory,
@@ -38,17 +52,26 @@ export async function POST(req: NextRequest) {
 
   const tools = getTools();
   const toolSummary = tools.map((t) =>
-    t.type === "function" ? `${t.name} → ${t.url}` : t.type === "platform" ? t.id : "mcp",
+    t.type === "function"
+      ? `${t.name} → ${t.url}`
+      : t.type === "platform" ? t.id : "mcp",
   );
   console.log("[agent] tools:", toolSummary);
 
-  const stream = client.stream({
-    engine: process.env.SUBCONSCIOUS_ENGINE ?? "tim-gpt",
-    input: {
-      instructions,
-      tools,
-    },
-  });
+  let stream;
+  try {
+    stream = client.stream({
+      engine: process.env.SUBCONSCIOUS_ENGINE ?? "tim-gpt",
+      input: {
+        instructions,
+        tools,
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[agent] Stream init error:", msg);
+    return Response.json({ error: msg }, { status: 500 });
+  }
 
   const encoder = new TextEncoder();
 

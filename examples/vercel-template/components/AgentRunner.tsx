@@ -345,7 +345,16 @@ async function consumeStream(
     body: JSON.stringify({ message: task }),
   });
 
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const err = await res.json();
+      if (err?.error) detail = err.error;
+    } catch {
+      /* response wasn't JSON, use status code */
+    }
+    throw new Error(detail);
+  }
 
   const reader = res.body?.getReader();
   if (!reader) throw new Error("No response body");

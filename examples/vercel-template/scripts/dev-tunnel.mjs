@@ -9,18 +9,34 @@
  */
 
 import { spawn } from "node:child_process";
+import { createServer } from "node:net";
 import localtunnel from "localtunnel";
 
-const PORT = process.env.PORT || 3000;
+const PREFERRED_PORT = Number(process.env.PORT || 3000);
 const HEALTH_INTERVAL_MS = 30_000;
 const RECONNECT_DELAY_MS = 3_000;
 
 let tunnel = null;
 let tunnelUrl = null;
 let nextProcess = null;
+let activePort = null;
+
+async function findOpenPort(start) {
+  for (let port = start; port < start + 20; port++) {
+    const available = await new Promise((resolve) => {
+      const srv = createServer();
+      srv.once("error", () => resolve(false));
+      srv.listen(port, () => {
+        srv.close(() => resolve(true));
+      });
+    });
+    if (available) return port;
+  }
+  throw new Error(`No open port found in range ${start}–${start + 19}`);
+}
 
 async function openTunnel() {
-  tunnel = await localtunnel({ port: Number(PORT) });
+  tunnel = await localtunnel({ port: activePort });
   tunnelUrl = tunnel.url;
 
   tunnel.on("close", () => {
@@ -67,6 +83,11 @@ async function healthCheck() {
 }
 
 async function main() {
+  activePort = await findOpenPort(PREFERRED_PORT);
+  if (activePort !== PREFERRED_PORT) {
+    console.log(`\n  Port ${PREFERRED_PORT} is in use, using ${activePort} instead.\n`);
+  }
+
   try {
     console.log("\n  Starting tunnel...\n");
     const url = await openTunnel();
@@ -88,10 +109,11 @@ async function main() {
   const env = { ...process.env };
   if (tunnelUrl) env.APP_URL = tunnelUrl;
 
-  nextProcess = spawn("npx", ["next", "dev", "--port", String(PORT)], {
-    stdio: "inherit",
-    env,
-  });
+  nextProcess = spawn(
+    "npx",
+    ["next", "dev", "--port", String(activePort)],
+    { stdio: "inherit", env },
+  );
 
   function cleanup() {
     clearInterval(healthTimer);

@@ -18,68 +18,59 @@
  *   3. Add it to lib/tool-registry.ts so the UI sidebar shows it
  */
 
-import type { Tool } from "subconscious";
+import type { Tool } from 'subconscious';
 
 function getBaseUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL;
-  if (process.env.VERCEL_URL)
-    return `https://${process.env.VERCEL_URL}`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
-export const platformTools: Tool[] = [
-  { type: "platform", id: "web_search", options: {} },
-];
+export const platformTools: Tool[] = [{ type: 'platform', id: 'web_search', options: {} }];
 
 export function getSelfHostedTools(): Tool[] {
   const base = getBaseUrl();
   const url = `${base}/api/tools`;
   const isDev = !process.env.VERCEL_URL;
-  const tunnelHeaders = isDev
-    ? { "Bypass-Tunnel-Reminder": "true" }
-    : undefined;
+  const tunnelHeaders = isDev ? { 'Bypass-Tunnel-Reminder': 'true' } : undefined;
 
   return [
     {
-      type: "function",
-      name: "Calculator",
-      description:
-        "Evaluate a mathematical expression and return the numeric result",
+      type: 'function',
+      name: 'Calculator',
+      description: 'Evaluate a mathematical expression and return the numeric result',
       url,
-      method: "POST",
+      method: 'POST',
       timeout: 10,
       ...(tunnelHeaders && { headers: tunnelHeaders }),
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           expression: {
-            type: "string",
-            description:
-              "Mathematical expression to evaluate, e.g. '(12 + 8) * 3'",
+            type: 'string',
+            description: "Mathematical expression to evaluate, e.g. '(12 + 8) * 3'",
           },
         },
-        required: ["expression"],
+        required: ['expression'],
       },
     },
     {
-      type: "function",
-      name: "WebReader",
-      description:
-        "Fetch a webpage URL and return its text content (title + body)",
+      type: 'function',
+      name: 'WebReader',
+      description: 'Fetch a webpage URL and return its text content (title + body)',
       url,
-      method: "POST",
+      method: 'POST',
       timeout: 10,
       ...(tunnelHeaders && { headers: tunnelHeaders }),
       parameters: {
-        type: "object",
+        type: 'object',
         properties: {
           url: {
-            type: "string",
-            description:
-              "Fully qualified URL to read, e.g. https://example.com",
+            type: 'string',
+            description: 'Fully qualified URL to read, e.g. https://example.com',
           },
         },
-        required: ["url"],
+        required: ['url'],
       },
     },
 
