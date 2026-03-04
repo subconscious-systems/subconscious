@@ -1,8 +1,9 @@
 /**
  * Client-side tool metadata for the sidebar UI.
  *
- * When you add a tool in lib/tools.ts, add a matching entry here
- * so it shows up in the sidebar. The `name` must match exactly.
+ * When you add a tool (handler in app/api/tools/route.ts +
+ * schema in lib/tools.ts), add a matching entry here so it
+ * shows up in the sidebar. The `name` must match exactly.
  */
 
 export interface RegisteredTool {

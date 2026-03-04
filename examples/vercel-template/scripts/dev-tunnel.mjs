@@ -2,79 +2,106 @@
  * Local development helper.
  *
  * Subconscious needs a public URL to call your self-hosted tools.
- * This script creates a Cloudflare Quick Tunnel automatically
- * (no signup, no config) and passes the URL to Next.js as APP_URL.
+ * This script creates a localtunnel with auto-reconnect and a
+ * periodic health check so the tunnel stays alive.
  *
  * If you don't need self-hosted tools, use `npm run dev:no-tunnel`.
  */
 
 import { spawn } from "node:child_process";
-import { Tunnel } from "cloudflared";
+import localtunnel from "localtunnel";
 
 const PORT = process.env.PORT || 3000;
+const HEALTH_INTERVAL_MS = 30_000;
+const RECONNECT_DELAY_MS = 3_000;
+
+let tunnel = null;
+let tunnelUrl = null;
+let nextProcess = null;
+
+async function openTunnel() {
+  tunnel = await localtunnel({ port: Number(PORT) });
+  tunnelUrl = tunnel.url;
+
+  tunnel.on("close", () => {
+    console.log("\n  ⚠ Tunnel closed — reconnecting...\n");
+    setTimeout(reconnect, RECONNECT_DELAY_MS);
+  });
+
+  tunnel.on("error", (err) => {
+    console.log(`\n  ⚠ Tunnel error: ${err.message} — reconnecting...\n`);
+    try { tunnel.close(); } catch { /* ignore */ }
+    setTimeout(reconnect, RECONNECT_DELAY_MS);
+  });
+
+  return tunnelUrl;
+}
+
+async function reconnect() {
+  try {
+    const url = await openTunnel();
+    console.log(`  Tunnel reconnected`);
+    console.log(`  ${url}\n`);
+  } catch (err) {
+    console.warn(`  Reconnect failed: ${err.message} — retrying in ${RECONNECT_DELAY_MS / 1000}s`);
+    setTimeout(reconnect, RECONNECT_DELAY_MS);
+  }
+}
+
+async function healthCheck() {
+  if (!tunnel || tunnel.closed) return;
+  try {
+    const res = await fetch(tunnelUrl, {
+      method: "HEAD",
+      signal: AbortSignal.timeout(5_000),
+      headers: { "Bypass-Tunnel-Reminder": "true" },
+    });
+    if (!res.ok && res.status !== 404) {
+      console.log(`\n  ⚠ Health check failed (${res.status}) — reconnecting...\n`);
+      try { tunnel.close(); } catch { /* ignore */ }
+    }
+  } catch {
+    console.log("\n  ⚠ Health check failed (unreachable) — reconnecting...\n");
+    try { tunnel.close(); } catch { /* ignore */ }
+  }
+}
 
 async function main() {
-  let tunnelUrl = null;
-  let tunnel = null;
-
   try {
     console.log("\n  Starting tunnel...\n");
-
-    tunnel = Tunnel.quick({ "--url": `localhost:${PORT}` });
-
-    tunnelUrl = await new Promise((resolve, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error("Tunnel timed out after 15s")),
-        15_000,
-      );
-      tunnel.once("url", (url) => {
-        clearTimeout(timeout);
-        resolve(url);
-      });
-      tunnel.once("error", (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-    });
-
+    const url = await openTunnel();
     console.log(`  Tunnel ready`);
-    console.log(`  ${tunnelUrl}\n`);
+    console.log(`  ${url}\n`);
     console.log(
       "  Subconscious will call your self-hosted tools at this URL.\n",
     );
   } catch (err) {
     console.warn(`\n  Could not start tunnel: ${err.message}`);
-    console.warn(
-      "  Self-hosted tools (Calculator, WebReader) won't work.",
-    );
+    console.warn("  Self-hosted tools (Calculator, WebReader) won't work.");
     console.warn(
       "  Set APP_URL in .env.local to a public tunnel URL, or deploy to Vercel.\n",
     );
   }
 
+  const healthTimer = setInterval(healthCheck, HEALTH_INTERVAL_MS);
+
   const env = { ...process.env };
   if (tunnelUrl) env.APP_URL = tunnelUrl;
 
-  const next = spawn("npx", ["next", "dev", "--port", String(PORT)], {
+  nextProcess = spawn("npx", ["next", "dev", "--port", String(PORT)], {
     stdio: "inherit",
     env,
   });
 
-  function stopTunnel() {
-    try {
-      tunnel?._stop?.();
-    } catch {
-      // ignore
-    }
-  }
-
   function cleanup() {
-    stopTunnel();
-    next.kill("SIGTERM");
+    clearInterval(healthTimer);
+    try { tunnel?.close(); } catch { /* ignore */ }
+    nextProcess.kill("SIGTERM");
   }
 
-  next.on("exit", (code) => {
-    stopTunnel();
+  nextProcess.on("exit", (code) => {
+    clearInterval(healthTimer);
+    try { tunnel?.close(); } catch { /* ignore */ }
     process.exit(code ?? 0);
   });
 

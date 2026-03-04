@@ -36,11 +36,17 @@ export async function POST(req: NextRequest) {
     body.conversationHistory,
   );
 
+  const tools = getTools();
+  const toolSummary = tools.map((t) =>
+    t.type === "function" ? `${t.name} → ${t.url}` : t.type === "platform" ? t.id : "mcp",
+  );
+  console.log("[agent] tools:", toolSummary);
+
   const stream = client.stream({
     engine: process.env.SUBCONSCIOUS_ENGINE ?? "tim-gpt",
     input: {
       instructions,
-      tools: getTools(),
+      tools,
     },
   });
 

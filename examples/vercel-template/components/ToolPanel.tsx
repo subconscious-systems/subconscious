@@ -10,6 +10,7 @@
 import { TOOL_REGISTRY } from "@/lib/tool-registry";
 import {
   formatToolParams,
+  formatToolResult,
   type ParsedToolUse,
 } from "@/lib/stream-parser";
 
@@ -91,6 +92,16 @@ export function ToolPanel({ invocations }: ToolPanelProps) {
                   <pre className="mt-1.5 text-[11px] text-(--cream)/35 font-mono overflow-x-auto leading-relaxed">
                     {formatToolParams(inv.parameters)}
                   </pre>
+                )}
+                {inv.hasResult && inv.result && (
+                  <div className="mt-2 pt-2 border-t border-(--border)">
+                    <span className="text-[10px] font-semibold text-(--green)/60 uppercase tracking-wider">
+                      Result
+                    </span>
+                    <pre className="mt-1 text-[11px] text-(--green)/80 font-mono overflow-x-auto leading-relaxed">
+                      {formatToolResult(inv.result)}
+                    </pre>
+                  </div>
                 )}
               </div>
             ))}
