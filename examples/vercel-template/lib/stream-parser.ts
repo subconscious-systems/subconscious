@@ -47,6 +47,7 @@ export interface ParsedToolUse {
   toolName: string;
   parameters: string;
   hasResult: boolean;
+  result: string;
 }
 
 // ─── Main entry point ────────────────────────────────────────────
@@ -71,6 +72,22 @@ export function formatToolParams(raw: string): string {
   try {
     return Object.entries(JSON.parse(raw))
       .filter(([k]) => k !== "objective")
+      .map(
+        ([k, v]) =>
+          `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`,
+      )
+      .join("\n");
+  } catch {
+    return raw;
+  }
+}
+
+/** Format tool result for display. */
+export function formatToolResult(raw: string): string {
+  if (!raw) return "";
+  try {
+    const obj = JSON.parse(raw);
+    return Object.entries(obj)
       .map(
         ([k, v]) =>
           `${k}: ${typeof v === "string" ? v : JSON.stringify(v)}`,
@@ -150,6 +167,7 @@ function extractNodeToolUses(node: any): ParsedToolUse[] {
         toolName: tu.tool_name,
         parameters: tu.parameters ? JSON.stringify(tu.parameters) : "{}",
         hasResult: tu.tool_result !== undefined,
+        result: tu.tool_result != null ? JSON.stringify(tu.tool_result) : "",
       });
     }
   }
@@ -314,10 +332,12 @@ function extractToolUses(content: string): ParsedToolUse[] {
     const nextToolIdx = afterMatch.indexOf('"tool_name"', 10);
     const scope = nextToolIdx > 0 ? afterMatch.slice(0, nextToolIdx) : afterMatch;
 
+    const resultMatch = scope.match(/"tool_result"\s*:\s*(\{[^}]*\})/);
     tools.push({
       toolName: unesc(match[1]),
       parameters: scope.match(/"parameters"\s*:\s*(\{[^}]*\})/)?.[1] ?? "{}",
       hasResult: /"tool_result"\s*:/.test(scope),
+      result: resultMatch?.[1] ?? "",
     });
   }
 

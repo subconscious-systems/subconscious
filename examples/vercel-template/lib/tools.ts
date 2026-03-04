@@ -8,11 +8,12 @@
  *     Full list: https://docs.subconscious.dev/tools/platform
  *
  *   Self-hosted (function) tools — your own HTTP endpoints.
- *     Subconscious POSTs to the URL you provide, passing the
- *     parameters as JSON. Your endpoint returns a JSON result.
+ *     All self-hosted tools share a single dispatch endpoint at
+ *     /api/tools. Subconscious POSTs { tool_name, parameters }
+ *     and the dispatcher routes to the right handler.
  *
  * To add a new tool:
- *   1. Create the endpoint at app/api/tools/<name>/route.ts
+ *   1. Add a handler in app/api/tools/route.ts
  *   2. Add the tool definition to getSelfHostedTools() below
  *   3. Add it to lib/tool-registry.ts so the UI sidebar shows it
  */
@@ -32,6 +33,11 @@ export const platformTools: Tool[] = [
 
 export function getSelfHostedTools(): Tool[] {
   const base = getBaseUrl();
+  const url = `${base}/api/tools`;
+  const isDev = !process.env.VERCEL_URL;
+  const tunnelHeaders = isDev
+    ? { "Bypass-Tunnel-Reminder": "true" }
+    : undefined;
 
   return [
     {
@@ -39,9 +45,10 @@ export function getSelfHostedTools(): Tool[] {
       name: "Calculator",
       description:
         "Evaluate a mathematical expression and return the numeric result",
-      url: `${base}/api/tools/calculator`,
+      url,
       method: "POST",
-      timeout: 5,
+      timeout: 10,
+      ...(tunnelHeaders && { headers: tunnelHeaders }),
       parameters: {
         type: "object",
         properties: {
@@ -59,9 +66,10 @@ export function getSelfHostedTools(): Tool[] {
       name: "WebReader",
       description:
         "Fetch a webpage URL and return its text content (title + body)",
-      url: `${base}/api/tools/web-reader`,
+      url,
       method: "POST",
       timeout: 10,
+      ...(tunnelHeaders && { headers: tunnelHeaders }),
       parameters: {
         type: "object",
         properties: {
@@ -76,22 +84,8 @@ export function getSelfHostedTools(): Tool[] {
     },
 
     // ── Add your own tools here ──────────────────────────────
-    //
-    // {
-    //   type: "function",
-    //   name: "MyTool",
-    //   description: "What the tool does",
-    //   url: `${base}/api/tools/my-tool`,
-    //   method: "POST",
-    //   timeout: 10,
-    //   parameters: {
-    //     type: "object",
-    //     properties: {
-    //       query: { type: "string", description: "..." },
-    //     },
-    //     required: ["query"],
-    //   },
-    // },
+    // All tools share the same dispatch URL. Just add a matching
+    // handler in app/api/tools/route.ts.
   ];
 }
 

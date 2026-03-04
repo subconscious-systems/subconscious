@@ -1,6 +1,6 @@
 {
   "name": "subconscious-vercel-template",
-  "displayName": "Vercel Agent Runner",
+  "displayName": "Subconscious Vercel Template",
   "version": "1.0.0",
   "private": true,
   "setup": [
@@ -28,9 +28,9 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "cloudflared": "^0.7.1",
     "eslint": "^9",
     "eslint-config-next": "^15",
+    "localtunnel": "^2.0.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
