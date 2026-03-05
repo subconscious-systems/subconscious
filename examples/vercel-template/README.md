@@ -54,10 +54,9 @@ Your tools live as API routes inside this same app — no separate infra.
 
 **Adding a new tool:**
 
-1. Create `app/api/tools/your-tool/route.ts`
-2. Register it in `lib/tools.ts` inside `getSelfHostedTools()`
-3. Add it to `lib/tool-registry.ts` so the UI panel shows it
-4. Deploy
+1. Add a `tool({ ... })` entry in `lib/tools.ts` with name, description,
+   parameters, and handler — that's it, one file
+2. Deploy
 
 ## Engines
 
@@ -90,8 +89,7 @@ lib/
 ├── subconscious.ts                 # SDK singleton
 ├── tools.ts                        # Tool config (platform + self-hosted)
 ├── types.ts                        # Request/response types
-├── stream-parser.ts                # Incremental JSON stream parser
-└── tool-registry.ts                # Client-side tool metadata for UI
+└── stream-parser.ts                # Incremental JSON stream parser
 
 components/
 ├── AgentRunner.tsx                 # Task input + execution orchestrator

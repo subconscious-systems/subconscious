@@ -7,7 +7,7 @@
 
 "use client";
 
-import { TOOL_REGISTRY } from "@/lib/tool-registry";
+import { getToolRegistry } from "@/lib/tools";
 import {
   formatToolParams,
   formatToolResult,
@@ -28,7 +28,7 @@ export function ToolPanel({ invocations }: ToolPanelProps) {
           Agent Tools
         </h3>
         <div className="flex flex-col gap-1.5">
-          {TOOL_REGISTRY.map((tool) => {
+          {getToolRegistry().map((tool) => {
             const active = activeNames.has(tool.name);
             return (
               <div
@@ -54,6 +54,13 @@ export function ToolPanel({ invocations }: ToolPanelProps) {
               </div>
             );
           })}
+        </div>
+        <div className="mt-3 rounded-lg border border-dashed border-(--cream)/10 px-3 py-2.5">
+          <p className="text-[11px] text-(--cream)/30 leading-relaxed">
+            Add your own tools in{" "}
+            <code className="text-(--accent)/60 font-mono">lib/tools.ts</code>
+            {" "}&mdash; name, description, parameters, handler. That&apos;s it.
+          </p>
         </div>
       </div>
 
@@ -112,24 +119,29 @@ export function ToolPanel({ invocations }: ToolPanelProps) {
   );
 }
 
-function TypeBadge({ type }: { type: "platform" | "self-hosted" }) {
-  const isPlatform = type === "platform";
+type ToolType = "platform" | "self-hosted" | "mcp";
+
+function TypeBadge({ type }: { type: ToolType }) {
+  const colors = {
+    platform: "bg-(--teal)/10 text-(--teal) border-(--teal)/20",
+    "self-hosted": "bg-(--accent)/10 text-(--accent) border-(--accent)/20",
+    mcp: "bg-purple-500/10 text-purple-400 border-purple-400/20",
+  };
+  const labels = { platform: "platform", "self-hosted": "local", mcp: "mcp" };
   return (
     <span
       className={[
         "shrink-0 text-[10px] px-1.5 py-0.5",
         "rounded-full font-medium border",
-        isPlatform
-          ? "bg-(--teal)/10 text-(--teal) border-(--teal)/20"
-          : "bg-(--accent)/10 text-(--accent) border-(--accent)/20",
+        colors[type],
       ].join(" ")}
     >
-      {isPlatform ? "platform" : "local"}
+      {labels[type]}
     </span>
   );
 }
 
-function ToolTypeIcon({ type }: { type: "platform" | "self-hosted" }) {
+function ToolTypeIcon({ type }: { type: ToolType }) {
   if (type === "platform") {
     return (
       <svg
@@ -143,6 +155,24 @@ function ToolTypeIcon({ type }: { type: "platform" | "self-hosted" }) {
       >
         <circle cx="8" cy="8" r="6" />
         <path d="M2 8h12M8 2a10 10 0 0 1 3 6 10 10 0 0 1-3 6 10 10 0 0 1-3-6 10 10 0 0 1 3-6z" />
+      </svg>
+    );
+  }
+  if (type === "mcp") {
+    return (
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        className="text-purple-400 shrink-0"
+      >
+        <circle cx="4" cy="8" r="2" />
+        <circle cx="12" cy="4" r="2" />
+        <circle cx="12" cy="12" r="2" />
+        <path d="M6 8h4M10 4L6 8l4 4" />
       </svg>
     );
   }

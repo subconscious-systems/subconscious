@@ -1,85 +1,101 @@
 /**
- * Tool definitions passed to the Subconscious agent.
+ * Tool definitions using the Subconscious SDK types directly.
  *
- * Subconscious supports two kinds of tools:
- *
- *   Platform tools — hosted by Subconscious, referenced by ID.
- *     Example: { type: "platform", id: "web_search" }
- *     Full list: https://docs.subconscious.dev/tools/platform
- *
- *   Self-hosted (function) tools — your own HTTP endpoints.
- *     All self-hosted tools share a single dispatch endpoint at
- *     /api/tools. Subconscious POSTs { tool_name, parameters }
- *     and the dispatcher routes to the right handler.
- *
- * To add a new tool:
- *   1. Add a handler in app/api/tools/route.ts
- *   2. Add the tool definition to getSelfHostedTools() below
- *   3. Add it to lib/tool-registry.ts so the UI sidebar shows it
+ * To add a tool:
+ *   - Function tool: add a FunctionTool entry + handler in app/api/tools/route.ts
+ *   - Platform tool: add a PlatformTool entry (hosted by Subconscious)
+ *   - MCP tool:      add an McpTool entry pointing at any MCP server
  */
 
-import type { Tool } from 'subconscious';
+import type { Tool } from "subconscious";
 
 function getBaseUrl(): string {
   if (process.env.APP_URL) return process.env.APP_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  if (process.env.VERCEL_URL)
+    return `https://${process.env.VERCEL_URL}`;
   return `http://localhost:${process.env.PORT ?? 3000}`;
 }
 
-export const platformTools: Tool[] = [{ type: 'platform', id: 'web_search', options: {} }];
-
-export function getSelfHostedTools(): Tool[] {
+export function getTools(): Tool[] {
   const base = getBaseUrl();
   const url = `${base}/api/tools`;
   const isDev = !process.env.VERCEL_URL;
-  const tunnelHeaders = isDev ? { 'Bypass-Tunnel-Reminder': 'true' } : undefined;
 
   return [
+    // ── Platform tools (built-in to Subconscious) ──────────
+    { type: "platform", id: "web_search", options: {} },
+
+    // ── Self-hosted tools (your custom tools) ──────────────
+
     {
-      type: 'function',
-      name: 'Calculator',
-      description: 'Evaluate a mathematical expression and return the numeric result',
+      type: "function",
+      name: "Calculator",
+      description:
+        "Evaluate a mathematical expression and return the numeric result",
       url,
-      method: 'POST',
+      method: "POST",
       timeout: 10,
-      ...(tunnelHeaders && { headers: tunnelHeaders }),
+      ...(isDev && { headers: { "Bypass-Tunnel-Reminder": "true" } }),
       parameters: {
-        type: 'object',
+        type: "object",
         properties: {
           expression: {
-            type: 'string',
-            description: "Mathematical expression to evaluate, e.g. '(12 + 8) * 3'",
+            type: "string",
+            description:
+              "Mathematical expression to evaluate, e.g. '(12 + 8) * 3'",
           },
         },
-        required: ['expression'],
-      },
-    },
-    {
-      type: 'function',
-      name: 'WebReader',
-      description: 'Fetch a webpage URL and return its text content (title + body)',
-      url,
-      method: 'POST',
-      timeout: 10,
-      ...(tunnelHeaders && { headers: tunnelHeaders }),
-      parameters: {
-        type: 'object',
-        properties: {
-          url: {
-            type: 'string',
-            description: 'Fully qualified URL to read, e.g. https://example.com',
-          },
-        },
-        required: ['url'],
+        required: ["expression"],
       },
     },
 
-    // ── Add your own tools here ──────────────────────────────
-    // All tools share the same dispatch URL. Just add a matching
-    // handler in app/api/tools/route.ts.
+    {
+      type: "function",
+      name: "WebReader",
+      description:
+        "Fetch a webpage URL and return its text content (title + body)",
+      url,
+      method: "POST",
+      timeout: 10,
+      ...(isDev && { headers: { "Bypass-Tunnel-Reminder": "true" } }),
+      parameters: {
+        type: "object",
+        properties: {
+          url: {
+            type: "string",
+            description:
+              "Fully qualified URL to read, e.g. https://example.com",
+          },
+        },
+        required: ["url"],
+      },
+    },
+
+    // ── MCP tools (any MCP-compatible server) ──────────────
+    //
+    // { type: "mcp", url: "https://mcp.example.com" },
+    // { type: "mcp", url: "https://mcp.example.com", allow: ["query_database"] },
+
+    // ┌────────────────────────────────────────────────────────┐
+    // │  ADD YOUR TOOLS HERE — copy any shape above.           │
+    // └────────────────────────────────────────────────────────┘
   ];
 }
 
-export function getTools(): Tool[] {
-  return [...platformTools, ...getSelfHostedTools()];
+/** Sidebar metadata — derived from getTools(). */
+export function getToolRegistry() {
+  return getTools().map((tool) => {
+    if (tool.type === "platform") {
+      return { name: tool.id, description: tool.id, type: "platform" as const };
+    }
+    if (tool.type === "function") {
+      return {
+        name: tool.name,
+        description: tool.description,
+        type: "self-hosted" as const,
+      };
+    }
+    const host = new URL(tool.url).host;
+    return { name: host, description: `MCP server at ${host}`, type: "mcp" as const };
+  });
 }
