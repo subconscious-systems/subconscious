@@ -1,9 +1,9 @@
 {
-  "name": "@subconscious/cli",
+  "name": "subconscious-cli",
   "version": "0.1.0",
   "description": "CLI for Subconscious — authenticate and manage your API keys",
   "bin": {
-    "subconscious": "./bin/cli.js"
+    "subconscious-cli": "./bin/cli.js"
   },
   "files": [
     "bin"

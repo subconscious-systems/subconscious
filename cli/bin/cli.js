@@ -240,7 +240,7 @@ async function loginCommand() {
     console.log(`\n${c.yellow}Already logged in.${c.reset}`);
     console.log(`  Key: ${c.dim}${masked}${c.reset}`);
     console.log(
-      `\n  Run ${c.cyan}subconscious logout${c.reset} first to switch accounts.\n`,
+      `\n  Run ${c.cyan}subconscious-cli logout${c.reset} first to switch accounts.\n`,
     );
     return;
   }
@@ -326,7 +326,7 @@ async function whoamiCommand() {
   if (!key) {
     console.log(`\n  ${c.dim}Not logged in.${c.reset}`);
     console.log(
-      `  Run ${c.cyan}subconscious login${c.reset} to get started.\n`,
+      `  Run ${c.cyan}subconscious-cli login${c.reset} to get started.\n`,
     );
     return;
   }
@@ -359,7 +359,7 @@ async function whoamiCommand() {
       console.log(`  ${c.dim}Source: ${source}${c.reset}`);
       console.log();
       console.log(
-        `  Run ${c.cyan}subconscious logout${c.reset} then ${c.cyan}subconscious login${c.reset} to re-authenticate.`,
+        `  Run ${c.cyan}subconscious-cli logout${c.reset} then ${c.cyan}subconscious-cli login${c.reset} to re-authenticate.`,
       );
     }
   } catch {
@@ -378,7 +378,7 @@ function printHelp() {
   ${c.magenta}${c.bold}Subconscious CLI${c.reset}
 
   ${c.bold}Usage${c.reset}
-    ${c.cyan}subconscious${c.reset} <command>
+    ${c.cyan}subconscious-cli${c.reset} <command>
 
   ${c.bold}Commands${c.reset}
     ${c.cyan}login${c.reset}     Authenticate and save your API key
@@ -390,7 +390,7 @@ function printHelp() {
     ${c.dim}-v, --version${c.reset}  Show version
 
   ${c.bold}Quick start${c.reset}
-    ${c.dim}$${c.reset} npx @subconscious/cli login
+    ${c.dim}$${c.reset} npx subconscious-cli login
 `);
 }
 
