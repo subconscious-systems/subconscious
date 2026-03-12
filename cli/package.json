@@ -1,0 +1,29 @@
+{
+  "name": "subconscious-cli",
+  "version": "0.1.0",
+  "description": "CLI for Subconscious — authenticate and manage your API keys",
+  "bin": {
+    "subconscious-cli": "./bin/cli.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/subconscious-systems/subconscious.git",
+    "directory": "cli"
+  },
+  "keywords": [
+    "subconscious",
+    "ai",
+    "cli",
+    "api-key",
+    "authentication"
+  ],
+  "author": "Subconscious Systems",
+  "license": "MIT"
+}
