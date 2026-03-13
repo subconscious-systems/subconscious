@@ -37,7 +37,7 @@
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
-    "subconscious": "^0.1.9",
+    "subconscious": ">=0.2.0",
     "@e2b/sdk": "^2.0.0",
     "localtunnel": "^2.0.2"
   },
