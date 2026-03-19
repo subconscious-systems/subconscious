@@ -5,11 +5,19 @@
     "description": "AI todo assistant with real-time updates using Subconscious + Convex",
     "private": true,
     "type": "module",
+    "subconscious": {
+        "language": "typescript",
+        "framework": "Convex",
+        "tags": ["typescript", "web"],
+        "envVars": {
+            "SUBCONSCIOUS_API_KEY": { "required": true }
+        }
+    },
     "setup": [
         "npm install",
-        "npx convex dev (keep this terminal running - auto-generates .env.local with VITE_CONVEX_URL)",
-        "Set SUBCONSCIOUS_API_KEY in Convex Dashboard > Settings > Environment Variables",
-        "npm run dev (new terminal)"
+        "echo \"SUBCONSCIOUS_API_KEY=your_key\" > .env.local",
+        "npx convex dev --once",
+        "npm run dev"
     ],
     "scripts": {
         "dev": "vite",

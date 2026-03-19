@@ -1,26 +1,52 @@
 {
-  "version": 1,
-  "generated": "2026-03-13T14:37:54.912Z",
+  "version": 2,
+  "generated": "2026-03-19T17:36:52.027Z",
   "examples": [
     {
       "name": "convex_app",
       "displayName": "Convex Real-time App",
       "description": "AI todo assistant with real-time updates using Subconscious + Convex",
+      "language": "typescript",
+      "framework": "Convex",
+      "tags": [
+        "typescript",
+        "web"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
       "setup": [
         "npm install",
-        "npx convex dev (keep this terminal running - auto-generates .env.local with VITE_CONVEX_URL)",
-        "Set SUBCONSCIOUS_API_KEY in Convex Dashboard > Settings > Environment Variables",
-        "npm run dev (new terminal)"
+        "echo \"SUBCONSCIOUS_API_KEY=your_key\" > .env.local",
+        "npx convex dev --once",
+        "npm run dev"
       ]
     },
     {
       "name": "e2b_cli",
       "displayName": "E2B CLI Agent",
       "description": "CLI-first autonomous agent using Subconscious + E2B cloud sandboxes",
+      "language": "typescript",
+      "framework": "E2B",
+      "tags": [
+        "typescript",
+        "cli"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        },
+        "E2B_API_KEY": {
+          "required": true,
+          "url": "https://e2b.dev"
+        }
+      },
       "setup": [
         "bun install",
         "export SUBCONSCIOUS_API_KEY=your_key",
-        "export E2B_API_KEY=your_key",
+        "export E2B_API_KEY=your_e2b_key",
         "bun run agent"
       ]
     },
@@ -28,6 +54,11 @@
       "name": "getting_started_notebook",
       "displayName": "Getting Started Notebook",
       "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
+      "language": "python",
+      "tags": [
+        "python",
+        "notebook"
+      ],
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
@@ -38,16 +69,26 @@
       "name": "search_agent_cli",
       "displayName": "Search Agent CLI",
       "description": "CLI agent with web search capabilities powered by Subconscious",
+      "language": "python",
+      "tags": [
+        "python",
+        "cli"
+      ],
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
-        "python cli.py"
+        "python cli.py \"What are the latest developments in AI agents?\""
       ]
     },
     {
       "name": "structured_output_python",
       "displayName": "Structured Output (Python)",
       "description": "Get type-safe structured responses from Subconscious agents using Pydantic models",
+      "language": "python",
+      "tags": [
+        "python",
+        "cli"
+      ],
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
@@ -58,6 +99,16 @@
       "name": "structured_output_typescript",
       "displayName": "Structured Output (TypeScript)",
       "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
+      "language": "typescript",
+      "tags": [
+        "typescript",
+        "cli"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
       "setup": [
         "npm install",
         "export SUBCONSCIOUS_API_KEY=your_key",
@@ -66,12 +117,23 @@
     },
     {
       "name": "vercel-template",
-      "displayName": "Subconscious Vercel Template",
-      "description": "",
+      "displayName": "Next.js + Subconscious Starter",
+      "description": "Full-stack Next.js app with Subconscious agent integration — includes API routes, streaming UI, tool calling, and one-click Vercel deploy",
+      "language": "typescript",
+      "framework": "Next.js",
+      "tags": [
+        "typescript",
+        "web"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
       "setup": [
         "npm install",
         "cp .env.example .env.local",
-        "Set SUBCONSCIOUS_API_KEY in .env.local",
+        "echo \"SUBCONSCIOUS_API_KEY=your_key\" >> .env.local",
         "npm run dev"
       ]
     }

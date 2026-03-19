@@ -1,10 +1,15 @@
-name: Generate Examples Manifest
+name: Examples Manifest
 
 on:
   push:
     branches: [main]
     paths:
       - 'examples/**'
+      - 'scripts/generate-manifest.js'
+  pull_request:
+    paths:
+      - 'examples/**'
+      - 'scripts/generate-manifest.js'
 
 permissions:
   contents: write
@@ -14,15 +19,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Generate manifest
+        run: node scripts/generate-manifest.js
+
+      - name: Validate manifest
         run: |
-          node scripts/generate-manifest.js
-      
+          node -e "
+          const m = require('./examples/manifest.json');
+          const errors = [];
+          if (m.version !== 2) errors.push('manifest version must be 2');
+          for (const ex of m.examples) {
+            if (!ex.name) errors.push('missing name');
+            if (!ex.displayName) errors.push(ex.name + ': missing displayName');
+            if (!ex.description) errors.push(ex.name + ': missing description');
+            if (!ex.language) errors.push(ex.name + ': missing language');
+            if (!['typescript', 'python'].includes(ex.language)) errors.push(ex.name + ': language must be typescript or python');
+            if (!ex.tags || !ex.tags.length) errors.push(ex.name + ': missing tags');
+            if (!ex.setup || !ex.setup.length) errors.push(ex.name + ': missing setup');
+            // Every setup step must be a runnable command or a comment
+            for (const step of (ex.setup || [])) {
+              if (step.includes('(') && !step.startsWith('#')) {
+                errors.push(ex.name + ': setup step has parenthetical instructions, must be runnable: ' + step);
+              }
+              if (/^[A-Z]/.test(step) && !step.startsWith('#')) {
+                errors.push(ex.name + ': setup step looks like prose, must be a command: ' + step);
+              }
+            }
+          }
+          if (errors.length) {
+            console.error('Manifest validation failed:');
+            errors.forEach(e => console.error('  - ' + e));
+            process.exit(1);
+          }
+          console.log('Manifest valid: ' + m.examples.length + ' examples');
+          "
+
+      # Only commit on push to main, not on PRs
       - name: Commit manifest
+        if: github.event_name == 'push'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add examples/manifest.json
-          git diff --staged --quiet || git commit -m "chore: update examples manifest"
+          git diff --staged --quiet || git commit -m "chore: update examples manifest [skip ci]"
           git push
