@@ -1,12 +1,21 @@
 {
   "name": "subconscious-vercel-template",
-  "displayName": "Subconscious Vercel Template",
+  "displayName": "Next.js + Subconscious Starter",
+  "description": "Full-stack Next.js app with Subconscious agent integration — includes API routes, streaming UI, tool calling, and one-click Vercel deploy",
   "version": "1.0.0",
   "private": true,
+  "subconscious": {
+    "language": "typescript",
+    "framework": "Next.js",
+    "tags": ["typescript", "web"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true }
+    }
+  },
   "setup": [
     "npm install",
     "cp .env.example .env.local",
-    "Set SUBCONSCIOUS_API_KEY in .env.local",
+    "echo \"SUBCONSCIOUS_API_KEY=your_key\" >> .env.local",
     "npm run dev"
   ],
   "scripts": {

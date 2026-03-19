@@ -5,10 +5,19 @@
   "private": false,
   "type": "module",
   "description": "CLI-first autonomous agent using Subconscious + E2B cloud sandboxes",
+  "subconscious": {
+    "language": "typescript",
+    "framework": "E2B",
+    "tags": ["typescript", "cli"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true },
+      "E2B_API_KEY": { "required": true, "url": "https://e2b.dev" }
+    }
+  },
   "setup": [
     "bun install",
     "export SUBCONSCIOUS_API_KEY=your_key",
-    "export E2B_API_KEY=your_key",
+    "export E2B_API_KEY=your_e2b_key",
     "bun run agent"
   ],
   "main": "dist/index.js",

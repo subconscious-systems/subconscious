@@ -4,6 +4,13 @@
   "displayName": "Structured Output (TypeScript)",
   "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
   "type": "module",
+  "subconscious": {
+    "language": "typescript",
+    "tags": ["typescript", "cli"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true }
+    }
+  },
   "setup": [
     "npm install",
     "export SUBCONSCIOUS_API_KEY=your_key",
