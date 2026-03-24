@@ -1,11 +1,11 @@
-# @subconscious/cli
+# subconscious-cli
 
 Authenticate with Subconscious from your terminal. One command opens your browser, signs you in (or up), and saves your API key locally.
 
 ## Quick start
 
 ```bash
-npx @subconscious/cli login
+npx subconscious-cli login
 ```
 
 That's it. Your API key is saved to `~/.subcon/config.json` and ready to use.
@@ -32,7 +32,7 @@ Terminal                          Browser
 Opens your browser to sign in (or create an account). After authentication, your API key is automatically generated and saved.
 
 ```bash
-npx @subconscious/cli login
+npx subconscious-cli login
 ```
 
 ### `logout`
@@ -40,7 +40,7 @@ npx @subconscious/cli login
 Removes your saved API key.
 
 ```bash
-npx @subconscious/cli logout
+npx subconscious-cli logout
 ```
 
 ### `whoami`
@@ -48,7 +48,7 @@ npx @subconscious/cli logout
 Shows your current authentication status and which key is active.
 
 ```bash
-npx @subconscious/cli whoami
+npx subconscious-cli whoami
 ```
 
 ## Where keys are stored
@@ -68,6 +68,6 @@ Environment variable `SUBCONSCIOUS_API_KEY` takes precedence over the config fil
 If you prefer a persistent command:
 
 ```bash
-npm install -g @subconscious/cli
-subconscious login
+npm install -g subconscious-cli
+subconscious-cli login
 ```
