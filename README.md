@@ -183,10 +183,12 @@ Connect to any [MCP](https://modelcontextprotocol.io/) server:
 ```python
 mcp_tool = {
     "type": "mcp",
-    "url": "https://mcp.example.com",
-    "allow": ["read", "write"],
+    "server": "https://mcp.example.com",
+    "allowedTools": ["read", "write"],
 }
 ```
+
+> Requires `subconscious-sdk >= 0.3.0` (Python) or `subconscious >= 0.3.0` (Node.js).
 
 ## Architecture
 
