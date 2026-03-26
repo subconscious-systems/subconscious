@@ -204,7 +204,7 @@ const mcpTool = {
 };
 ```
 
-> Requires `subconscious-sdk >= 0.3.0` (Python) or `subconscious >= 0.3.0` (Node.js).
+> Requires the latest [subconscious](https://www.npmjs.com/package/subconscious) (Node.js) or [subconscious-sdk](https://pypi.org/project/subconscious-sdk/) (Python).
 
 ## Architecture
 
