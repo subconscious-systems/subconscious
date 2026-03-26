@@ -183,9 +183,25 @@ Connect to any [MCP](https://modelcontextprotocol.io/) server:
 ```python
 mcp_tool = {
     "type": "mcp",
-    "server": "https://mcp.example.com",
-    "allowedTools": ["read", "write"],
+    "url": "https://mcp.example.com/mcp",
+    "allowed_tools": ["read_example_tool", "write_example_tool"],
+    "auth": {
+        "type": "bearer",
+        "token": "your-bearer-token",
+    },
 }
+```
+
+```typescript
+const mcpTool = {
+    type: 'mcp',
+    url: 'https://mcp.example.com/mcp',
+    allowedTools: ['read_example_tool', 'write_example_tool'],
+    auth: {
+        type: 'bearer',
+        token: 'your-bearer-token',
+    },
+};
 ```
 
 > Requires `subconscious-sdk >= 0.3.0` (Python) or `subconscious >= 0.3.0` (Node.js).
