@@ -123,6 +123,32 @@ npx create-subconscious-app --list                  # list all available example
 2. Add metadata (`package.json` for JS/TS or `pyproject.toml` for Python) with `name`, `description`, and an optional `setup` array of post-scaffold instructions.
 3. Open a PR. When it merges, a [GitHub Action](.github/workflows/generate-manifest.yml) regenerates `examples/manifest.json` and your example becomes available via `npx create-subconscious-app` immediately.
 
+## Skills
+
+Skills are reusable knowledge packages that give agents specialized capabilities like coding standards, domain expertise, and workflow guidelines. Pass skill names in your run request and the agent loads instructions on demand via progressive disclosure.
+
+```python
+run = client.run(
+    engine="tim-gpt",
+    input={
+        "instructions": "Review this code for security issues",
+        "skills": ["security-review", "coding-standards"],
+    },
+    options={"await_completion": True},
+)
+```
+
+Manage skills in the [dashboard](https://www.subconscious.dev/platform/skills), import from GitHub, or create them with the AI skill builder. See the [Skills docs](https://docs.subconscious.dev/core-concepts/skills) for details.
+
+## Webhooks
+
+Get a POST when runs complete instead of polling. Two options:
+
+- **Per-run callback**: pass `callbackUrl` on any run request
+- **Org-wide subscriptions**: set up persistent endpoints that receive webhooks for all runs
+
+Manage subscriptions in the [dashboard](https://www.subconscious.dev/platform/webhooks) or via the API (`POST /v1/webhooks/subscriptions`). Supports event filtering, enable/disable, HMAC-SHA256 signing, and a delivery log. See the [webhooks docs](https://docs.subconscious.dev/core-concepts/async-webhooks).
+
 ## Engines
 
 | Engine | API Name | Type | Best For |
