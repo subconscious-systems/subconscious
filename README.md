@@ -209,10 +209,28 @@ Connect to any [MCP](https://modelcontextprotocol.io/) server:
 ```python
 mcp_tool = {
     "type": "mcp",
-    "url": "https://mcp.example.com",
-    "allow": ["read", "write"],
+    "url": "https://mcp.example.com/mcp",
+    "allowed_tools": ["read_example_tool", "write_example_tool"],
+    "auth": {
+        "type": "bearer",
+        "token": "your-bearer-token",
+    },
 }
 ```
+
+```typescript
+const mcpTool = {
+    type: 'mcp',
+    url: 'https://mcp.example.com/mcp',
+    allowedTools: ['read_example_tool', 'write_example_tool'],
+    auth: {
+        type: 'bearer',
+        token: 'your-bearer-token',
+    },
+};
+```
+
+> Requires the latest [subconscious](https://www.npmjs.com/package/subconscious) (Node.js) or [subconscious-sdk](https://pypi.org/project/subconscious-sdk/) (Python).
 
 ## Architecture
 
