@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-30T18:14:06.969Z",
+  "generated": "2026-03-30T18:35:27.394Z",
   "examples": [
     {
       "name": "convex_app",
@@ -120,7 +120,7 @@
       "displayName": "Val.Town Example Script",
       "description": "Email-triggered Val Town automation that summarizes inbound messages with Subconscious and Gmail MCP context",
       "language": "typescript",
-      "framework": "Val.Town",
+      "framework": "Val Town",
       "tags": [
         "typescript",
         "automation",
