@@ -120,7 +120,7 @@
       "displayName": "Val.Town Example Script",
       "description": "Email-triggered Val Town automation that summarizes inbound messages with Subconscious and Gmail MCP context",
       "language": "typescript",
-      "framework": "Val Town",
+      "framework": "Val.Town",
       "tags": [
         "typescript",
         "automation",

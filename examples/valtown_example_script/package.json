@@ -6,7 +6,7 @@
   "type": "module",
   "subconscious": {
     "language": "typescript",
-    "framework": "Val Town",
+    "framework": "Val.Town",
     "tags": ["typescript", "automation", "email", "mcp"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true }
