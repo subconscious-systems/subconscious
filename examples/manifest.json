@@ -133,7 +133,7 @@
         }
       },
       "setup": [
-        "# in Subconscious platform tools, enable gmail_mcp for this API key account",
+        "# on the Subconscious platform (https://www.subconscious.dev/platform/tools), enable the gmail_mcp",
         "# create a new Email val in Val Town",
         "# copy emailSummary.val.ts into your Email val",
         "# set SUBCONSCIOUS_API_KEY=your_key in Val env vars"
