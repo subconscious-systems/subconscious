@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-30T22:54:46.335Z",
+  "generated": "2026-03-30T22:59:18.532Z",
   "examples": [
     {
       "name": "convex_app",
@@ -123,8 +123,8 @@
     },
     {
       "name": "valtown_example_script",
-      "displayName": "Val.Town Example",
-      "description": "Learn how to use the Subconscious API with automation scripts on Val.Town",
+      "displayName": "Val.Town Example Script",
+      "description": "Email-triggered Val Town automation that summarizes inbound messages with Subconscious and Gmail MCP context",
       "language": "typescript",
       "framework": "Val.Town",
       "tags": [
