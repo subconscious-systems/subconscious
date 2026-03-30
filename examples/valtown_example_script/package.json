@@ -7,21 +7,16 @@
   "subconscious": {
     "language": "typescript",
     "framework": "Val.Town",
-    "tags": ["typescript", "automation", "email", "mcp"],
+    "tags": ["typescript", "automation"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true }
     }
   },
   "setup": [
-    "# on the Subconscious platform (https://www.subconscious.dev/platform/tools), enable the gmail_mcp",
-    "# create a new Email val in Val Town",
-    "# copy emailSummary.val.ts into your Email val",
-    "# set SUBCONSCIOUS_API_KEY=your_key in Val env vars"
-  ],
-  "scripts": {
-    "check": "echo \"This template runs in Val Town. See README.md\""
-  },
-  "dependencies": {
-    "subconscious": ">=0.2.0"
-  }
+    "# Visit our Val.Town getting started repo",
+    "# Remix the repo to your own account",
+    "# Set the SUBCONSCIOUS_API_KEY in the Val env vars",
+    "# Run the Val",
+    "npx open-cli https://www.val.town/x/subconscious_ajaya/subconscious-getting-started"
+  ]
 }

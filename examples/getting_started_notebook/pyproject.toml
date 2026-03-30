@@ -24,5 +24,5 @@ tags = ["python", "notebook"]
 setup = [
     "pip install .",
     "export SUBCONSCIOUS_API_KEY=your_key",
-    "jupyter notebook getting_started.ipynb",
+    "jupyter notebook 'Subconscious Quickstart.ipynb'",
 ]
