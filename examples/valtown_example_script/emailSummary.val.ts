@@ -33,7 +33,7 @@ Analyze and summarize the inbound email.
 
 Inbound email:
 - From: ${email.from}
-- To: ${email.to.join(", ")}
+- To: ${Array.isArray(email.to) ? email.to.join(", ") : email.to}
 - Subject: ${subject}
 - Body:
 ${trimmedText}
