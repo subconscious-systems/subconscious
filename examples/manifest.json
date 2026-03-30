@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-30T22:35:29.163Z",
+  "generated": "2026-03-30T22:40:33.989Z",
   "examples": [
     {
       "name": "convex_app",
@@ -138,11 +138,10 @@
         }
       },
       "setup": [
-        "# Visit our Val.Town getting started repo",
+        "# Visit our Val.Town getting started repo (https://www.val.town/x/subconscious_ajaya/subconscious-getting-started)",
         "# Remix the repo to your own account",
         "# Set the SUBCONSCIOUS_API_KEY in the Val env vars",
-        "# Run the Val",
-        "npx open-cli https://www.val.town/x/subconscious_ajaya/subconscious-getting-started"
+        "# Run the Val"
       ]
     },
     {
