@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-30T22:43:53.709Z",
+  "generated": "2026-03-30T22:54:46.335Z",
   "examples": [
     {
       "name": "convex_app",
@@ -138,7 +138,8 @@
         }
       },
       "setup": [
-        "# Visit our Val.Town getting started repo (https://www.val.town/x/subconscious_ajaya/subconscious-getting-started)",
+        "# Visit our Val.Town getting started repo:",
+        "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started",
         "# Remix the repo to your own account",
         "# Set the SUBCONSCIOUS_API_KEY=your_key in the Val env vars",
         "# Run the Val"
