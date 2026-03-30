@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-30T18:38:33.280Z",
+  "generated": "2026-03-30T18:39:07.055Z",
   "examples": [
     {
       "name": "convex_app",
@@ -133,10 +133,10 @@
         }
       },
       "setup": [
-    "# on the Subconscious platform (https://www.subconscious.dev/platform/tools), enable the gmail_mcp",
-    "# create a new Email val in Val Town",
-    "# copy emailSummary.val.ts into your Email val",
-    "# set SUBCONSCIOUS_API_KEY=your_key in Val env vars"
+        "# on the Subconscious platform (https://www.subconscious.dev/platform/tools), enable the gmail_mcp",
+        "# create a new Email val in Val Town",
+        "# copy emailSummary.val.ts into your Email val",
+        "# set SUBCONSCIOUS_API_KEY=your_key in Val env vars"
       ]
     },
     {
