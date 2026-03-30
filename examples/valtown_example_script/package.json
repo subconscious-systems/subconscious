@@ -14,7 +14,7 @@
   },
   "setup": [
       "# Visit our Val.Town getting started repo:",
-      "[url](https://www.val.town/x/subconscious_ajaya/subconscious-getting-started)",
+      "[Val.Town Repo](https://www.val.town/x/subconscious_ajaya/subconscious-getting-started)",
       "# Remix the repo to your own account",
       "# Set the SUBCONSCIOUS_API_KEY=your_key in the Val env vars",
       "# Run the Val"
