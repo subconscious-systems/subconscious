@@ -1,0 +1,27 @@
+{
+  "name": "valtown_example_script",
+  "version": "1.0.0",
+  "displayName": "Val.Town Example Script",
+  "description": "Email-triggered Val Town automation that summarizes inbound messages with Subconscious and Gmail MCP context",
+  "type": "module",
+  "subconscious": {
+    "language": "typescript",
+    "framework": "Val Town",
+    "tags": ["typescript", "automation", "email", "mcp"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true }
+    }
+  },
+  "setup": [
+    "# in Subconscious platform tools, enable gmail_mcp for this API key account",
+    "# create a new Email val in Val Town",
+    "# copy emailSummary.val.ts into your Email val",
+    "# set SUBCONSCIOUS_API_KEY=your_key in Val env vars"
+  ],
+  "scripts": {
+    "check": "echo \"This template runs in Val Town. See README.md\""
+  },
+  "dependencies": {
+    "subconscious": ">=0.2.0"
+  }
+}

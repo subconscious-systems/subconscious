@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-25T14:24:45.345Z",
+  "generated": "2026-03-30T18:14:06.969Z",
   "examples": [
     {
       "name": "convex_app",
@@ -113,6 +113,30 @@
         "npm install",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "npx tsx main.ts"
+      ]
+    },
+    {
+      "name": "valtown_example_script",
+      "displayName": "Val.Town Example Script",
+      "description": "Email-triggered Val Town automation that summarizes inbound messages with Subconscious and Gmail MCP context",
+      "language": "typescript",
+      "framework": "Val.Town",
+      "tags": [
+        "typescript",
+        "automation",
+        "email",
+        "mcp"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
+      "setup": [
+        "# in Subconscious platform tools, enable gmail_mcp for this API key account",
+        "# create a new Email val in Val Town",
+        "# copy emailSummary.val.ts into your Email val",
+        "# set SUBCONSCIOUS_API_KEY=your_key in Val env vars"
       ]
     },
     {
