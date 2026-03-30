@@ -20,7 +20,7 @@ where = ["."]
 [tool.subconscious]
 display_name = "Getting Started Notebook"
 language = "python"
-tags = ["python", "notebook"]
+tags = ["python", "notebook", "local"]
 setup = [
     "pip install .",
     "export SUBCONSCIOUS_API_KEY=your_key",

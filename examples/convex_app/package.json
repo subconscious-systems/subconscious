@@ -8,7 +8,7 @@
     "subconscious": {
         "language": "typescript",
         "framework": "Convex",
-        "tags": ["typescript", "web"],
+        "tags": ["typescript", "web", "local"],
         "envVars": {
             "SUBCONSCIOUS_API_KEY": { "required": true }
         }

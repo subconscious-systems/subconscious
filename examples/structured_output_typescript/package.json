@@ -6,7 +6,7 @@
   "type": "module",
   "subconscious": {
     "language": "typescript",
-    "tags": ["typescript", "cli"],
+    "tags": ["typescript", "cli", "local"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true }
     }

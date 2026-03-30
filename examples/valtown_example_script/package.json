@@ -7,7 +7,7 @@
   "subconscious": {
     "language": "typescript",
     "framework": "Val.Town",
-    "tags": ["typescript", "automation"],
+    "tags": ["typescript", "automation", "cloud"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true }
     }

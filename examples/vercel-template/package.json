@@ -7,7 +7,7 @@
   "subconscious": {
     "language": "typescript",
     "framework": "Next.js",
-    "tags": ["typescript", "web"],
+    "tags": ["typescript", "web", "local"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true }
     }
