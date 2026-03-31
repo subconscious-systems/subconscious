@@ -8,7 +8,7 @@
   "subconscious": {
     "language": "typescript",
     "framework": "E2B",
-    "tags": ["typescript", "cli", "local"],
+    "tags": ["local"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true },
       "E2B_API_KEY": { "required": true, "url": "https://e2b.dev" }

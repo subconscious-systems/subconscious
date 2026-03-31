@@ -7,16 +7,12 @@
   "subconscious": {
     "language": "typescript",
     "framework": "Val.Town",
-    "tags": ["typescript", "automation", "cloud"],
+    "tags": ["cloud"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true }
     }
   },
   "setup": [
-      "# Visit our Val.Town getting started repo:",
-      "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started",
-      "# Remix the repo to your own account",
-      "# Set SUBCONSCIOUS_API_KEY=your_key in the env vars",
-      "# Run the Val"
+      "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started"
   ]
 }
