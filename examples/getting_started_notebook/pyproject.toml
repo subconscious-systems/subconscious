@@ -20,7 +20,7 @@ where = ["."]
 [tool.subconscious]
 display_name = "Getting Started Notebook"
 language = "python"
-tags = ["local"]
+tags = ["cloud"]
 envVars = { "SUBCONSCIOUS_API_KEY" = { required = true } }
 setup = [
     "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb",
