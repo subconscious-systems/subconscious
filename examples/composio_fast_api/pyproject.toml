@@ -30,7 +30,7 @@ tags = ["local"]
 envVars = { SUBCONSCIOUS_API_KEY = { required = true }, COMPOSIO_API_KEY = { required = true, url = "https://platform.composio.dev/settings" } }
 setup = [
     "pip install .",
-    "echo SUBCONSCIOUS_API_KEY=your_key > .env",
-    "echo COMPOSIO_API_KEY=your_composio_key >> .env",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "export COMPOSIO_API_KEY=your_composio_key",
     "uvicorn main:app --reload",
 ]
