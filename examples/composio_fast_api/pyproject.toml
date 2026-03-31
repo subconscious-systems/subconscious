@@ -1,7 +1,7 @@
 [project]
 name = "composio-fast-api"
 version = "0.1.0"
-description = "Example FastAPI server using Subconscious + Composio for OAuth app connections"
+description = "Connect 100+ Apps to your Agents with Subconscious + Composio as OAuth provider"
 requires-python = ">=3.10"
 dependencies = [
     "python-dotenv>=1.0.0",

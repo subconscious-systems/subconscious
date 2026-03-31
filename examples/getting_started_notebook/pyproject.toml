@@ -1,7 +1,7 @@
 [project]
 name = "getting-started-notebook"
 version = "0.1.0"
-description = "Interactive Colab notebook to learn Subconscious from scratch — no experience required"
+description = "Learn Subconscious from scratch via Jupyter Notebook — no experience required"
 requires-python = ">=3.9"
 dependencies = [
     "subconscious-sdk",
