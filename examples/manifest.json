@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-31T15:43:41.848Z",
+  "generated": "2026-03-31T15:57:09.595Z",
   "examples": [
     {
       "name": "convex_app",
@@ -53,6 +53,7 @@
       "displayName": "Getting Started Notebook",
       "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
       "language": "python",
+      "framework": "Jupyter",
       "tags": [
         "cloud"
       ],
@@ -70,6 +71,7 @@
       "displayName": "Search Agent CLI",
       "description": "CLI agent with web search capabilities powered by Subconscious",
       "language": "python",
+      "framework": "Search",
       "tags": [
         "local"
       ],
@@ -84,6 +86,7 @@
       "displayName": "Structured Output (Python)",
       "description": "Get type-safe structured responses from Subconscious agents using Pydantic models",
       "language": "python",
+      "framework": "Pydantic",
       "tags": [
         "local"
       ],
@@ -98,6 +101,7 @@
       "displayName": "Structured Output (TypeScript)",
       "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
       "language": "typescript",
+      "framework": "Zod Schema",
       "tags": [
         "local"
       ],
