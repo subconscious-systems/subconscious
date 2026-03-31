@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-31T15:14:20.525Z",
+  "generated": "2026-03-31T15:43:41.848Z",
   "examples": [
     {
       "name": "convex_app",
@@ -54,7 +54,7 @@
       "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
       "language": "python",
       "tags": [
-        "local"
+        "cloud"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {
