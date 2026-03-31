@@ -1,7 +1,32 @@
 {
   "version": 2,
-  "generated": "2026-03-31T15:43:41.848Z",
+  "generated": "2026-03-31T19:44:00.652Z",
   "examples": [
+    {
+      "name": "composio_fast_api",
+      "displayName": "Composio FastAPI Server",
+      "description": "Example FastAPI server using Subconscious + Composio for OAuth app connections",
+      "language": "python",
+      "framework": "FastAPI",
+      "tags": [
+        "local"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        },
+        "COMPOSIO_API_KEY": {
+          "required": true,
+          "url": "https://platform.composio.dev/settings"
+        }
+      },
+      "setup": [
+        "pip install .",
+        "echo SUBCONSCIOUS_API_KEY=your_key > .env",
+        "echo COMPOSIO_API_KEY=your_composio_key >> .env",
+        "uvicorn main:app --reload"
+      ]
+    },
     {
       "name": "convex_app",
       "displayName": "Convex Real-time App",
@@ -53,6 +78,7 @@
       "displayName": "Getting Started Notebook",
       "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
       "language": "python",
+      "framework": "Jupyter",
       "tags": [
         "cloud"
       ],
@@ -70,6 +96,7 @@
       "displayName": "Search Agent CLI",
       "description": "CLI agent with web search capabilities powered by Subconscious",
       "language": "python",
+      "framework": "Search",
       "tags": [
         "local"
       ],
@@ -84,6 +111,7 @@
       "displayName": "Structured Output (Python)",
       "description": "Get type-safe structured responses from Subconscious agents using Pydantic models",
       "language": "python",
+      "framework": "Pydantic",
       "tags": [
         "local"
       ],
@@ -98,6 +126,7 @@
       "displayName": "Structured Output (TypeScript)",
       "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
       "language": "typescript",
+      "framework": "Zod Schema",
       "tags": [
         "local"
       ],
