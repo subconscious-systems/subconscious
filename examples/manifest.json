@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-30T23:04:51.683Z",
+  "generated": "2026-03-31T15:14:20.525Z",
   "examples": [
     {
       "name": "convex_app",
@@ -9,8 +9,6 @@
       "language": "typescript",
       "framework": "Convex",
       "tags": [
-        "typescript",
-        "web",
         "local"
       ],
       "envVars": {
@@ -32,8 +30,6 @@
       "language": "typescript",
       "framework": "E2B",
       "tags": [
-        "typescript",
-        "cli",
         "local"
       ],
       "envVars": {
@@ -58,14 +54,15 @@
       "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
       "language": "python",
       "tags": [
-        "python",
-        "notebook",
         "local"
       ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
       "setup": [
-        "pip install .",
-        "export SUBCONSCIOUS_API_KEY=your_key",
-        "jupyter notebook 'Subconscious Quickstart.ipynb'"
+        "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb"
       ]
     },
     {
@@ -74,8 +71,6 @@
       "description": "CLI agent with web search capabilities powered by Subconscious",
       "language": "python",
       "tags": [
-        "python",
-        "cli",
         "local"
       ],
       "setup": [
@@ -90,8 +85,6 @@
       "description": "Get type-safe structured responses from Subconscious agents using Pydantic models",
       "language": "python",
       "tags": [
-        "python",
-        "cli",
         "local"
       ],
       "setup": [
@@ -106,8 +99,6 @@
       "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
       "language": "typescript",
       "tags": [
-        "typescript",
-        "cli",
         "local"
       ],
       "envVars": {
@@ -128,8 +119,6 @@
       "language": "typescript",
       "framework": "Val.Town",
       "tags": [
-        "typescript",
-        "automation",
         "cloud"
       ],
       "envVars": {
@@ -138,11 +127,7 @@
         }
       },
       "setup": [
-        "# Visit our Val.Town getting started repo:",
-        "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started",
-        "# Remix the repo to your own account",
-        "# Set SUBCONSCIOUS_API_KEY=your_key in the env vars",
-        "# Run the Val"
+        "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started"
       ]
     },
     {
