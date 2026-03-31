@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-03-31T19:47:41.132Z",
+  "generated": "2026-03-31T19:55:41.953Z",
   "examples": [
     {
       "name": "composio_fast_api",
@@ -22,8 +22,8 @@
       },
       "setup": [
         "pip install .",
-        "echo SUBCONSCIOUS_API_KEY=your_key > .env",
-        "echo COMPOSIO_API_KEY=your_composio_key >> .env",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "export COMPOSIO_API_KEY=your_composio_key",
         "uvicorn main:app --reload"
       ]
     },
