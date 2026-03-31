@@ -23,6 +23,7 @@ where = ["."]
 [tool.subconscious]
 display_name = "Search Agent CLI"
 language = "python"
+framework = "Search"
 tags = ["local"]
 setup = [
     "pip install .",

@@ -6,6 +6,7 @@
   "type": "module",
   "subconscious": {
     "language": "typescript",
+    "framework": "Zod Schema",
     "tags": ["local"],
     "envVars": {
       "SUBCONSCIOUS_API_KEY": { "required": true }

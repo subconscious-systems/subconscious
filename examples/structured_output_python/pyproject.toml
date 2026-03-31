@@ -22,6 +22,7 @@ where = ["."]
 [tool.subconscious]
 display_name = "Structured Output (Python)"
 language = "python"
+framework = "Pydantic"
 tags = ["local"]
 setup = [
     "pip install .",
