@@ -1,11 +1,11 @@
 {
   "version": 2,
-  "generated": "2026-03-31T19:55:41.953Z",
+  "generated": "2026-03-31T20:40:10.589Z",
   "examples": [
     {
       "name": "composio_fast_api",
       "displayName": "Composio FastAPI Server",
-      "description": "Example FastAPI server using Subconscious + Composio for OAuth app connections",
+      "description": "Connect 100+ Apps to your Agents with Subconscious + Composio as OAuth provider",
       "language": "python",
       "framework": "FastAPI",
       "tags": [
@@ -76,7 +76,7 @@
     {
       "name": "getting_started_notebook",
       "displayName": "Getting Started Notebook",
-      "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
+      "description": "Learn Subconscious from scratch via Jupyter Notebook — no experience required",
       "language": "python",
       "framework": "Jupyter",
       "tags": [
