@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-04-01T15:12:33.689Z",
+  "generated": "2026-04-01T15:14:28.865Z",
   "examples": [
     {
       "name": "composio_fast_api",
@@ -94,7 +94,7 @@
     {
       "name": "local_hosted_tools",
       "displayName": "Local-Hosted Tools Starter",
-      "description": "Starter example for locally hosted Subconscious tools via FastAPI + ngrok (image editing demo, not production-hardened)",
+      "description": "Starter template for locally hosted Subconscious tools via FastAPI + ngrok; image editing app example",
       "language": "python",
       "framework": "FastAPI",
       "tags": [
