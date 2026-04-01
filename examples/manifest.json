@@ -1,6 +1,10 @@
 {
   "version": 2,
+<<<<<<< Updated upstream
   "generated": "2026-03-31T20:40:10.589Z",
+=======
+  "generated": "2026-04-01T14:49:29.628Z",
+>>>>>>> Stashed changes
   "examples": [
     {
       "name": "composio_fast_api",
@@ -89,6 +93,31 @@
       },
       "setup": [
         "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb"
+      ]
+    },
+    {
+      "name": "local_hosted_tools",
+      "displayName": "Local-Hosted Tools Starter",
+      "description": "Starter example for locally hosted Subconscious tools via FastAPI + ngrok (image editing demo, not production-hardened)",
+      "language": "python",
+      "framework": "FastAPI",
+      "tags": [
+        "local"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        },
+        "NGROK_AUTHTOKEN": {
+          "required": true,
+          "url": "https://dashboard.ngrok.com/get-started/your-authtoken"
+        }
+      },
+      "setup": [
+        "pip install .",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "export NGROK_AUTHTOKEN=your_ngrok_token",
+        "python main.py"
       ]
     },
     {
