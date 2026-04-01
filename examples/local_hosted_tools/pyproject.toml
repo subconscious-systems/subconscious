@@ -1,7 +1,7 @@
 [project]
 name = "local-hosted-tools-starter"
 version = "0.1.0"
-description = "Starter example for locally hosted Subconscious tools via FastAPI + ngrok (image editing demo, not production-hardened)"
+description = "Starter template for locally hosted Subconscious tools via FastAPI + ngrok; image editing app example"
 requires-python = ">=3.10"
 dependencies = [
     "python-dotenv>=1.0.0",
