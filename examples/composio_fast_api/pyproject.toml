@@ -1,0 +1,36 @@
+[project]
+name = "composio-fast-api"
+version = "0.1.0"
+description = "Connect 100+ Apps to your Agents with Subconscious + Composio as OAuth provider"
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "subconscious-sdk",
+    "composio",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.subconscious]
+display_name = "Composio FastAPI Server"
+language = "python"
+framework = "FastAPI"
+tags = ["local"]
+envVars = { SUBCONSCIOUS_API_KEY = { required = true }, COMPOSIO_API_KEY = { required = true, url = "https://platform.composio.dev/settings" } }
+setup = [
+    "pip install .",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "export COMPOSIO_API_KEY=your_composio_key",
+    "uvicorn main:app --reload",
+]

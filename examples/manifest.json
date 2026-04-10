@@ -1,7 +1,32 @@
 {
   "version": 2,
-  "generated": "2026-03-25T14:24:45.345Z",
+  "generated": "2026-04-01T15:14:28.865Z",
   "examples": [
+    {
+      "name": "composio_fast_api",
+      "displayName": "Composio FastAPI Server",
+      "description": "Connect 100+ Apps to your Agents with Subconscious + Composio as OAuth provider",
+      "language": "python",
+      "framework": "FastAPI",
+      "tags": [
+        "local"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        },
+        "COMPOSIO_API_KEY": {
+          "required": true,
+          "url": "https://platform.composio.dev/settings"
+        }
+      },
+      "setup": [
+        "pip install .",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "export COMPOSIO_API_KEY=your_composio_key",
+        "uvicorn main:app --reload"
+      ]
+    },
     {
       "name": "convex_app",
       "displayName": "Convex Real-time App",
@@ -9,8 +34,7 @@
       "language": "typescript",
       "framework": "Convex",
       "tags": [
-        "typescript",
-        "web"
+        "local"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {
@@ -31,8 +55,7 @@
       "language": "typescript",
       "framework": "E2B",
       "tags": [
-        "typescript",
-        "cli"
+        "local"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {
@@ -53,16 +76,44 @@
     {
       "name": "getting_started_notebook",
       "displayName": "Getting Started Notebook",
-      "description": "Interactive Colab notebook to learn Subconscious from scratch — no experience required",
+      "description": "Learn Subconscious from scratch via Jupyter Notebook — no experience required",
       "language": "python",
+      "framework": "Jupyter",
       "tags": [
-        "python",
-        "notebook"
+        "cloud"
       ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
+      "setup": [
+        "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb"
+      ]
+    },
+    {
+      "name": "local_hosted_tools",
+      "displayName": "Local-Hosted Tools Starter",
+      "description": "Starter template for locally hosted Subconscious tools via FastAPI + ngrok; image editing app example",
+      "language": "python",
+      "framework": "FastAPI",
+      "tags": [
+        "local"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        },
+        "NGROK_AUTHTOKEN": {
+          "required": true,
+          "url": "https://dashboard.ngrok.com/get-started/your-authtoken"
+        }
+      },
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
-        "jupyter notebook getting_started.ipynb"
+        "export NGROK_AUTHTOKEN=your_ngrok_token",
+        "python main.py"
       ]
     },
     {
@@ -70,9 +121,9 @@
       "displayName": "Search Agent CLI",
       "description": "CLI agent with web search capabilities powered by Subconscious",
       "language": "python",
+      "framework": "Search",
       "tags": [
-        "python",
-        "cli"
+        "local"
       ],
       "setup": [
         "pip install .",
@@ -85,9 +136,9 @@
       "displayName": "Structured Output (Python)",
       "description": "Get type-safe structured responses from Subconscious agents using Pydantic models",
       "language": "python",
+      "framework": "Pydantic",
       "tags": [
-        "python",
-        "cli"
+        "local"
       ],
       "setup": [
         "pip install .",
@@ -100,9 +151,9 @@
       "displayName": "Structured Output (TypeScript)",
       "description": "Get type-safe structured responses from Subconscious agents using Zod schemas",
       "language": "typescript",
+      "framework": "Zod Schema",
       "tags": [
-        "typescript",
-        "cli"
+        "local"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {
@@ -116,6 +167,24 @@
       ]
     },
     {
+      "name": "valtown_example_script",
+      "displayName": "Val.Town Example",
+      "description": "Learn how to use the Subconscious API with automation scripts on Val.Town",
+      "language": "typescript",
+      "framework": "Val.Town",
+      "tags": [
+        "cloud"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
+      "setup": [
+        "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started"
+      ]
+    },
+    {
       "name": "vercel-template",
       "displayName": "Next.js + Subconscious Starter",
       "description": "Full-stack Next.js app with Subconscious agent integration — includes API routes, streaming UI, tool calling, and one-click Vercel deploy",
@@ -123,7 +192,8 @@
       "framework": "Next.js",
       "tags": [
         "typescript",
-        "web"
+        "web",
+        "local"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {

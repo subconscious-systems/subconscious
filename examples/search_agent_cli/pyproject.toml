@@ -23,7 +23,8 @@ where = ["."]
 [tool.subconscious]
 display_name = "Search Agent CLI"
 language = "python"
-tags = ["python", "cli"]
+framework = "Search"
+tags = ["local"]
 setup = [
     "pip install .",
     "export SUBCONSCIOUS_API_KEY=your_key",

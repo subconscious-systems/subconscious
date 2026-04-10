@@ -1,0 +1,37 @@
+[project]
+name = "local-hosted-tools-starter"
+version = "0.1.0"
+description = "Starter template for locally hosted Subconscious tools via FastAPI + ngrok; image editing app example"
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "subconscious-sdk",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.20.0",
+    "pydantic>=2.0.0",
+    "pillow>=10.0.0",
+    "pyngrok>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.subconscious]
+display_name = "Local-Hosted Tools Starter"
+language = "python"
+framework = "FastAPI"
+tags = ["local"]
+envVars = { SUBCONSCIOUS_API_KEY = { required = true }, NGROK_AUTHTOKEN = { required = true, url = "https://dashboard.ngrok.com/get-started/your-authtoken" } }
+setup = [
+    "pip install .",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "export NGROK_AUTHTOKEN=your_ngrok_token",
+    "python main.py",
+]

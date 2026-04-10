@@ -1,0 +1,18 @@
+{
+  "name": "valtown_example_script",
+  "version": "1.0.0",
+  "displayName": "Val.Town Example",
+  "description": "Learn how to use the Subconscious API with automation scripts on Val.Town",
+  "type": "module",
+  "subconscious": {
+    "language": "typescript",
+    "framework": "Val.Town",
+    "tags": ["cloud"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true }
+    }
+  },
+  "setup": [
+      "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started"
+  ]
+}
