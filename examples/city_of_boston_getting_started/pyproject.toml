@@ -1,0 +1,28 @@
+[project]
+name = "getting-started-notebook"
+version = "0.1.0"
+description = "Learn Subconscious from scratch via Jupyter Notebook — no experience required"
+requires-python = ">=3.9"
+dependencies = [
+    "subconscious-sdk",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.subconscious]
+display_name = "City of Boston Subconscious Getting Started"
+language = "python"
+framework = "Jupyter"
+tags = ["cloud"]
+envVars = { "SUBCONSCIOUS_API_KEY" = { required = true } }
+setup = [
+    "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb",
+]
