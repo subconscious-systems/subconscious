@@ -1,7 +1,25 @@
 {
   "version": 2,
-  "generated": "2026-04-11T16:28:05.386Z",
+  "generated": "2026-04-16T18:33:52.278Z",
   "examples": [
+    {
+      "name": "city_of_boston_getting_started",
+      "displayName": "City of Boston Subconscious Getting Started",
+      "description": "Learn Subconscious from scratch via Jupyter Notebook — no experience required",
+      "language": "python",
+      "framework": "Jupyter",
+      "tags": [
+        "cloud"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true
+        }
+      },
+      "setup": [
+        "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb"
+      ]
+    },
     {
       "name": "composio_fast_api",
       "displayName": "Composio FastAPI Server",
