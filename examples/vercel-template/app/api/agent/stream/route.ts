@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
   let stream;
   try {
     stream = client.stream({
-      engine: process.env.SUBCONSCIOUS_ENGINE ?? "tim-gpt",
+      engine: process.env.SUBCONSCIOUS_ENGINE ?? "tim",
       input: {
         instructions,
         tools,

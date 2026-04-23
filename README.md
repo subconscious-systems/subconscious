@@ -9,7 +9,6 @@
 <p><strong>Build AI agents that reason, use tools, and solve complex problems — with a single API call.</strong></p>
 
 [![Documentation](https://img.shields.io/badge/docs-subconscious.dev-blue)](https://docs.subconscious.dev)
-[![Paper](https://img.shields.io/badge/paper-arXiv-red.svg)](https://arxiv.org/pdf/2507.16784)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Models-yellow)](https://huggingface.co/SubconsciousDev/TIM-8b-preview)
 [![npm](https://img.shields.io/npm/v/subconscious)](https://www.npmjs.com/package/subconscious)
 [![PyPI](https://img.shields.io/pypi/v/subconscious-sdk)](https://pypi.org/project/subconscious-sdk/)
@@ -21,18 +20,13 @@
 
 ## What is Subconscious?
 
-Subconscious is an AI agent platform built on research from MIT CSAIL. We provide the infrastructure to run autonomous agents that can reason over long horizons, use external tools, and solve multi-step problems — all orchestrated behind a single API call.
+Subconscious is a **co-designed model and inference runtime for production agents**.
 
-Traditional LLM APIs require you to manage tool-call loops, context windows, and multi-agent frameworks yourself. Subconscious handles all of that. You define a goal and the tools your agent can use. We handle orchestration, context management, and multi-hop reasoning automatically.
+We are not a framework. LangChain-style harnesses wrap any LLM in tool-call loops, but a harness alone cannot make a small model reason reliably — it only steers what the model already does.
 
-### The technology behind it
+We are not just a model. Foundation-model providers ship raw capabilities, then leave orchestration, context management, and tool-call loops for you to stitch together.
 
-Our platform is powered by two core innovations:
-
-- **TIM (Thread Inference Model)** — A family of LLMs trained for recursive, decompositional problem solving. Rather than generating text as flat token sequences, TIM models reasoning as trees measured by both length and depth, enabling virtually unlimited working memory within a single inference.
-- **TIMRUN** — A high-performance inference runtime that orchestrates TIM with intelligent KV cache pruning, tool execution, and subtask management. TIMRUN sustains high throughput even when manipulating up to 90% of the KV cache in GPU memory.
-
-Together, they overcome the output limits, positional-embedding constraints, and GPU-memory bottlenecks that prevent standard LLMs from handling complex, multi-step tasks.
+Subconscious is what happens when the model and the runtime are designed for each other. Our **TIM models** are trained for recursive, tool-using reasoning. Our **TIMRUN runtime** orchestrates that reasoning — KV-cache pruning, tool execution, subtask management — inside a single inference. The result is agent engines that let **small language models run highly reliable, cost-effective agents in production**, behind a single API call.
 
 ## Quick Start
 
@@ -60,7 +54,7 @@ const client = new Subconscious({
 });
 
 const run = await client.run({
-  engine: 'tim-gpt',
+  engine: 'tim',
   input: {
     instructions: 'Search for the latest AI news and summarize the top 3 stories',
     tools: [{ type: 'platform', id: 'fast_search' }],
@@ -79,7 +73,7 @@ from subconscious import Subconscious
 client = Subconscious(api_key="your-api-key")
 
 run = client.run(
-    engine="tim-gpt",
+    engine="tim",
     input={
         "instructions": "Search for the latest AI news and summarize the top 3 stories",
         "tools": [{"type": "platform", "id": "fast_search"}],
@@ -109,13 +103,17 @@ npx create-subconscious-app --list                  # list all available example
 
 | Example | Description | Stack |
 |---------|-------------|-------|
-| **[Vercel Agent Runner](examples/vercel-template/)** | Full-stack Next.js app with streaming reasoning UI and tool management | Next.js, TypeScript |
-| **[E2B CLI Agent](examples/e2b_cli/)** | Autonomous CLI agent with cloud sandboxes for code execution | TypeScript, E2B |
-| **[Convex Real-time App](examples/convex_app/)** | AI todo assistant with real-time updates | React, Convex, TypeScript |
-| **[Search Agent CLI](examples/search_agent_cli/)** | Interactive CLI agent with web search capabilities | Python |
-| **[Structured Output (Python)](examples/structured_output_python/)** | Type-safe structured responses using Pydantic models | Python, Pydantic |
-| **[Structured Output (TypeScript)](examples/structured_output_typescript/)** | Type-safe structured responses using Zod schemas | TypeScript, Zod |
-| **[Getting Started Notebook](examples/getting_started_notebook/)** | Interactive Colab notebook — no experience required | Python, Jupyter |
+| **[Vercel Agent Runner](examples/vercel-template/)** | Full-stack Next.js app with streaming UI, tool management, and one-click Vercel deploy | Next.js, TypeScript |
+| **[E2B CLI Agent](examples/e2b_cli/)** | Autonomous CLI agent with E2B cloud sandboxes for code execution and file I/O | TypeScript, E2B |
+| **[Convex Real-time App](examples/convex_app/)** | AI todo assistant with real-time updates backed by Convex | React, Convex, TypeScript |
+| **[Composio FastAPI](examples/composio_fast_api/)** | 100+ OAuth apps as agent tools via MCP + Composio | Python, FastAPI |
+| **[Local-Hosted Tools](examples/local_hosted_tools/)** | Function-tool starter over FastAPI + ngrok; image-editing demo | Python, FastAPI |
+| **[Search Agent CLI](examples/search_agent_cli/)** | Streaming CLI agent with web search | Python, Typer |
+| **[Structured Output (Python)](examples/structured_output_python/)** | Type-safe structured responses via Pydantic + `answerFormat` | Python, Pydantic |
+| **[Structured Output (TypeScript)](examples/structured_output_typescript/)** | Type-safe structured responses via Zod + `answerFormat` | TypeScript, Zod |
+| **[Getting Started Notebook](examples/getting_started_notebook/)** | Colab walkthrough — no setup required | Python, Jupyter |
+| **[City of Boston Getting Started](examples/city_of_boston_getting_started/)** | Colab notebook tailored to the City of Boston POC | Python, Jupyter |
+| **[Val.Town Example](examples/valtown_example_script/)** | Subconscious from a Val.Town automation script | TypeScript, Val.Town |
 
 ### Adding Your Own Example
 
@@ -129,7 +127,7 @@ Skills are reusable knowledge packages that give agents specialized capabilities
 
 ```python
 run = client.run(
-    engine="tim-gpt",
+    engine="tim",
     input={
         "instructions": "Review this code for security issues",
         "skills": ["security-review", "coding-standards"],
@@ -155,11 +153,12 @@ Manage subscriptions in the [dashboard](https://www.subconscious.dev/platform/we
 |--------|----------|------|----------|
 | **TIM** | `tim` | Unified | Flagship engine for a wide range of tasks |
 | **TIM-Edge** | `tim-edge` | Unified | Speed, efficiency, search-heavy workloads |
-| **TIMINI** | `timini` | Compound | Long-context and tool use, strong reasoning (Gemini-3 Flash) |
-| **TIM-GPT** | `tim-gpt` | Compound | Most use cases, good balance of cost and performance (GPT-4.1) |
-| **TIM-GPT-Heavy** | `tim-gpt-heavy` | Compound | Maximum capability, complex reasoning (GPT-5.2) |
+| **TIM-Claude** | `tim-claude` | Compound | Complex reasoning backed by Claude Sonnet (supports images) |
+| **TIM-Claude-Heavy** | `tim-claude-heavy` | Compound | Maximum capability, backed by Claude Opus (supports images) |
+| **TIM-OSS-Local** | `tim-oss-local` | Compound | Tool-calling with TIM-trained OSS models |
+| **TIM-1.5** | `tim-1.5` | Compound | Tool-calling with large OSS models |
 
-Start with `tim-gpt` for most applications.
+Start with `tim` for most applications; reach for `tim-claude` when you need deeper reasoning or image input.
 
 ## Tools
 
@@ -232,64 +231,6 @@ const mcpTool = {
 
 > Requires the latest [subconscious](https://www.npmjs.com/package/subconscious) (Node.js) or [subconscious-sdk](https://pypi.org/project/subconscious-sdk/) (Python).
 
-## Architecture
-
-```
-┌─────────────────┐    ┌─────────────────────────────────────────┐
-│   Input Query   │───▶│         Subconscious Engine              │
-│                 │    │                                           │
-└─────────────────┘    │  ┌─────────────────┐                     │
-                       │  │ Structure Check  │                     │
-                       │  │                  │                     │
-                       │  │ • Tool Calls     │                     │
-                       │  │ • Prunable       │                     │
-                       │  │   Subtasks       │                     │
-                       │  └─────────────────┘                     │
-                       │           │                               │
-                       │           ▼                               │
-                       │  ┌─────────────────┐                     │
-                       │  │   TIM Model      │                     │
-                       │  │                  │                     │
-                       │  │  • Sparse Attn   │ ──────────          │
-                       │  │  • Multi-hop     │          │          │
-                       │  │  • Token Pred    │          │          │
-                       │  └─────────────────┘          │          │
-                       │           │                    │          │
-                       │           ▼                    ▼          │
-┌─────────────────┐    │  ┌──────────────┐    ┌─────────────────┐ │
-│   Tool Usage    │◀───┼──│ Tool Execute │    │   KV Cache      │ │
-│                 │    │  │              │    │   Pruning       │ │
-│  • External APIs│    │  │ • Call Tools │    │                 │ │
-│  • Tool Calls   │    │  │ • Encode     │    │ • Memory Mgmt   │ │
-│  • Data Sources │    │  │   Response   │    │                 │ │
-└─────────────────┘    │  └──────────────┘    └─────────────────┘ │
-                       │           │                    │          │
-                       │           ▼                    ▼          │
-                       │  ┌───────────────────────────────────────┐│
-                       │  │       Continue Decoding               ││
-                       │  │    (with updated context)             ││
-                       │  └───────────────────────────────────────┘│
-                       └──────────────────────────────────────────┘
-                                        │
-                                        ▼
-                               ┌─────────────────┐
-                               │   Final Result   │
-                               └─────────────────┘
-```
-
-## Research
-
-Our work is described in detail in the paper **"Beyond Context Limits: Subconscious Threads for Long-Horizon Reasoning"** by researchers from MIT CSAIL and Subconscious Systems.
-
-```bibtex
-@article{tim-timrun,
-  title={Beyond Context Limits: Subconscious Threads for Long-Horizon Reasoning},
-  author={Hongyin Luo, Nathaniel Morgan, Tina Li, Derek Zhao, Ai Vy Ngo, Philip Schroeder, Lijie Yang, Assaf Ben-Kish, Jack O'Brien, James Glass},
-  journal={arXiv preprint arXiv:2507.16784},
-  year={2024}
-}
-```
-
 ## Documentation & Resources
 
 - [Getting Started Guide](https://docs.subconscious.dev/quickstart)
@@ -301,7 +242,7 @@ Our work is described in detail in the paper **"Beyond Context Limits: Subconsci
 
 ## Support
 
-- Email: hongyin OR jack AT subconscious DOT dev
+- Email: {jack,hongyin,dana,wei}@subconscious.dev
 - Issues: [GitHub Issues](https://github.com/subconscious-systems/subconscious/issues)
 - Docs: [docs.subconscious.dev](https://docs.subconscious.dev/)
 

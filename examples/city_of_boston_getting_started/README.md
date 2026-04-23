@@ -13,7 +13,7 @@ The notebook walks through every core concept step by step:
 3. **Platform tools** — web search, news search, etc.
 4. **Structured output** — typed JSON responses with Pydantic models
 5. **MCP tools** — connect to the City of Boston open data portal (`https://data-mcp.boston.gov/mcp`) with no extra signup
-6. **Engines** — swap between `tim-claude`, `tim-gpt-heavy`, `tim`, and more
+6. **Engines** — swap between `tim-claude`, `tim-claude-heavy`, `tim`, and more
 
 ## Run Locally
 
