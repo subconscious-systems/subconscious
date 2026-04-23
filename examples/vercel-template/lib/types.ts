@@ -2,6 +2,8 @@
  * Shared types for Subconscious agent requests and responses.
  */
 
+import type { ReasoningTask } from "subconscious";
+
 export interface AgentRequest {
   message: string;
   conversationHistory?: ChatMessage[];
@@ -41,48 +43,25 @@ export function buildInstructions(
   return `${conversation}\n\nUser: ${message}\n\nRespond to the user's latest message.`;
 }
 
-/**
- * The reasoning tree that Subconscious returns after a run.
- *
- * Each node represents one step the agent took:
- *   - title:      what the agent is doing ("Research the topic")
- *   - thought:    its internal reasoning
- *   - tooluse:    tools it called and their results
- *   - subtask:    nested sub-steps (the agent breaking the problem down)
- *   - conclusion: the step's outcome
- */
-export interface ReasoningNode {
-  title?: string;
-  thought?: string;
-  tooluse?: Array<{
-    tool_name?: string;
-    parameters?: Record<string, unknown>;
-    tool_result?: unknown;
-  }>;
-  subtask?: ReasoningNode[];
-  conclusion?: string;
-}
-
 /** Recursively walk the reasoning tree and collect every tool invocation. */
-export function extractToolCalls(reasoning?: ReasoningNode): ToolCallInfo[] {
+export function extractToolCalls(reasoning?: ReasoningTask[]): ToolCallInfo[] {
   if (!reasoning) return [];
   const calls: ToolCallInfo[] = [];
 
-  function traverse(node: ReasoningNode) {
-    for (const tu of node.tooluse ?? []) {
-      if (tu.tool_name) {
-        calls.push({
-          name: tu.tool_name,
-          input: tu.parameters ?? {},
-          output: tu.tool_result,
-        });
-      }
+  function traverse(node: ReasoningTask) {
+    const tu = node.tooluse;
+    if (tu?.tool_name) {
+      calls.push({
+        name: tu.tool_name,
+        input: tu.parameters ?? {},
+        output: tu.tool_result,
+      });
     }
-    for (const sub of node.subtask ?? []) {
+    for (const sub of node.subtasks ?? []) {
       traverse(sub);
     }
   }
 
-  traverse(reasoning);
+  for (const node of reasoning) traverse(node);
   return calls;
 }

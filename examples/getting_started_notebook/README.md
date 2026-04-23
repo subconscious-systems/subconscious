@@ -13,7 +13,7 @@ The notebook walks through every core concept step by step:
 3. **Platform tools** — web search, news search, etc.
 4. **MCP tools** — connect to a hosted MCP server ([Context7](https://context7.com/) docs at `https://mcp.context7.com/mcp`) with no extra signup
 5. **Structured output** — typed JSON responses with Pydantic models
-6. **Engine comparison** — try `tim-claude`, `tim-gpt-heavy`, `tim`, and more
+6. **Engine comparison** — try `tim-claude`, `tim-claude-heavy`, `tim`, and more
 
 ## Run Locally
 

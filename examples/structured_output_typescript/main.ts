@@ -28,7 +28,7 @@ async function analyzeSentiment(text: string): Promise<SentimentAnalysis> {
     options: { awaitCompletion: true },
   });
 
-  return run.result?.answer as unknown as SentimentAnalysis;
+  return SentimentAnalysis.parse(run.result?.parsedAnswer);
 }
 
 async function main() {

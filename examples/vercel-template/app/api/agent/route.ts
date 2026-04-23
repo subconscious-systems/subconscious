@@ -7,14 +7,22 @@
  * Good for simple integrations where you don't need live streaming.
  * For real-time progress, use the /api/agent/stream endpoint instead.
  *
- * Engine options: "tim", "tim-gpt", "tim-gpt-heavy", "tim-edge"
+ * Engine options: "tim", "tim-edge", "tim-claude", "tim-claude-heavy"
  * Docs: https://docs.subconscious.dev/engines
+ *
+ * Advanced knobs available on this call:
+ *  - input.skills       — reusable prompt fragments resolved server-side by name
+ *  - options.timeout    — max run duration (seconds, 1–3600)
+ *  - options.maxStepTokens — per-step token cap (256–20000)
+ *  - options.output.callbackUrl — webhook for async completion
+ *  - options.output.responseContent — "full" | "answer_only"
+ * See https://docs.subconscious.dev/core-concepts/runs#runtime-options
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getClient } from '@/lib/subconscious';
 import { getTools } from '@/lib/tools';
-import { buildInstructions, extractToolCalls, type AgentRequest, type AgentResponse, type ReasoningNode } from '@/lib/types';
+import { buildInstructions, extractToolCalls, type AgentRequest, type AgentResponse } from '@/lib/types';
 
 export const maxDuration = 60;
 
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
     const instructions = buildInstructions(body.message, body.conversationHistory);
 
     const run = await client.run({
-      engine: process.env.SUBCONSCIOUS_ENGINE ?? 'tim-gpt',
+      engine: process.env.SUBCONSCIOUS_ENGINE ?? 'tim',
       input: {
         instructions,
         tools: getTools(),
@@ -39,9 +47,9 @@ export async function POST(req: NextRequest) {
     });
 
     const response: AgentResponse = {
-      answer: run.result?.answer ?? '',
+      answer: typeof run.result?.answer === 'string' ? run.result.answer : '',
       runId: run.runId,
-      toolCalls: extractToolCalls(run.result?.reasoning as ReasoningNode),
+      toolCalls: extractToolCalls(run.result?.reasoning),
     };
 
     return NextResponse.json(response);

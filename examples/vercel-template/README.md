@@ -64,9 +64,10 @@ Set `SUBCONSCIOUS_ENGINE` in `.env.local` to switch models:
 
 | Engine | Best for |
 |--------|----------|
-| `tim-gpt` | Most use cases (default) |
+| `tim` | Most use cases (default) |
 | `tim-edge` | Speed and efficiency |
-| `tim-gpt-heavy` | Maximum capability |
+| `tim-claude` | Complex reasoning (Claude Sonnet, multimodal) |
+| `tim-claude-heavy` | Maximum capability (Claude Opus, multimodal) |
 
 Full list at [docs.subconscious.dev/engines](https://docs.subconscious.dev/engines).
 
@@ -107,7 +108,7 @@ scripts/
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `SUBCONSCIOUS_API_KEY` | **Yes** | — | API key from [subconscious.dev/platform](https://subconscious.dev/platform) |
-| `SUBCONSCIOUS_ENGINE` | No | `tim-gpt` | Which engine to use |
+| `SUBCONSCIOUS_ENGINE` | No | `tim` | Which engine to use |
 
 ## Learn more
 

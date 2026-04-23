@@ -1,6 +1,5 @@
 from subconscious import Subconscious
 import os
-import json
 import dotenv
 from pydantic import BaseModel
 
@@ -27,7 +26,7 @@ def analyze_sentiment(text: str) -> SentimentAnalysis:
         options={"await_completion": True},
     )
 
-    return run.result.answer
+    return run.result.parsed_answer
     
 def main():
     user_input = input("Enter a text to analyze: ")

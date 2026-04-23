@@ -1,0 +1,89 @@
+name: Publish packages to npm
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'cli/package.json'
+      - 'create-subconscious-app/package.json'
+
+jobs:
+  publish-cli:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Check if version changed
+        id: check
+        run: |
+          PUBLISHED=$(npm view subconscious-cli version 2>/dev/null || echo "0.0.0")
+          CURRENT=$(node -p "require('./cli/package.json').version")
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISHED" != "$CURRENT" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing subconscious-cli $CURRENT (npm has $PUBLISHED)"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "subconscious-cli $CURRENT already published, skipping"
+          fi
+
+      - name: Publish subconscious-cli
+        if: steps.check.outputs.changed == 'true'
+        run: npm publish ./cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: cli-v${{ steps.check.outputs.version }}
+          name: subconscious-cli v${{ steps.check.outputs.version }}
+          generate_release_notes: true
+
+  publish-create-app:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Check if version changed
+        id: check
+        run: |
+          PUBLISHED=$(npm view create-subconscious-app version 2>/dev/null || echo "0.0.0")
+          CURRENT=$(node -p "require('./create-subconscious-app/package.json').version")
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "$PUBLISHED" != "$CURRENT" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing create-subconscious-app $CURRENT (npm has $PUBLISHED)"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "create-subconscious-app $CURRENT already published, skipping"
+          fi
+
+      - name: Publish create-subconscious-app
+        if: steps.check.outputs.changed == 'true'
+        run: npm publish ./create-subconscious-app
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        if: steps.check.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: create-app-v${{ steps.check.outputs.version }}
+          name: create-subconscious-app v${{ steps.check.outputs.version }}
+          generate_release_notes: true
