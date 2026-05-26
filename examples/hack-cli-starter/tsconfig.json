@@ -1,0 +1,24 @@
+{
+  // NodeNext + ESM: we compile with `tsc` and run the output directly under Node.
+  // That means relative imports in source must carry a `.js` extension (e.g.
+  // `import { loadConfig } from "../lib/config.js"`) — TypeScript keeps them as-is
+  // and Node resolves them at runtime. `tsx` (used for `npm run dev`) handles the
+  // same `.js`-pointing-at-`.ts` imports transparently.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "jsx": "react-jsx",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}

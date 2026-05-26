@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-04-23T21:35:29.977Z",
+  "generated": "2026-05-26T18:38:03.454Z",
   "examples": [
     {
       "name": "city_of_boston_getting_started",
@@ -107,6 +107,29 @@
       },
       "setup": [
         "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb"
+      ]
+    },
+    {
+      "name": "hack-cli-starter",
+      "displayName": "Hack CLI Starter",
+      "description": "Clone-and-go Subconscious agent CLI: a polished Ink REPL with client-side MCP tool-calling. Build your hackathon agent in 5 minutes.",
+      "language": "typescript",
+      "framework": "Ink + MCP",
+      "tags": [
+        "local"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://www.subconscious.dev/platform"
+        }
+      },
+      "setup": [
+        "npm install",
+        "npm run build",
+        "npm link",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "sub"
       ]
     },
     {
