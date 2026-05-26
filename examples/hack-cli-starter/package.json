@@ -1,0 +1,72 @@
+{
+  "name": "hack-cli-starter",
+  "version": "0.1.0",
+  "displayName": "Hack CLI Starter",
+  "description": "Clone-and-go Subconscious agent CLI: a polished Ink REPL with client-side MCP tool-calling. Build your hackathon agent in 5 minutes.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "bin": {
+    "sub": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc",
+    "postbuild": "chmod +x dist/index.js",
+    "dev": "tsx src/index.tsx",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit"
+  },
+  "subconscious": {
+    "language": "typescript",
+    "framework": "Ink + MCP",
+    "tags": [
+      "local"
+    ],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": {
+        "required": true,
+        "url": "https://www.subconscious.dev/platform"
+      }
+    }
+  },
+  "setup": [
+    "npm install",
+    "npm run build",
+    "npm link",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "sub"
+  ],
+  "keywords": [
+    "subconscious",
+    "agent",
+    "cli",
+    "mcp",
+    "ink",
+    "starter",
+    "hackathon"
+  ],
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^14.0.3",
+    "conf": "^15.1.0",
+    "ink": "^6.8.0",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "openai": "^6.39.0",
+    "react": "^19.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.2.15",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3"
+  }
+}
