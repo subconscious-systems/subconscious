@@ -1,6 +1,6 @@
 {
   "name": "@subcon/e2b-cli",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "displayName": "E2B CLI Agent",
   "private": false,
   "type": "module",
@@ -46,13 +46,11 @@
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
-    "subconscious": "^2.0.0",
-    "@e2b/sdk": "^2.0.0",
-    "localtunnel": "^2.0.2"
+    "openai": "^4.104.0",
+    "@e2b/sdk": "^2.0.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/localtunnel": "^2.0.4",
     "typescript": "^5.9.3"
   },
   "engines": {

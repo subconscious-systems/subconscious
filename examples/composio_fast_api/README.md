@@ -2,7 +2,7 @@
 
 A FastAPI server that pairs **Subconscious** as the AI engine with **Composio** for OAuth connections to 1000+ apps (Gmail, GitHub, Slack, Notion, etc.).
 
-Composio handles user-level OAuth and exposes connected apps as MCP tools. Subconscious runs the agent and calls those tools during execution — giving you the "connect any app" experience with Subconscious as the model provider.
+Composio manages user-level OAuth and exposes connected apps as **OpenAI-format tool schemas**. Subconscious provides the model via its OpenAI-compatible API, which natively supports standard OpenAI function tools. All tool calling runs **client-side** inside this FastAPI process: the server passes Composio tool schemas directly as `tools=[...]` to the chat-completions API, then executes any `tool_calls` the model returns via the Composio SDK before looping back to the model.
 
 ## Setup
 
@@ -39,7 +39,15 @@ curl -X POST http://localhost:8000/run \
   -d '{"user_id": "user_123", "instructions": "Star the composiohq/composio repo on GitHub"}'
 ```
 
-If the user hasn't connected the required app yet, Composio surfaces an auth link so they can complete OAuth and retry.
+Optionally restrict which Composio toolkits are available to the agent:
+
+```bash
+curl -X POST http://localhost:8000/run \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user_123", "instructions": "Send an email to hello@example.com", "toolkits": ["gmail"]}'
+```
+
+If the user has not yet connected the required app, complete OAuth first using the `/connect` endpoint below.
 
 ### List all connections
 
@@ -65,6 +73,16 @@ Open the `redirect_url` from the response in your browser to complete OAuth.
 
 ## How it works
 
-1. **Composio session** — `composio.create(user_id=...)` creates a per-user session. `session.mcp.url` and `session.mcp.headers` expose all connected tools over MCP.
-2. **Subconscious run** — The MCP endpoint is passed as a tool to `sub_client.run()`. Subconscious discovers available tools from the MCP server and calls them as needed.
-3. **Connection management** — Separate endpoints let you list connections, check status, and kick off OAuth flows so your frontend can render a connections UI.
+1. **Composio tool schemas** — On each `/run` request, the server calls `composio.tools.get(user_id, ...)` to fetch OpenAI-formatted tool schemas for the user's connected apps.
+2. **Native function tools** — The schemas are passed directly as `tools=[...]` to `client.chat.completions.create(...)`. No system-prompt injection or `response_format` workaround needed — the Subconscious endpoint supports standard OpenAI function tools natively.
+3. **Client-side execution** — When the model returns `tool_calls`, the server executes each call via `composio.tools.execute(slug, arguments, user_id=user_id)`, appends a `role: "tool"` result message for each call, and loops back to the model. Multiple tool calls per turn are supported.
+4. **Final answer** — When the model responds with no `tool_calls`, `message.content` is the final answer and the loop exits.
+5. **Connection management** — The `/connections` and `/connect` endpoints allow your frontend to render a connections UI and kick off OAuth flows.
+
+## File structure
+
+| File | Purpose |
+|---|---|
+| `main.py` | FastAPI app — endpoints, input validation, startup checks |
+| `agent.py` | Client-side ReAct loop using the Subconscious OpenAI-compatible API |
+| `composio_adapter.py` | Composio SDK wrapper — schema fetching and tool execution |

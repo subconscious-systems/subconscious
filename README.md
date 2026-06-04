@@ -104,16 +104,16 @@ npx create-subconscious-app --list                  # list all available example
 | Example | Description | Stack |
 |---------|-------------|-------|
 | **[Vercel Agent Runner](examples/vercel-template/)** | Full-stack Next.js app with streaming UI, tool management, and one-click Vercel deploy | Next.js, TypeScript |
+| **[Hack CLI Starter](examples/hack-cli-starter/)** | Clone-and-go terminal agent: client-side ReAct loop over MCP tools | TypeScript, Ink, MCP |
 | **[E2B CLI Agent](examples/e2b_cli/)** | Autonomous CLI agent with E2B cloud sandboxes for code execution and file I/O | TypeScript, E2B |
 | **[Convex Real-time App](examples/convex_app/)** | AI todo assistant with real-time updates backed by Convex | React, Convex, TypeScript |
-| **[Composio FastAPI](examples/composio_fast_api/)** | 100+ OAuth apps as agent tools via MCP + Composio | Python, FastAPI |
-| **[Local-Hosted Tools](examples/local_hosted_tools/)** | Function-tool starter over FastAPI + ngrok; image-editing demo | Python, FastAPI |
-| **[Search Agent CLI](examples/search_agent_cli/)** | Streaming CLI agent with web search | Python, Typer |
-| **[Structured Output (Python)](examples/structured_output_python/)** | Type-safe structured responses via Pydantic + `answerFormat` | Python, Pydantic |
-| **[Structured Output (TypeScript)](examples/structured_output_typescript/)** | Type-safe structured responses via Zod + `answerFormat` | TypeScript, Zod |
+| **[Composio FastAPI](examples/composio_fast_api/)** | 100+ OAuth apps as agent tools via Composio, executed in a client-side loop | Python, FastAPI |
+| **[Local-Hosted Tools](examples/local_hosted_tools/)** | Client-side tool loop with local Python functions; image-editing demo | Python |
+| **[Search Agent CLI](examples/search_agent_cli/)** | Streaming CLI agent with client-side web search | Python |
+| **[Structured Output (Python)](examples/structured_output_python/)** | Type-safe structured responses via Pydantic + `response_format` | Python, Pydantic |
+| **[Structured Output (TypeScript)](examples/structured_output_typescript/)** | Type-safe structured responses via Zod + `response_format` | TypeScript, Zod |
 | **[Getting Started Notebook](examples/getting_started_notebook/)** | Colab walkthrough — no setup required | Python, Jupyter |
 | **[City of Boston Getting Started](examples/city_of_boston_getting_started/)** | Colab notebook tailored to the City of Boston POC | Python, Jupyter |
-| **[Val.Town Example](examples/valtown_example_script/)** | Subconscious from a Val.Town automation script | TypeScript, Val.Town |
 
 ### Adding Your Own Example
 

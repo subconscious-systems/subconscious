@@ -1,8 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ReasoningDisplay } from "./ReasoningDisplay";
 import { StatusBadge, type AgentRun } from "./AgentRunner";
+import {
+  formatToolParams,
+  formatToolResult,
+  type ParsedToolUse,
+} from "@/lib/stream-parser";
 
 interface RunResultProps {
   run: AgentRun;
@@ -47,6 +51,32 @@ function getErrorInfo(message: string): {
   };
 }
 
+function ToolInvocationCard({ inv }: { inv: ParsedToolUse }) {
+  return (
+    <div className="rounded-lg border p-2.5 bg-black/20 border-(--border)">
+      <div className="flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${inv.hasResult ? "bg-(--green)" : "bg-(--accent)"}`} />
+        <span className="font-mono text-xs text-(--teal)">{inv.toolName}</span>
+      </div>
+      {inv.parameters !== "{}" && (
+        <pre className="mt-1.5 text-[11px] text-(--cream)/35 font-mono overflow-x-auto leading-relaxed">
+          {formatToolParams(inv.parameters)}
+        </pre>
+      )}
+      {inv.hasResult && inv.result && (
+        <div className="mt-2 pt-2 border-t border-(--border)">
+          <span className="text-[10px] font-semibold text-(--green)/60 uppercase tracking-wider">
+            Result
+          </span>
+          <pre className="mt-1 text-[11px] text-(--green)/80 font-mono overflow-x-auto leading-relaxed">
+            {formatToolResult(inv.result)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RunResult({ run }: RunResultProps) {
   const [expanded, setExpanded] = useState(false);
   const isError = run.status === "error";
@@ -86,12 +116,9 @@ export function RunResult({ run }: RunResultProps) {
             )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            <StatusBadge
-              status={run.status}
-              durationMs={run.durationMs}
-            />
+            <StatusBadge status={run.status} durationMs={run.durationMs} />
             <span className="text-[10px] text-(--cream)/30 group-hover:text-(--cream)/50 transition-colors">
-              {expanded ? "\u25BE" : "\u25B8"}
+              {expanded ? "▾" : "▸"}
             </span>
           </div>
         </div>
@@ -135,9 +162,16 @@ export function RunResult({ run }: RunResultProps) {
 
       {expanded && !isError && (
         <div className="px-5 pb-5 animate-fade-in">
-          {run.steps.length > 0 && (
+          {run.toolInvocations.length > 0 && (
             <div className="mb-4">
-              <ReasoningDisplay steps={run.steps} isStreaming={false} />
+              <div className="text-[11px] font-semibold text-(--cream)/40 uppercase tracking-wider mb-2">
+                Tools Used
+              </div>
+              <div className="flex flex-col gap-2">
+                {run.toolInvocations.map((inv, i) => (
+                  <ToolInvocationCard key={i} inv={inv} />
+                ))}
+              </div>
             </div>
           )}
 
@@ -150,30 +184,6 @@ export function RunResult({ run }: RunResultProps) {
                 <p className="text-sm text-(--cream)/80 leading-relaxed whitespace-pre-wrap">
                   {run.answer}
                 </p>
-              </div>
-            </div>
-          )}
-
-          {run.toolInvocations.length > 0 && (
-            <div className="mt-3">
-              <div className="text-[11px] font-semibold text-(--cream)/40 uppercase tracking-wider mb-2">
-                Tools Used
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {run.toolInvocations.map((inv, i) => (
-                  <span
-                    key={i}
-                    className={[
-                      "text-[11px] font-mono",
-                      "text-(--teal)",
-                      "bg-(--teal)/10",
-                      "border border-(--teal)/20",
-                      "px-2 py-0.5 rounded",
-                    ].join(" ")}
-                  >
-                    {inv.toolName}
-                  </span>
-                ))}
               </div>
             </div>
           )}

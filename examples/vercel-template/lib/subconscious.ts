@@ -1,18 +1,23 @@
 /**
- * Subconscious SDK client (singleton).
+ * Subconscious OpenAI-compatible client (singleton).
  *
- * The SDK provides two ways to run an agent:
- *   - client.run()    → waits for the full result (answer + reasoning tree)
- *   - client.stream() → streams reasoning events as they happen via SSE
+ * Subconscious exposes an OpenAI Chat Completions API at:
+ *   https://api.subconscious.dev/v1
+ *
+ * Use the official `openai` npm package and point `baseURL` at the
+ * Subconscious endpoint. The only model is `subconscious/tim-qwen3.6-27b`.
  *
  * Get your API key at: https://subconscious.dev/platform
  */
 
-import { Subconscious } from "subconscious";
+import OpenAI from "openai";
 
-let client: Subconscious;
+export const SUBCONSCIOUS_BASE_URL = "https://api.subconscious.dev/v1";
+export const SUBCONSCIOUS_MODEL = "subconscious/tim-qwen3.6-27b";
 
-export function getClient(): Subconscious {
+let client: OpenAI | undefined;
+
+export function getClient(): OpenAI {
   if (!client) {
     const apiKey = process.env.SUBCONSCIOUS_API_KEY;
     if (!apiKey) {
@@ -21,7 +26,10 @@ export function getClient(): Subconscious {
           "Get your key at https://subconscious.dev/platform",
       );
     }
-    client = new Subconscious({ apiKey });
+    client = new OpenAI({
+      baseURL: SUBCONSCIOUS_BASE_URL,
+      apiKey,
+    });
   }
   return client;
 }

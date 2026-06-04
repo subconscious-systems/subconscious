@@ -5,8 +5,8 @@ description = "Connect 100+ Apps to your Agents with Subconscious + Composio as 
 requires-python = ">=3.10"
 dependencies = [
     "python-dotenv>=1.0.0",
-    "subconscious-sdk",
-    "composio",
+    "openai>=1.40.0",
+    "composio>=0.13.0",
     "fastapi>=0.100.0",
     "uvicorn>=0.20.0",
     "pydantic>=2.0.0",

@@ -1,8 +1,8 @@
 /**
- * Sidebar showing available Subconscious tools and live invocations.
+ * Sidebar showing available agent tools and live invocations.
  *
- * "platform" tools are hosted by Subconscious (e.g. web_search).
- * "self-hosted" tools are your own API routes that Subconscious calls.
+ * Tools run locally inside the agent loop on the server —
+ * no separate infrastructure or tunneling required.
  */
 
 "use client";
@@ -41,7 +41,7 @@ export function ToolPanel({ invocations }: ToolPanelProps) {
                     : "bg-black/20 border-(--border)",
                 ].join(" ")}
               >
-                <ToolTypeIcon type={tool.type} />
+                <ToolTypeIcon />
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-medium text-(--cream)/80 font-mono truncate">
                     {tool.name}
@@ -50,7 +50,7 @@ export function ToolPanel({ invocations }: ToolPanelProps) {
                     {tool.description}
                   </div>
                 </div>
-                <TypeBadge type={tool.type} />
+                <LocalBadge />
               </div>
             );
           })}
@@ -119,63 +119,21 @@ export function ToolPanel({ invocations }: ToolPanelProps) {
   );
 }
 
-type ToolType = "platform" | "self-hosted" | "mcp";
-
-function TypeBadge({ type }: { type: ToolType }) {
-  const colors = {
-    platform: "bg-(--teal)/10 text-(--teal) border-(--teal)/20",
-    "self-hosted": "bg-(--accent)/10 text-(--accent) border-(--accent)/20",
-    mcp: "bg-purple-500/10 text-purple-400 border-purple-400/20",
-  };
-  const labels = { platform: "platform", "self-hosted": "local", mcp: "mcp" };
+function LocalBadge() {
   return (
     <span
       className={[
         "shrink-0 text-[10px] px-1.5 py-0.5",
         "rounded-full font-medium border",
-        colors[type],
+        "bg-(--accent)/10 text-(--accent) border-(--accent)/20",
       ].join(" ")}
     >
-      {labels[type]}
+      local
     </span>
   );
 }
 
-function ToolTypeIcon({ type }: { type: ToolType }) {
-  if (type === "platform") {
-    return (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        className="text-(--teal) shrink-0"
-      >
-        <circle cx="8" cy="8" r="6" />
-        <path d="M2 8h12M8 2a10 10 0 0 1 3 6 10 10 0 0 1-3 6 10 10 0 0 1-3-6 10 10 0 0 1 3-6z" />
-      </svg>
-    );
-  }
-  if (type === "mcp") {
-    return (
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        className="text-purple-400 shrink-0"
-      >
-        <circle cx="4" cy="8" r="2" />
-        <circle cx="12" cy="4" r="2" />
-        <circle cx="12" cy="12" r="2" />
-        <path d="M6 8h4M10 4L6 8l4 4" />
-      </svg>
-    );
-  }
+function ToolTypeIcon() {
   return (
     <svg
       width="14"

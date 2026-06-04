@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "Learn Subconscious from scratch via Jupyter Notebook — no experience required"
 requires-python = ">=3.9"
 dependencies = [
-    "subconscious-sdk",
+    "openai>=1.40.0",
+    "pydantic>=2.0.0",
+    "jupyter",
 ]
 
 [project.optional-dependencies]

@@ -45,7 +45,7 @@ understand everything.
 **1. The agent loop** ([`src/agent/loop.ts`](src/agent/loop.ts)) — the loop asks the
 model "what next?"; if it wants a tool, we run it, feed the result back, and ask again
 (Reason → Act → Observe) until it gives a final answer. Running this loop *ourselves* is
-the whole game — [The constraint](#the-constraint-why-its-built-this-way) explains why.
+the whole game — [How tools work](#how-tools-work-why-its-built-this-way) explains why.
 
 **2. MCP for tools** ([`src/mcp/client.ts`](src/mcp/client.ts)) — tools come from
 [MCP](https://modelcontextprotocol.io) servers. The CLI is the MCP client: it
@@ -53,10 +53,10 @@ connects (stdio / SSE / HTTP), flattens every server's tools into one list with
 `<server>__<tool>` names, and runs them on request. The list of tools the agent gets
 lives in [`src/tools/index.ts`](src/tools/index.ts).
 
-**3. The JSON-schema trick** — instead of fragile "did the model mean to call a
-tool?" prose parsing, we force the model's reply into a strict JSON shape
-(`{ action: "tool_call" | "final_answer", ... }`) using `response_format`. The reply
-is always machine-readable, so the loop never guesses.
+**3. Native function tools** — we hand the model our MCP tools as standard OpenAI
+function tools (`tools: [...]`). When it wants one, the reply comes back with a
+`tool_calls` array (name + JSON arguments) — no prose parsing, no guessing. We run
+the tool and send the result back as a `role: "tool"` message.
 
 ---
 
@@ -113,17 +113,17 @@ add one line.** (Tools work this way too — see [Tools](#tools) above.)
 
 ---
 
-## The constraint (why it's built this way)
+## How tools work (why it's built this way)
 
 Subconscious exposes an **OpenAI-compatible** chat endpoint
 (`https://api.subconscious.dev/v1`, model `subconscious/tim-qwen3.6-27b`). It speaks
-the protocol you already know — but it does **not** accept a `tools` field. There's
-no server-side function-calling.
+the protocol you already know — including standard **function tools**: you pass a
+`tools` array and the model replies with `tool_calls`.
 
-So tools are wired in **client-side**: this CLI is the MCP client *and* runs the
-ReAct loop, and we use JSON-schema-constrained output to force a clean "tool call vs
-final answer" decision each turn. The day Subconscious ships native tool-calling,
-you'd rewrite only `src/agent/loop.ts` — nothing else moves.
+What it does **not** do is *execute* those tools for you. So this CLI runs the loop
+**client-side**: it's the MCP client that owns the tools, it passes them to the
+model as OpenAI function tools, and when the model calls one it runs it and feeds
+the result back (`role: "tool"`) — looping until the model gives a final answer.
 
 That's the lesson worth taking to your own project: a small, explicit loop you
 control beats a black box you can't.

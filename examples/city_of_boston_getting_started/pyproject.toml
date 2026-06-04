@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "Learn Subconscious from scratch via Jupyter Notebook — no experience required"
 requires-python = ">=3.9"
 dependencies = [
-    "subconscious-sdk",
+    "openai>=1.40.0",
+    "mcp>=1.0.0",
+    "pydantic>=2.0.0",
+    "jupyter",
 ]
 
 [project.optional-dependencies]
@@ -24,5 +27,5 @@ framework = "Jupyter"
 tags = ["cloud"]
 envVars = { "SUBCONSCIOUS_API_KEY" = { required = true } }
 setup = [
-    "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb",
+    "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/city_of_boston_getting_started/Boston%20Subconscious%20Quickstart.ipynb",
 ]

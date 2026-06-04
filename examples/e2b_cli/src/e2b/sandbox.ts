@@ -113,8 +113,9 @@ export class E2BSandbox {
     }
 
     // Check if sandbox object has an isExpired property (E2B SDK specific)
-    if (typeof (this.sandbox as any).isExpired === "boolean") {
-      return !(this.sandbox as any).isExpired;
+    const maybeExpired = (this.sandbox as unknown as Record<string, unknown>)["isExpired"];
+    if (typeof maybeExpired === "boolean") {
+      return !maybeExpired;
     }
 
     return true;
@@ -208,7 +209,7 @@ export class E2BSandbox {
         throw new Error("Sandbox not initialized");
       }
 
-      const envVars = (this.sandbox as any)._envVars || {};
+      const envVars = ((this.sandbox as unknown as Record<string, unknown>)["_envVars"] ?? {}) as Record<string, unknown>;
       const envPrefix = Object.entries(envVars)
         .map(([key, value]) => `${key}="${String(value).replace(/"/g, '\\"')}"`)
         .join(" ");
@@ -367,7 +368,7 @@ export class E2BSandbox {
   /**
    * List files in a directory.
    */
-  async listFiles(dirPath = "/home/user"): Promise<any[]> {
+  async listFiles(dirPath = "/home/user"): Promise<unknown[]> {
     if (!this.sandbox) throw new Error("Sandbox not initialized");
     this.updateActivity();
     return await this.sandbox.files.list(dirPath);
@@ -486,7 +487,7 @@ export class E2BSandbox {
     this.updateActivity();
 
     if (Object.keys(vars).length > 0) {
-      (this.sandbox as any)._envVars = vars;
+      (this.sandbox as unknown as Record<string, unknown>)["_envVars"] = vars;
       log(`[e2b] Environment variables set: ${Object.keys(vars).join(", ")}`);
     }
   }

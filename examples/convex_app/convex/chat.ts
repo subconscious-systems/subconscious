@@ -1,298 +1,403 @@
 /**
  * Chat handler.
- * Connects the frontend to Subconscious.
+ * Connects the frontend to Subconscious via the OpenAI-compatible chat/completions API.
  *
  * When a user sends a message:
  * 1. Save the message to the database
- * 2. Get current todos for context
- * 3. Define the tools the AI can use (with HTTP URLs)
- * 4. Call the Subconscious API
- * 5. Wait for the AI to finish (it may call tools)
- * 6. Save and return the response
+ * 2. Load prior conversation history for multi-turn context
+ * 3. Get current todos and build a system prompt
+ * 4. Run the tool loop: call chat/completions with standard OpenAI function tools;
+ *    if the model returns `tool_calls`, execute each one in-process via
+ *    ctx.runMutation / ctx.runQuery, append the results as `role: "tool"`
+ *    messages, and repeat until the model returns a final text answer
+ * 5. Save and return the assistant response
  *
- * The tools point to our /tools/* endpoints. When Subconscious decides
- * to use a tool, it makes an HTTP request to that URL. The endpoint
- * runs the mutation, the database updates, and React components
- * subscribed via useQuery() update automatically.
+ * Subconscious is OpenAI-compatible and supports standard function tools, but it
+ * does NOT execute tools server-side — we run the loop here and call the todo
+ * mutations directly (no callback HTTP endpoints needed).
  */
 
 import { httpAction } from "./_generated/server";
 import { api } from "./_generated/api";
+import type { GenericActionCtx, AnyDataModel } from "convex/server";
 
-const corsHeaders = {
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const SUBCONSCIOUS_BASE_URL = "https://api.subconscious.dev/v1";
+const SUBCONSCIOUS_MODEL = "subconscious/tim-qwen3.6-27b";
+const MAX_TOOL_STEPS = 12;
+
+const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Content-Type": "application/json",
 };
 
+// ---------------------------------------------------------------------------
+// OpenAI-compatible types (the subset we use)
+// ---------------------------------------------------------------------------
+
+interface Tool {
+  type: "function";
+  function: {
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, { type: string; description?: string }>;
+      required?: string[];
+    };
+  };
+}
+
+interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+interface MessageParam {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string;
+  tool_call_id?: string;
+  tool_calls?: ToolCall[];
+}
+
+interface ChatCompletionChoice {
+  message: { role: "assistant"; content: string | null; tool_calls?: ToolCall[] };
+  finish_reason: string;
+}
+
+interface ChatCompletionResponse {
+  choices: ChatCompletionChoice[];
+}
+
+// ---------------------------------------------------------------------------
+// Tool definitions (standard OpenAI function-calling format)
+// ---------------------------------------------------------------------------
+
+const TOOLS: Tool[] = [
+  {
+    type: "function",
+    function: {
+      name: "addTodo",
+      description: "Add a new todo item to the list",
+      parameters: {
+        type: "object",
+        properties: { text: { type: "string", description: "The todo item text" } },
+        required: ["text"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "completeTodo",
+      description: "Mark a todo item as completed",
+      parameters: {
+        type: "object",
+        properties: { id: { type: "string", description: "The todo ID to complete" } },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "uncompleteTodo",
+      description: "Mark a todo item as not completed",
+      parameters: {
+        type: "object",
+        properties: { id: { type: "string", description: "The todo ID to uncomplete" } },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "deleteTodo",
+      description: "Delete a todo item permanently",
+      parameters: {
+        type: "object",
+        properties: { id: { type: "string", description: "The todo ID to delete" } },
+        required: ["id"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clearCompleted",
+      description: "Remove all completed todos from the list",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "listTodos",
+      description: "Get the current list of all todos",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function errorResponse(message: string, status: number, details?: string): Response {
+  const body: Record<string, string> = { error: message };
+  if (details !== undefined) {
+    body.details = details;
+  }
+  return new Response(JSON.stringify(body), { status, headers: CORS_HEADERS });
+}
+
+function getStringEnv(name: string): string | null {
+  const value = process.env[name];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function narrowErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+// ---------------------------------------------------------------------------
+// Tool executor — runs a single tool call against the Convex database
+// ---------------------------------------------------------------------------
+
+async function executeTool(
+  ctx: GenericActionCtx<AnyDataModel>,
+  toolName: string,
+  rawArgs: unknown
+): Promise<unknown> {
+  const args =
+    typeof rawArgs === "object" && rawArgs !== null
+      ? (rawArgs as Record<string, unknown>)
+      : {};
+
+  switch (toolName) {
+    case "addTodo": {
+      const text = typeof args.text === "string" ? args.text : "";
+      if (!text) return { error: "Missing required parameter: text" };
+      return await ctx.runMutation(api.todos.add, { text });
+    }
+    case "completeTodo": {
+      const id = typeof args.id === "string" ? args.id : "";
+      if (!id) return { error: "Missing required parameter: id" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await ctx.runMutation(api.todos.complete, { id } as any);
+    }
+    case "uncompleteTodo": {
+      const id = typeof args.id === "string" ? args.id : "";
+      if (!id) return { error: "Missing required parameter: id" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await ctx.runMutation(api.todos.uncomplete, { id } as any);
+    }
+    case "deleteTodo": {
+      const id = typeof args.id === "string" ? args.id : "";
+      if (!id) return { error: "Missing required parameter: id" };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await ctx.runMutation(api.todos.remove, { id } as any);
+    }
+    case "clearCompleted": {
+      return await ctx.runMutation(api.todos.clearCompleted, {});
+    }
+    case "listTodos": {
+      const todos = await ctx.runQuery(api.todos.list, {});
+      return { todos };
+    }
+    default:
+      return { error: `Unknown tool: ${toolName}` };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Single chat/completions call
+// ---------------------------------------------------------------------------
+
+async function callChatCompletions(
+  apiKey: string,
+  messages: MessageParam[]
+): Promise<ChatCompletionResponse> {
+  const res = await fetch(`${SUBCONSCIOUS_BASE_URL}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: SUBCONSCIOUS_MODEL,
+      messages,
+      tools: TOOLS,
+      tool_choice: "auto",
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Subconscious API error (${res.status}): ${text}`);
+  }
+
+  const data: unknown = await res.json();
+  if (
+    typeof data !== "object" ||
+    data === null ||
+    !Array.isArray((data as Record<string, unknown>).choices)
+  ) {
+    throw new Error("Unexpected response shape from Subconscious API");
+  }
+  return data as ChatCompletionResponse;
+}
+
+// ---------------------------------------------------------------------------
+// HTTP action
+// ---------------------------------------------------------------------------
+
 export const chat = httpAction(async (ctx, request) => {
   try {
-    // Parse request body
-    let message: string;
+    // --- Parse request -------------------------------------------------------
+    let userMessage: string;
     try {
-      const body = await request.json();
-      message = body.message;
-      if (!message || typeof message !== "string") {
-        return new Response(
-          JSON.stringify({ error: "Missing or invalid 'message' field in request body" }),
-          { status: 400, headers: corsHeaders }
-        );
+      const body: unknown = await request.json();
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        typeof (body as Record<string, unknown>).message !== "string"
+      ) {
+        return errorResponse("Missing or invalid 'message' field in request body", 400);
       }
-    } catch (error) {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON in request body", details: String(error) }),
-        { status: 400, headers: corsHeaders }
+      userMessage = (body as Record<string, string>).message;
+      if (!userMessage.trim()) {
+        return errorResponse("'message' must not be empty", 400);
+      }
+    } catch (err) {
+      return errorResponse("Invalid JSON in request body", 400, narrowErrorMessage(err));
+    }
+
+    // --- Validate env vars ---------------------------------------------------
+    const apiKey = getStringEnv("SUBCONSCIOUS_API_KEY");
+    if (!apiKey) {
+      console.error("SUBCONSCIOUS_API_KEY environment variable not set in Convex Dashboard");
+      return errorResponse(
+        "SUBCONSCIOUS_API_KEY environment variable not set",
+        500,
+        "Set SUBCONSCIOUS_API_KEY in Convex Dashboard > Settings > Environment Variables"
       );
     }
 
-    // Save user message
-    await ctx.runMutation(api.messages.send, { role: "user", content: message });
+    // --- Persist user message ------------------------------------------------
+    await ctx.runMutation(api.messages.send, { role: "user", content: userMessage });
 
-    // Get current todos for context
+    // --- Load conversation history for multi-turn context --------------------
+    // All but the last message — we just inserted the user turn above.
+    const history = await ctx.runQuery(api.messages.list, {});
+    const priorMessages = history.slice(0, -1);
+
+    // --- Load current todos for the system prompt ----------------------------
     const todos = await ctx.runQuery(api.todos.list, {});
-
     const todoList =
       todos.length === 0
         ? "No todos yet."
         : todos
             .map(
-              (t) => `- [${t.completed ? "x" : " "}] ${t.text} (id: ${t._id})`
+              (t: { completed: boolean; text: string; _id: string }) =>
+                `- [${t.completed ? "x" : " "}] ${t.text} (id: ${t._id})`
             )
             .join("\n");
 
-    // Build prompt with context
-    const instructions = `You are a helpful todo list assistant. Help users manage their todos.
+    const systemPrompt = `You are a helpful todo list assistant. Help users manage their todos.
 
 Current todos:
 ${todoList}
 
-User request: ${message}
-
 When the user asks to add, complete, uncomplete, or remove todos, use the provided tools.
 Be concise. After using a tool, briefly confirm what you did.
-For listing todos, you can either use the listTodos tool or just describe the current state from context.`;
+For listing todos, you can either use the listTodos tool or describe the current state from context.`;
 
-    // Get environment variables
-    // CONVEX_SITE_URL is auto-generated by Convex and points to the .site URL for HTTP endpoints
-    const CONVEX_SITE_URL = process.env.CONVEX_SITE_URL;
+    // --- Build initial messages array ----------------------------------------
+    const messages: MessageParam[] = [
+      { role: "system", content: systemPrompt },
+      ...priorMessages.map(
+        (m: { role: string; content: string }): MessageParam => ({
+          role: m.role as "user" | "assistant",
+          content: m.content,
+        })
+      ),
+      { role: "user", content: userMessage },
+    ];
 
-    if (!CONVEX_SITE_URL) {
-      console.error("CONVEX_SITE_URL environment variable not set (should be auto-generated by Convex)");
-      return new Response(
-        JSON.stringify({ 
-          error: "CONVEX_SITE_URL environment variable not set",
-          hint: "This should be auto-generated by Convex. Make sure you're running 'npx convex dev' and the variable is available in your deployment."
-        }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
+    // --- Tool loop: call model, run any tool_calls, repeat -------------------
+    let assistantMessage = "I couldn't process that request.";
 
-  // Define tools with HTTP URLs pointing to our endpoints
-  const tools = [
-    {
-      type: "function" as const,
-      name: "addTodo",
-      description: "Add a new todo item to the list",
-      url: `${CONVEX_SITE_URL}/tools/addTodo`,
-      method: "POST" as const,
-      timeout: 10,
-      parameters: {
-        type: "object",
-        properties: {
-          text: { type: "string", description: "The todo item text" },
-        },
-        required: ["text"],
-      },
-    },
-    {
-      type: "function" as const,
-      name: "completeTodo",
-      description: "Mark a todo item as completed",
-      url: `${CONVEX_SITE_URL}/tools/completeTodo`,
-      method: "POST" as const,
-      timeout: 10,
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "string", description: "The todo ID to complete" },
-        },
-        required: ["id"],
-      },
-    },
-    {
-      type: "function" as const,
-      name: "uncompleteTodo",
-      description: "Mark a todo item as not completed",
-      url: `${CONVEX_SITE_URL}/tools/uncompleteTodo`,
-      method: "POST" as const,
-      timeout: 10,
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "string", description: "The todo ID to uncomplete" },
-        },
-        required: ["id"],
-      },
-    },
-    {
-      type: "function" as const,
-      name: "deleteTodo",
-      description: "Delete a todo item permanently",
-      url: `${CONVEX_SITE_URL}/tools/deleteTodo`,
-      method: "POST" as const,
-      timeout: 10,
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "string", description: "The todo ID to delete" },
-        },
-        required: ["id"],
-      },
-    },
-    {
-      type: "function" as const,
-      name: "clearCompleted",
-      description: "Remove all completed todos from the list",
-      url: `${CONVEX_SITE_URL}/tools/clearCompleted`,
-      method: "POST" as const,
-      timeout: 10,
-      parameters: {
-        type: "object",
-        properties: {},
-      },
-    },
-    {
-      type: "function" as const,
-      name: "listTodos",
-      description: "Get the current list of all todos",
-      url: `${CONVEX_SITE_URL}/tools/listTodos`,
-      method: "POST" as const,
-      timeout: 10,
-      parameters: {
-        type: "object",
-        properties: {},
-      },
-    },
-  ];
-
-    // Call Subconscious API
-    const SUBCONSCIOUS_API_KEY = process.env.SUBCONSCIOUS_API_KEY;
-
-    if (!SUBCONSCIOUS_API_KEY) {
-      console.error("SUBCONSCIOUS_API_KEY environment variable not set in Convex Dashboard");
-      return new Response(
-        JSON.stringify({
-          error: "SUBCONSCIOUS_API_KEY environment variable not set",
-          hint: "Set SUBCONSCIOUS_API_KEY in Convex Dashboard > Settings > Environment Variables"
-        }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
-    const createResponse = await fetch(
-      "https://api.subconscious.dev/v1/runs",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${SUBCONSCIOUS_API_KEY}`,
-        },
-        body: JSON.stringify({
-          engine: "tim",
-          input: {
-            instructions,
-            tools,
-          },
-        }),
-      }
-    );
-
-    if (!createResponse.ok) {
-      const error = await createResponse.text();
-      console.error("Subconscious API error (create):", error);
-      return new Response(
-        JSON.stringify({ 
-          error: "Failed to create run",
-          details: error 
-        }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
-    const { runId } = await createResponse.json();
-
-    // Poll for completion
-    let run;
-    const maxAttempts = 60;
-
-    for (let i = 0; i < maxAttempts; i++) {
-      const pollResponse = await fetch(
-        `https://api.subconscious.dev/v1/runs/${runId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${SUBCONSCIOUS_API_KEY}`,
-          },
-        }
-      );
-
-      if (!pollResponse.ok) {
-        const error = await pollResponse.text();
-        console.error("Subconscious API error (poll):", error);
-        return new Response(
-          JSON.stringify({ 
-            error: "Failed to poll run",
-            details: error 
-          }),
-          { status: 500, headers: corsHeaders }
-        );
+    for (let step = 0; step < MAX_TOOL_STEPS; step++) {
+      let completion: ChatCompletionResponse;
+      try {
+        completion = await callChatCompletions(apiKey, messages);
+      } catch (err) {
+        console.error("Subconscious API call failed:", narrowErrorMessage(err));
+        return errorResponse("Failed to call Subconscious API", 500, narrowErrorMessage(err));
       }
 
-      run = await pollResponse.json();
+      const choice = completion.choices[0];
+      if (!choice) {
+        return errorResponse("Subconscious API returned no choices", 500);
+      }
 
-      if (
-        run.status === "succeeded" ||
-        run.status === "failed" ||
-        run.status === "canceled" ||
-        run.status === "timed_out"
-      ) {
+      const responseMessage = choice.message;
+      const toolCalls = responseMessage.tool_calls;
+
+      // No tool calls — this is the final answer.
+      if (!toolCalls || toolCalls.length === 0) {
+        assistantMessage = responseMessage.content ?? "I couldn't process that request.";
         break;
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Record the assistant turn that requested the tools.
+      messages.push({
+        role: "assistant",
+        content: responseMessage.content ?? "",
+        tool_calls: toolCalls,
+      });
+
+      // Execute each requested tool and feed the results back.
+      for (const toolCall of toolCalls) {
+        let parsedArgs: unknown;
+        try {
+          parsedArgs = JSON.parse(toolCall.function.arguments) as unknown;
+        } catch {
+          parsedArgs = {};
+        }
+
+        let toolResult: unknown;
+        try {
+          toolResult = await executeTool(ctx, toolCall.function.name, parsedArgs);
+        } catch (err) {
+          toolResult = { error: narrowErrorMessage(err) };
+        }
+
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult),
+        });
+      }
     }
 
-    if (!run || run.status !== "succeeded") {
-      return new Response(
-        JSON.stringify({ 
-          error: "Run timed out or failed",
-          status: run?.status 
-        }),
-        { status: 500, headers: corsHeaders }
-      );
-    }
-
-    // Save and return response
-    const assistantMessage =
-      run.result?.answer || "I couldn't process that request.";
-
-    await ctx.runMutation(api.messages.send, {
-      role: "assistant",
-      content: assistantMessage,
-    });
+    // --- Persist and return assistant response --------------------------------
+    await ctx.runMutation(api.messages.send, { role: "assistant", content: assistantMessage });
 
     return new Response(JSON.stringify({ message: assistantMessage }), {
       status: 200,
-      headers: corsHeaders,
+      headers: CORS_HEADERS,
     });
-  } catch (error) {
-    console.error("Unexpected error in chat handler:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : String(error)
-      }),
-      { status: 500, headers: corsHeaders }
-    );
+  } catch (err) {
+    console.error("Unexpected error in chat handler:", narrowErrorMessage(err));
+    return errorResponse("Internal server error", 500, narrowErrorMessage(err));
   }
 });

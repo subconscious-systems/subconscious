@@ -2,7 +2,7 @@
  * Shared types for Subconscious agent requests and responses.
  */
 
-import type { ReasoningTask } from "subconscious";
+import type OpenAI from "openai";
 
 export interface AgentRequest {
   message: string;
@@ -16,7 +16,6 @@ export interface ChatMessage {
 
 export interface AgentResponse {
   answer: string;
-  runId: string;
   toolCalls?: ToolCallInfo[];
 }
 
@@ -27,41 +26,19 @@ export interface ToolCallInfo {
 }
 
 /**
- * The Subconscious SDK takes a single `instructions` string, not a
- * messages array. This helper flattens chat history into one prompt.
+ * Build an OpenAI-style messages array from chat history + latest message.
+ * The Subconscious API is OpenAI Chat Completions compatible.
  */
-export function buildInstructions(
+export function buildMessages(
   message: string,
   history?: ChatMessage[],
-): string {
-  if (!history?.length) return message;
+): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+  const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [];
 
-  const conversation = history
-    .map((m) => `${m.role === "user" ? "User" : "Assistant"}: ${m.content}`)
-    .join("\n\n");
-
-  return `${conversation}\n\nUser: ${message}\n\nRespond to the user's latest message.`;
-}
-
-/** Recursively walk the reasoning tree and collect every tool invocation. */
-export function extractToolCalls(reasoning?: ReasoningTask[]): ToolCallInfo[] {
-  if (!reasoning) return [];
-  const calls: ToolCallInfo[] = [];
-
-  function traverse(node: ReasoningTask) {
-    const tu = node.tooluse;
-    if (tu?.tool_name) {
-      calls.push({
-        name: tu.tool_name,
-        input: tu.parameters ?? {},
-        output: tu.tool_result,
-      });
-    }
-    for (const sub of node.subtasks ?? []) {
-      traverse(sub);
-    }
+  for (const turn of history ?? []) {
+    messages.push({ role: turn.role, content: turn.content });
   }
 
-  for (const node of reasoning) traverse(node);
-  return calls;
+  messages.push({ role: "user", content: message });
+  return messages;
 }

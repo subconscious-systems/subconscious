@@ -1,6 +1,6 @@
 # CLI Agent: Subconscious + E2B
 
-A developer-first autonomous agent that reasons and executes code in a secure cloud sandbox. This agent uses **Subconscious** for long-horizon reasoning and **E2B** for isolated code execution.
+A developer-first autonomous agent that reasons and executes code in a secure cloud sandbox. This agent uses **Subconscious** (via its OpenAI-compatible API) for reasoning and **E2B** for isolated code execution.
 
 ```
   ┌─┐┬ ┬┌┐ ┌─┐┌─┐┌┐┌┌─┐┌─┐┬┌─┐┬ ┬┌─┐
@@ -10,13 +10,13 @@ A developer-first autonomous agent that reasons and executes code in a secure cl
 
 ## What it does
 
-- **Long-horizon reasoning**: Subconscious handles complex multi-step tasks with planning and self-correction
+- **Client-side ReAct loop**: The agent reasons and executes tools entirely in-process — no server, no tunnel
 - **Secure execution**: All code runs in isolated E2B cloud sandboxes
 - **File I/O**: Upload local files, download generated outputs (charts, reports, data)
 - **Multi-language**: Python, JavaScript, TypeScript, Go, Rust, C++, Ruby, Java, Bash
 - **Data science ready**: numpy, pandas, matplotlib pre-installed
 - **Command history**: Arrow keys navigate previous commands
-- **Zero-config tunneling**: Works out of the box - no external dependencies
+- **Session persistence**: Sandbox is kept alive between tasks to avoid re-initialization overhead
 
 ## Quick Start
 
@@ -86,7 +86,6 @@ The agent supports file upload and download:
 |--------|-------------|---------|
 | `file: ./path` | Upload a file to the sandbox | `Analyze file: ./data.csv` |
 | `'/path/to/file'` | Quoted path (drag-and-drop) | `Analyze '/Users/me/data.csv'` |
-| `files: ./dir/*.csv` | Upload multiple files (glob) | `Process files: ./reports/*.csv` |
 | `output: ./path` | Download output when done | `Save chart to output: ./chart.png` |
 
 > **Tip**: You can drag and drop files into the terminal and the quoted path will be automatically recognized and uploaded to the sandbox.
@@ -125,32 +124,52 @@ The agent supports file upload and download:
 ┌─────────────────────────────────────────────────────────────────┐
 │                         CLI Agent                                │
 ├─────────────────────────────────────────────────────────────────┤
-│  User Input  ->  File Parser  ->  Subconscious API  ->  Display │
-│                      |                  |                        │
-│               Upload Files      Stream Reasoning                 │
-│                      |                  |                        │
-│              E2B Sandbox  <---  Tool Calls (execute_code)       │
-│                      |                                           │
-│              Download Outputs  ->  Local Filesystem              │
+│  User Input → Subconscious API (OpenAI-compatible)              │
+│                  ↓ native tool_calls response                    │
+│            Client-side tool loop (agent/loop.ts)                │
+│                  ↓ dispatch per tool call                        │
+│            Tool Executor (agent/executor.ts)                     │
+│                  ↓ direct SDK calls                              │
+│            E2B Sandbox (e2b/sandbox.ts)                         │
+│                  ↓ stdout / stderr / files                       │
+│            role:"tool" result → next model turn                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+### How the tool loop works
+
+The Subconscious endpoint supports standard OpenAI function tools natively:
+
+1. Tool schemas are passed via the standard `tools` field on each request.
+2. When the model wants to call a tool, the response contains `message.tool_calls`.
+3. The loop appends the assistant message (with `tool_calls`) and a `role:"tool"` result message for each call, then calls the API again.
+4. When the model returns a reply with no `tool_calls`, that content is the final answer.
+
+No HTTP server and no tunnel are required — tools run locally in this process.
 
 ### Source Structure
 
 ```
 src/
+  agent/
+    loop.ts        # Client-side ReAct loop (Reason → Act → Observe)
+    executor.ts    # Dispatches tool calls to E2B sandbox
+    tools.ts       # E2B tool definitions and schemas
+    prompt.ts      # System prompt builder
   cli/
-    run.ts              # Interactive CLI with command history
-    fileParser.ts       # Parses file:/output: references
+    run.ts         # Interactive REPL with command history
+    onboarding.ts  # First-run API key setup
   e2b/
-    sandbox.ts          # E2B sandbox wrapper with multi-language support
-  tools/
-    e2bServer.ts        # HTTP server exposing execute_code tool
-    tunnel.ts           # Tunnel management (localtunnel)
+    sandbox.ts     # E2B sandbox wrapper with multi-language support
+  lib/
+    client.ts      # OpenAI client pointed at Subconscious API
   types/
-    agent.ts            # TypeScript definitions
-  config.ts             # Configuration loading
-  index.ts              # Entry point
+    agent.ts       # TypeScript definitions
+  utils/
+    retry.ts       # Exponential backoff retry
+    validation.ts  # Input and path validation
+  config.ts        # Configuration loading
+  index.ts         # Entry point
 ```
 
 ## Configuration
@@ -161,7 +180,6 @@ src/
 |----------|----------|-------------|
 | `SUBCONSCIOUS_API_KEY` | Yes | Your Subconscious API key |
 | `E2B_API_KEY` | Yes | Your E2B API key |
-| `TUNNEL_URL` | No | Use existing tunnel instead of auto-start |
 | `VERBOSE` | No | Enable verbose logging (`true`/`false`) |
 
 ### Config file (optional)
@@ -170,15 +188,6 @@ Create `agent.config.json` to customize:
 
 ```json
 {
-  "tunnel": {
-    "enabled": true,
-    "autoStart": true,
-    "port": 3001
-  },
-  "tools": {
-    "port": 3001,
-    "host": "localhost"
-  },
   "environment": {
     "filterSensitive": true,
     "sensitivePatterns": ["KEY", "SECRET", "TOKEN", "PASSWORD"]
@@ -188,28 +197,20 @@ Create `agent.config.json` to customize:
 
 ## Troubleshooting
 
-### Tunnel not starting
-
-The agent uses `localtunnel` which is installed automatically with `bun install`. If you're having issues:
-
-1. **Check your network** - localtunnel requires outbound internet access
-2. **Use an existing tunnel** - Set `TUNNEL_URL` environment variable to bypass auto-start
-
 ### Output files not appearing
 
 1. Make sure you use the `output:` prefix in your task
-2. Check that the agent says `[file] Downloaded:` at the end
-3. Verify the path is accessible (not a protected system directory)
+2. Verify the agent called the `download_file` tool at the end
+3. Check that the path is accessible (not a protected system directory)
 
 ### Sandbox timeout or slow startup
 
-The first run may take 30-60 seconds as E2B provisions the sandbox and installs packages. Subsequent runs are faster.
+The first run may take 30–60 seconds as E2B provisions the sandbox and installs packages. Subsequent runs reuse the same sandbox session.
 
 ## Links
 
-- [Subconscious](https://subconscious.dev) - Long-horizon AI reasoning
+- [Subconscious](https://subconscious.dev) - AI reasoning platform
 - [E2B](https://e2b.dev) - Secure code sandboxes
-- [localtunnel](https://github.com/localtunnel/localtunnel) - Tunnel service
 
 ## License
 
