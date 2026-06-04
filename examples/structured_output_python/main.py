@@ -3,8 +3,13 @@
 # Subconscious speaks the OpenAI Chat Completions protocol, so we point the
 # official `openai` SDK at its base URL. To get a typed response, we pass a JSON
 # schema via `response_format` and validate the reply with a Pydantic model.
+#
+# IMPORTANT: disable thinking on structured-output calls. When thinking is on
+# (the default), the model prepends a prose reasoning block before the JSON,
+# which breaks parsing. Pass `extra_body={"chat_template_kwargs": {"enable_thinking": False}}`.
 
 import os
+import sys
 
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -15,9 +20,17 @@ load_dotenv()
 BASE_URL = "https://api.subconscious.dev/v1"
 MODEL = "subconscious/tim-qwen3.6-27b"
 
+_api_key = os.environ.get("SUBCONSCIOUS_API_KEY")
+if not _api_key:
+    sys.exit(
+        "Error: SUBCONSCIOUS_API_KEY is not set.\n"
+        "Get your key at https://www.subconscious.dev/platform/api-keys\n"
+        "Then set it: export SUBCONSCIOUS_API_KEY=your_key"
+    )
+
 client = OpenAI(
     base_url=BASE_URL,
-    api_key=os.environ["SUBCONSCIOUS_API_KEY"],  # raises KeyError if unset
+    api_key=_api_key,
 )
 
 
@@ -70,13 +83,17 @@ def analyze_sentiment(text: str) -> SentimentAnalysis:
                 "schema": SENTIMENT_SCHEMA,
             },
         },
+        # Disable thinking so the reply is pure JSON — no prose preamble.
+        extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     )
 
     content = completion.choices[0].message.content or ""
     try:
         return SentimentAnalysis.model_validate_json(content)
     except ValidationError as err:
-        raise RuntimeError(f"Model returned data that did not match the schema:\n{content}") from err
+        raise RuntimeError(
+            f"Model returned data that did not match the schema:\n{content}"
+        ) from err
 
 
 def main() -> None:

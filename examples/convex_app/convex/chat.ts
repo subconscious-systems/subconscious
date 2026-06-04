@@ -236,6 +236,9 @@ async function callChatCompletions(
       messages,
       tools: TOOLS,
       tool_choice: "auto",
+      // Disable the thinking preamble so the assistant replies concisely.
+      // Subconscious thinking is ON by default; pass false for user-facing chat.
+      chat_template_kwargs: { enable_thinking: false },
     }),
   });
 

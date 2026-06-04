@@ -19,6 +19,7 @@ import { buildSystemPrompt } from "./prompt.js";
 import { E2B_TOOLS } from "./tools.js";
 import { executeTool } from "./executor.js";
 import { defaultConfig } from "../config.js";
+import { DEFAULT_MODEL } from "../lib/client.js";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -158,7 +159,7 @@ function buildRequestBody(
   enableThinking: boolean,
 ): OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming {
   return {
-    model: "subconscious/tim-qwen3.6-27b",
+    model: DEFAULT_MODEL,
     messages,
     tools: E2B_TOOLS,
     // `chat_template_kwargs` is a Subconscious vendor extension — not in OpenAI types.

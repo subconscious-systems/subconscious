@@ -15,7 +15,6 @@ from utils.timeout import (
     TimeoutError,
     handle_keyboard_interrupt,
     handle_timeout_error,
-    reset_timeout,
     timeout_context,
 )
 
@@ -65,7 +64,6 @@ def run_search(question: str, timeout: int = DEFAULT_TIMEOUT) -> None:
                 question=question,
                 on_event=on_event,
             )
-            reset_timeout(timeout)
     except TimeoutError as exc:
         state.stop_spinner()
         handle_timeout_error(exc, state)

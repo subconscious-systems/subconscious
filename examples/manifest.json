@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-06-04T19:01:04.824Z",
+  "generated": "2026-06-04T19:54:30.842Z",
   "examples": [
     {
       "name": "city_of_boston_getting_started",
@@ -61,8 +61,8 @@
       },
       "setup": [
         "npm install",
-        "echo \"SUBCONSCIOUS_API_KEY=your_key\" > .env.local",
         "npx convex dev --once",
+        "# Set SUBCONSCIOUS_API_KEY=your_key in the Convex Dashboard (Settings > Environment Variables)",
         "npm run dev"
       ]
     },
@@ -139,9 +139,9 @@
       "language": "python",
       "framework": "OpenAI SDK",
       "tags": [
+        "local",
         "image",
-        "tools",
-        "react-loop"
+        "tools"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {
@@ -164,6 +164,12 @@
       "tags": [
         "local"
       ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
@@ -179,6 +185,12 @@
       "tags": [
         "local"
       ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
@@ -212,9 +224,8 @@
       "language": "typescript",
       "framework": "Next.js",
       "tags": [
-        "typescript",
-        "web",
-        "local"
+        "local",
+        "web"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {

@@ -23,7 +23,7 @@ where = ["."]
 display_name = "Local Image Editing Tools"
 language = "python"
 framework = "OpenAI SDK"
-tags = ["image", "tools", "react-loop"]
+tags = ["local", "image", "tools"]
 envVars = { SUBCONSCIOUS_API_KEY = { required = true, url = "https://subconscious.dev/platform" } }
 setup = [
     "pip install .",

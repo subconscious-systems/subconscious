@@ -4,6 +4,13 @@ A FastAPI server that pairs **Subconscious** as the AI engine with **Composio** 
 
 Composio manages user-level OAuth and exposes connected apps as **OpenAI-format tool schemas**. Subconscious provides the model via its OpenAI-compatible API, which natively supports standard OpenAI function tools. All tool calling runs **client-side** inside this FastAPI process: the server passes Composio tool schemas directly as `tools=[...]` to the chat-completions API, then executes any `tool_calls` the model returns via the Composio SDK before looping back to the model.
 
+## Prerequisites
+
+- Python 3.10+
+- A [Subconscious API key](https://subconscious.dev/platform)
+- A [Composio API key](https://platform.composio.dev/settings)
+- At least one app connected in Composio for the user you will test with (e.g. GitHub — connect at `https://app.composio.dev`)
+
 ## Setup
 
 ```bash
@@ -78,6 +85,30 @@ Open the `redirect_url` from the response in your browser to complete OAuth.
 3. **Client-side execution** — When the model returns `tool_calls`, the server executes each call via `composio.tools.execute(slug, arguments, user_id=user_id)`, appends a `role: "tool"` result message for each call, and loops back to the model. Multiple tool calls per turn are supported.
 4. **Final answer** — When the model responds with no `tool_calls`, `message.content` is the final answer and the loop exits.
 5. **Connection management** — The `/connections` and `/connect` endpoints allow your frontend to render a connections UI and kick off OAuth flows.
+
+## Expected output
+
+After starting the server you should see:
+
+```
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process ...
+INFO:     Started server process ...
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+```
+
+A successful `/run` request returns:
+
+```json
+{"result": "I starred the composiohq/composio repository on GitHub for you."}
+```
+
+A successful `/connections/{user_id}` request returns:
+
+```json
+[{"toolkit": "github", "connected": true, "account_id": "..."}]
+```
 
 ## File structure
 

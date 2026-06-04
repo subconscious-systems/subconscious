@@ -21,15 +21,11 @@ Deploy a reasoning agent powered by [Subconscious](https://subconscious.dev) to 
 ## Local development
 
 ```bash
-git clone <your-repo-url>
-cd subconscious-agent
+git clone https://github.com/subconscious-systems/subconscious
+cd subconscious/examples/vercel-template
 npm install
 cp .env.example .env.local
-```
-
-Add your API key to `.env.local`, then:
-
-```bash
+# Edit .env.local and replace your_key with your actual API key
 npm run dev
 ```
 

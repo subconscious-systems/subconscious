@@ -10,6 +10,6 @@ export const toolsCommand: SlashCommand = {
       return;
     }
     const lines = tools.map((t) => `  ${t.qualifiedName} — ${t.description || "(no description)"}`);
-    ctx.say(["tools:", ...lines, "", "add more tools in src/commands/chat.tsx (see the README)."].join("\n"));
+    ctx.say(["tools:", ...lines, "", "add more tools in src/tools/index.ts (see the README)."].join("\n"));
   },
 };

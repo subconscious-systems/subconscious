@@ -1,5 +1,5 @@
 [project]
-name = "getting-started-notebook"
+name = "city-of-boston-getting-started"
 version = "0.1.0"
 description = "Learn Subconscious from scratch via Jupyter Notebook — no experience required"
 requires-python = ">=3.9"

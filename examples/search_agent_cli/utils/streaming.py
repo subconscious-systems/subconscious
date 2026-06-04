@@ -34,35 +34,32 @@ def start_loading_spinner(state: DisplayState) -> None:
     state.spinner = status
 
 
-def handle_agent_event(event: AgentEvent, state: DisplayState) -> bool:
+def handle_agent_event(event: AgentEvent, state: DisplayState) -> None:
     """
     React to an AgentEvent by printing appropriate output.
 
     Args:
         event: The AgentEvent emitted by the agent loop.
         state: Current display state.
-
-    Returns:
-        True to continue; False when the loop should stop.
     """
     if event.kind == "thinking":
         # No-op: spinner is already running or was already stopped.
-        return True
+        return
 
     if event.kind == "tool_call":
         state.stop_spinner()
         query = (event.args or {}).get("query", "")
         console.print(f"[dim]Searching: {query}[/dim]")
-        return True
+        return
 
     if event.kind == "tool_result":
         # Results fed back silently to the model; no need to echo all text.
-        return True
+        return
 
     if event.kind == "tool_error":
         state.stop_spinner()
         console.print(f"[yellow]Tool error ({event.tool}): {event.error}[/yellow]")
-        return True
+        return
 
     if event.kind == "final":
         state.stop_spinner()
@@ -72,12 +69,11 @@ def handle_agent_event(event: AgentEvent, state: DisplayState) -> bool:
         content = event.content or ""
         print(content, flush=True)
         console.print("\n[bold green]Complete[/bold green]")
-        return False
+        return
 
     if event.kind == "error":
         state.stop_spinner()
         console.print(f"\n[bold red]Error:[/bold red] {event.error}")
-        return False
+        return
 
-    # Unknown event kind — continue.
-    return True
+    # Unknown event kind — no-op.

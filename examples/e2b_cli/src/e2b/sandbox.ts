@@ -247,15 +247,15 @@ export class E2BSandbox {
           log(`[e2b] Retrying in ${delayMs}ms...`);
         }
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
-      const isTimeout =
-        error?.message?.includes("timeout") || duration >= executionTimeout;
+      const message = error instanceof Error ? error.message : String(error);
+      const isTimeout = message.includes("timeout") || duration >= executionTimeout;
 
       return {
         success: false,
         stdout: "",
-        stderr: String(error?.message || error),
+        stderr: message,
         exitCode: 1,
         duration,
         timeout: isTimeout,
@@ -424,11 +424,12 @@ export class E2BSandbox {
       }
 
       log(`[e2b] Uploaded ${localPath} → ${sandboxPath}`);
-    } catch (error: any) {
-      if (error.code === "ENOENT") {
+    } catch (error: unknown) {
+      if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT") {
         throw new Error(`File not found: ${localPath}`);
       }
-      throw new Error(`Failed to upload file: ${error.message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to upload file: ${message}`);
     }
   }
 
@@ -474,8 +475,9 @@ export class E2BSandbox {
       }
 
       log(`[e2b] Downloaded ${sandboxPath} → ${localPath}`);
-    } catch (error: any) {
-      throw new Error(`Failed to download file: ${error.message}`);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to download file: ${message}`);
     }
   }
 

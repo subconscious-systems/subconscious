@@ -13,7 +13,6 @@ import type { ValidationConfig } from "./utils/validation";
  */
 export interface RetryConfig {
   sandbox: RetryOptions;
-  tunnel: RetryOptions;
   api: RetryOptions;
   execution: RetryOptions;
 }
@@ -44,15 +43,6 @@ export interface AgentConfig {
   environment: {
     filterSensitive: boolean;
     sensitivePatterns: string[];
-  };
-  tunnel: {
-    enabled: boolean;
-    autoStart: boolean;
-    port: number;
-  };
-  tools: {
-    port: number;
-    host: string;
   };
   retry: RetryConfig;
   validation: ValidationConfig;
@@ -97,27 +87,12 @@ export const defaultConfig: AgentConfig = {
       "API_KEY",
     ],
   },
-  tunnel: {
-    enabled: true,
-    autoStart: true,
-    port: 3001,
-  },
-  tools: {
-    port: 3001,
-    host: "localhost",
-  },
   retry: {
     sandbox: {
       maxAttempts: 3,
       baseDelayMs: 1000,
       maxDelayMs: 10000,
       retryableErrors: ["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "503", "timeout", "network"],
-    },
-    tunnel: {
-      maxAttempts: 5,
-      baseDelayMs: 2000,
-      maxDelayMs: 30000,
-      retryableErrors: ["ECONNRESET", "ETIMEDOUT", "connection", "tunnel"],
     },
     api: {
       maxAttempts: 3,

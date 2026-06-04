@@ -42,8 +42,8 @@ e2b-cli
 bun install
 
 # Set your API keys
-export SUBCONSCIOUS_API_KEY=your_key_here  # Get at https://subconscious.dev/platform
-export E2B_API_KEY=your_key_here           # Get at https://e2b.dev
+export SUBCONSCIOUS_API_KEY=your_key      # Get at https://subconscious.dev/platform
+export E2B_API_KEY=your_e2b_key           # Get at https://e2b.dev
 
 # Run the agent
 bun run agent

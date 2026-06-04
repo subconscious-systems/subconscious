@@ -17,6 +17,11 @@ The notebook walks through every core concept step by step:
 4. **Structured output** — typed JSON responses validated with Pydantic models
 5. **Client-side tools** — a minimal Reason → Act → Observe loop that lets the model call your own functions
 
+## Prerequisites
+
+- Python 3.9+
+- A Subconscious API key — get one at [subconscious.dev/platform](https://www.subconscious.dev/platform)
+
 ## Run Locally
 
 ```bash
@@ -28,3 +33,18 @@ jupyter notebook "Subconscious Quickstart.ipynb"
 ## Run in Colab
 
 Click the badge above — everything runs in the browser, no local setup needed.
+
+In Colab, add your key via **Secrets** (key icon in the left sidebar):
+- Name: `SUBCONSCIOUS_API_KEY`
+- Value: `your_key`
+
+Then click **Run All**.
+
+## Expected Output
+
+After running all cells you should see:
+
+- A plain-text explanation of what an API is (cell 5)
+- A haiku about the ocean printed token-by-token (cell 7)
+- `Sentiment: positive`, `Confidence: <float>`, `Keywords: [...]` (cell 9)
+- `[tool] lookup_email(...)` lines followed by `Answer: Alice's email is alice@example.com` (cell 11)

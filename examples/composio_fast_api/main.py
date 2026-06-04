@@ -23,7 +23,7 @@ from typing import Any
 
 import dotenv
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from agent import run_agent
 from composio_adapter import get_composio
@@ -80,6 +80,20 @@ class RunRequest(BaseModel):
     When omitted the agent searches for relevant tools based on the
     instructions text.
     """
+
+    @field_validator("user_id")
+    @classmethod
+    def user_id_must_not_be_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("user_id must not be empty")
+        return v
+
+    @field_validator("instructions")
+    @classmethod
+    def instructions_must_not_be_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("instructions must not be empty")
+        return v
 
 
 @app.post("/run")
@@ -163,6 +177,13 @@ def check_connection(user_id: str, toolkit: str) -> dict[str, Any]:
 
 class ConnectRequest(BaseModel):
     user_id: str
+
+    @field_validator("user_id")
+    @classmethod
+    def user_id_must_not_be_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("user_id must not be empty")
+        return v
 
 
 @app.post("/connect/{toolkit}")

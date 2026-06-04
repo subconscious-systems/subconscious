@@ -42,13 +42,13 @@ def timeout_context(timeout: int) -> Generator[None, None, None]:
     
     try:
         yield
-    except TimeoutError:
+    except TimeoutError as exc:
         if sys.platform != "win32":
             signal.alarm(0)  # Cancel alarm
         elapsed = time.time() - stream_start_time
         raise TimeoutError(
             f"No response received within {timeout} seconds (elapsed: {elapsed:.1f}s)"
-        )
+        ) from exc
     except KeyboardInterrupt:
         if sys.platform != "win32":
             signal.alarm(0)  # Cancel alarm
@@ -57,17 +57,6 @@ def timeout_context(timeout: int) -> Generator[None, None, None]:
         # Cancel alarm if still active
         if sys.platform != "win32":
             signal.alarm(0)
-
-
-def reset_timeout(timeout: int) -> None:
-    """
-    Reset the timeout alarm (call this on each stream event).
-    
-    Args:
-        timeout: Timeout in seconds
-    """
-    if sys.platform != "win32":
-        signal.alarm(timeout)
 
 
 def handle_timeout_error(error: TimeoutError, state) -> None:

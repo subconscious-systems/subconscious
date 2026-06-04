@@ -9,7 +9,9 @@ agent loop injects into the system prompt.
 """
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
@@ -89,7 +91,7 @@ def adjust_curves(
     shadows: int = 0,
     midtones: int = 0,
     highlights: int = 0,
-) -> dict:
+) -> dict[str, Any]:
     """Apply a curves adjustment to the image.
 
     *channel* must be one of ``r``, ``g``, ``b``, or ``all``.
@@ -126,7 +128,7 @@ def adjust_curves(
         return {"status": "error", "message": str(exc)}
 
 
-def adjust_exposure(image_path: str, stops: float = 0.0) -> dict:
+def adjust_exposure(image_path: str, stops: float = 0.0) -> dict[str, Any]:
     """Adjust exposure (brightness) in photographic stops.
 
     +1 doubles brightness, -1 halves it.  Range: -3.0 to 3.0.
@@ -145,7 +147,7 @@ def adjust_exposure(image_path: str, stops: float = 0.0) -> dict:
         return {"status": "error", "message": str(exc)}
 
 
-def adjust_contrast(image_path: str, amount: float = 0.0) -> dict:
+def adjust_contrast(image_path: str, amount: float = 0.0) -> dict[str, Any]:
     """Adjust image contrast.
 
     Positive values increase contrast; negative values flatten it.
@@ -165,7 +167,7 @@ def adjust_contrast(image_path: str, amount: float = 0.0) -> dict:
         return {"status": "error", "message": str(exc)}
 
 
-def adjust_saturation(image_path: str, amount: float = 0.0) -> dict:
+def adjust_saturation(image_path: str, amount: float = 0.0) -> dict[str, Any]:
     """Adjust colour saturation.
 
     Positive values make colours more vivid; negative values desaturate.
@@ -185,7 +187,7 @@ def adjust_saturation(image_path: str, amount: float = 0.0) -> dict:
         return {"status": "error", "message": str(exc)}
 
 
-def blur(image_path: str, radius: float = 2.0) -> dict:
+def blur(image_path: str, radius: float = 2.0) -> dict[str, Any]:
     """Apply Gaussian blur.  *radius* range: 0.1 to 50.0."""
     if not (0.1 <= radius <= 50.0):
         return {"status": "error", "message": f"'radius' must be between 0.1 and 50.0, got {radius}."}
@@ -208,7 +210,7 @@ def add_text(
     font_size: int = 24,
     color: str = "#FFFFFF",
     alignment: str = "left",
-) -> dict:
+) -> dict[str, Any]:
     """Overlay *text* on the image at pixel coordinates (*x*, *y*).
 
     *color* is a hex string e.g. ``#FF0000``.
@@ -255,7 +257,7 @@ def add_text(
 # ---------------------------------------------------------------------------
 
 #: Maps tool name → callable.  The agent loop uses this to dispatch calls.
-TOOL_FUNCTIONS: dict[str, object] = {
+TOOL_FUNCTIONS: dict[str, Callable[..., dict[str, Any]]] = {
     "adjust_curves": adjust_curves,
     "adjust_exposure": adjust_exposure,
     "adjust_contrast": adjust_contrast,
@@ -266,7 +268,7 @@ TOOL_FUNCTIONS: dict[str, object] = {
 
 #: Raw function definitions (name, description, parameters).
 #: Used to build ``OPENAI_TOOL_SPECS`` below.
-TOOL_SCHEMAS: list[dict] = [
+TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "adjust_curves",
         "description": (
@@ -383,7 +385,7 @@ TOOL_SCHEMAS: list[dict] = [
 #: Native OpenAI function-tool specs consumed by the chat-completions ``tools`` param.
 #: Each entry wraps a TOOL_SCHEMAS entry in the ``{"type":"function","function":{...}}``
 #: envelope required by the OpenAI API.
-OPENAI_TOOL_SPECS: list[dict] = [
+OPENAI_TOOL_SPECS: list[dict[str, Any]] = [
     {"type": "function", "function": schema}
     for schema in TOOL_SCHEMAS
 ]

@@ -150,14 +150,14 @@ def run_agent(
         tool_result_messages: list[dict[str, Any]] = []
         for tc in msg.tool_calls:
             tool_name = tc.function.name
-            logger.info("Tool call: %s  raw_args=%s", tool_name, tc.function.arguments[:200])
+            logger.debug("Tool call: %s  raw_args=%s", tool_name, tc.function.arguments[:200])
             print(f"  [tool] {tool_name}({tc.function.arguments})")
 
             try:
                 result_json = _dispatch_tool(tool_name, tc.function.arguments)
-                logger.info("Tool result: %s", result_json)
+                logger.debug("Tool result: %s", result_json)
                 print(f"  [result] {result_json}")
-            except (KeyError, json.JSONDecodeError, Exception) as exc:
+            except Exception as exc:
                 result_json = json.dumps({"status": "error", "message": str(exc)})
                 logger.warning("Tool %r raised: %s", tool_name, exc)
                 print(f"  [error] {tool_name}: {exc}")

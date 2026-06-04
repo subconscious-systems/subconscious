@@ -20,6 +20,7 @@ The notebook walks through every core concept step by step:
 
 ```bash
 pip install .
+cp .env.example .env          # then edit .env with your key
 export SUBCONSCIOUS_API_KEY=your_key
 jupyter notebook "Boston Subconscious Quickstart.ipynb"
 ```

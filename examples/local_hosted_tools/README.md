@@ -69,6 +69,23 @@ The edited image is saved to `workspace/image.jpg`.
 
 All tools return `{"status": "success"}` or `{"status": "error", "message": "..."}`.
 
+## Expected output
+
+```
+Task: "This image has too much green. Reduce the green tones using a curves adjustment, then apply a gentle blur to soften the image."
+Running agent...
+
+  [tool] adjust_curves({"image_path": "/...workspace/image.jpg", "channel": "g", "midtones": -60})
+  [result] {"status": "success"}
+  [tool] blur({"image_path": "/...workspace/image.jpg", "radius": 3.0})
+  [result] {"status": "success"}
+
+Agent response:
+I've reduced the green channel midtones by 60 and applied a Gaussian blur with radius 3.0.
+
+Edited image saved to: .../workspace/image.jpg
+```
+
 ## Example prompts
 
 - _"This image has too much green. Reduce the green channel."_ — agent calls `adjust_curves` on the `g` channel
