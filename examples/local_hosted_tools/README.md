@@ -12,7 +12,7 @@ This is an educational starter, not a production-hardened app.
 1. `tools.py` defines six image-editing functions, their JSON-schema
    descriptions (`TOOL_SCHEMAS`), and a ready-made `OPENAI_TOOL_SPECS` list
    in the standard `{"type":"function","function":{...}}` shape.
-2. `agent.py` runs a native OpenAI function-tool loop against the Subconscious
+2. `main.py` runs a native OpenAI function-tool loop against the Subconscious
    endpoint (which supports `tools` natively — no workaround needed):
    - Sends `messages` + `tools=OPENAI_TOOL_SPECS` to
      `subconscious/tim-qwen3.6-27b`.
