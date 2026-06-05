@@ -15,8 +15,8 @@
     },
     "setup": [
         "npm install",
-        "echo \"SUBCONSCIOUS_API_KEY=your_key\" > .env.local",
         "npx convex dev --once",
+        "# Set SUBCONSCIOUS_API_KEY=your_key in the Convex Dashboard (Settings > Environment Variables)",
         "npm run dev"
     ],
     "scripts": {

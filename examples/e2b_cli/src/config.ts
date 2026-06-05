@@ -13,7 +13,6 @@ import type { ValidationConfig } from "./utils/validation";
  */
 export interface RetryConfig {
   sandbox: RetryOptions;
-  tunnel: RetryOptions;
   api: RetryOptions;
   execution: RetryOptions;
 }
@@ -44,15 +43,6 @@ export interface AgentConfig {
   environment: {
     filterSensitive: boolean;
     sensitivePatterns: string[];
-  };
-  tunnel: {
-    enabled: boolean;
-    autoStart: boolean;
-    port: number;
-  };
-  tools: {
-    port: number;
-    host: string;
   };
   retry: RetryConfig;
   validation: ValidationConfig;
@@ -97,27 +87,12 @@ export const defaultConfig: AgentConfig = {
       "API_KEY",
     ],
   },
-  tunnel: {
-    enabled: true,
-    autoStart: true,
-    port: 3001,
-  },
-  tools: {
-    port: 3001,
-    host: "localhost",
-  },
   retry: {
     sandbox: {
       maxAttempts: 3,
       baseDelayMs: 1000,
       maxDelayMs: 10000,
       retryableErrors: ["ECONNRESET", "ETIMEDOUT", "ECONNREFUSED", "503", "timeout", "network"],
-    },
-    tunnel: {
-      maxAttempts: 5,
-      baseDelayMs: 2000,
-      maxDelayMs: 30000,
-      retryableErrors: ["ECONNRESET", "ETIMEDOUT", "connection", "tunnel"],
     },
     api: {
       maxAttempts: 3,
@@ -153,30 +128,36 @@ export const defaultConfig: AgentConfig = {
 
 /**
  * Deep merge helper for nested config objects.
+ * Uses `unknown` casts internally to avoid index-signature requirements.
  */
-function deepMerge<T extends Record<string, any>>(target: T, source: Partial<T>): T {
-  const result = { ...target };
-  
+function deepMerge<T>(target: T, source: Partial<T>): T {
+  const result = { ...(target as object) } as T;
+
   for (const key in source) {
     if (Object.prototype.hasOwnProperty.call(source, key)) {
-      const sourceValue = source[key];
-      const targetValue = target[key];
-      
+      const sourceValue: unknown = source[key];
+      const targetValue: unknown = (target as Record<string, unknown>)[key];
+
       if (
-        sourceValue &&
+        sourceValue !== null &&
+        sourceValue !== undefined &&
         typeof sourceValue === "object" &&
         !Array.isArray(sourceValue) &&
-        targetValue &&
+        targetValue !== null &&
+        targetValue !== undefined &&
         typeof targetValue === "object" &&
         !Array.isArray(targetValue)
       ) {
-        (result as any)[key] = deepMerge(targetValue, sourceValue);
+        (result as Record<string, unknown>)[key] = deepMerge(
+          targetValue as Record<string, unknown>,
+          sourceValue as Partial<Record<string, unknown>>,
+        );
       } else if (sourceValue !== undefined) {
-        (result as any)[key] = sourceValue;
+        (result as Record<string, unknown>)[key] = sourceValue;
       }
     }
   }
-  
+
   return result;
 }
 
@@ -191,8 +172,8 @@ export async function loadConfig(): Promise<AgentConfig> {
 
   try {
     const content = await fs.readFile(configPath, "utf-8");
-    const userConfig = JSON.parse(content);
-    return deepMerge(defaultConfig, userConfig);
+    const userConfig = JSON.parse(content) as Partial<AgentConfig>;
+    return deepMerge<AgentConfig>(defaultConfig, userConfig);
   } catch {
     return defaultConfig;
   }

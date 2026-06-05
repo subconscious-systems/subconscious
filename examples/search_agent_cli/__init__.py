@@ -1,3 +1,3 @@
-"""Getting Started Search Agent - A CLI for demonstrating Subconscious's AI agents."""
+"""Search Agent CLI - A CLI that answers research questions using a client-side ReAct search loop."""
 
 __version__ = "0.1.0"

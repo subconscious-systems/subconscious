@@ -10,8 +10,7 @@
 
 [![Documentation](https://img.shields.io/badge/docs-subconscious.dev-blue)](https://docs.subconscious.dev)
 [![Hugging Face](https://img.shields.io/badge/🤗%20Hugging%20Face-Models-yellow)](https://huggingface.co/SubconsciousDev/TIM-8b-preview)
-[![npm](https://img.shields.io/npm/v/subconscious)](https://www.npmjs.com/package/subconscious)
-[![PyPI](https://img.shields.io/pypi/v/subconscious-sdk)](https://pypi.org/project/subconscious-sdk/)
+[![OpenAI-compatible](https://img.shields.io/badge/API-OpenAI--compatible-412991)](https://docs.subconscious.dev)
 [![SPONSORED BY E2B FOR STARTUPS](https://img.shields.io/badge/SPONSORED%20BY-E2B%20FOR%20STARTUPS-ff8800?style=for-the-badge)](https://e2b.dev/startups)
 
 </div>
@@ -30,59 +29,59 @@ Subconscious is what happens when the model and the runtime are designed for eac
 
 ## Quick Start
 
+Subconscious is **OpenAI-compatible**. Point the official OpenAI SDK at our base URL — no proprietary SDK to install.
+
 ### Install the SDK
 
 ```bash
 # Node.js / TypeScript
-npm install subconscious
+npm install openai
 
 # Python
-pip install subconscious-sdk
+pip install openai
 ```
 
-Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform).
+Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform). The base URL is `https://api.subconscious.dev/v1` and the model is `subconscious/tim-qwen3.6-27b`.
 
 ### Run your first agent
 
 **TypeScript**
 
 ```typescript
-import { Subconscious } from 'subconscious';
+import OpenAI from 'openai';
 
-const client = new Subconscious({
-  apiKey: process.env.SUBCONSCIOUS_API_KEY!,
+const client = new OpenAI({
+  baseURL: 'https://api.subconscious.dev/v1',
+  apiKey: process.env.SUBCONSCIOUS_API_KEY,
 });
 
-const run = await client.run({
-  engine: 'tim',
-  input: {
-    instructions: 'Search for the latest AI news and summarize the top 3 stories',
-    tools: [{ type: 'platform', id: 'fast_search' }],
-  },
-  options: { awaitCompletion: true },
+const completion = await client.chat.completions.create({
+  model: 'subconscious/tim-qwen3.6-27b',
+  messages: [{ role: 'user', content: 'Explain what an API is in 3 sentences.' }],
 });
 
-console.log(run.result?.answer);
+console.log(completion.choices[0].message.content);
 ```
 
 **Python**
 
 ```python
-from subconscious import Subconscious
+from openai import OpenAI
 
-client = Subconscious(api_key="your-api-key")
-
-run = client.run(
-    engine="tim",
-    input={
-        "instructions": "Search for the latest AI news and summarize the top 3 stories",
-        "tools": [{"type": "platform", "id": "fast_search"}],
-    },
-    options={"await_completion": True},
+client = OpenAI(
+    base_url="https://api.subconscious.dev/v1",
+    api_key="your-api-key",
 )
 
-print(run.result.answer)
+completion = client.chat.completions.create(
+    model="subconscious/tim-qwen3.6-27b",
+    messages=[{"role": "user", "content": "Explain what an API is in 3 sentences."}],
+)
+
+print(completion.choices[0].message.content)
 ```
+
+> **Thinking is on by default** — the model prepends a reasoning preamble to its reply. For clean, fast answers on chat / structured / classification tasks, pass `extra_body={"chat_template_kwargs": {"enable_thinking": False}}` (Python) or `chat_template_kwargs: { enable_thinking: false }` on the request body (TypeScript). Leave it on for hard multi-step reasoning.
 
 ## Examples & Templates
 
@@ -104,16 +103,16 @@ npx create-subconscious-app --list                  # list all available example
 | Example | Description | Stack |
 |---------|-------------|-------|
 | **[Vercel Agent Runner](examples/vercel-template/)** | Full-stack Next.js app with streaming UI, tool management, and one-click Vercel deploy | Next.js, TypeScript |
+| **[Hack CLI Starter](examples/hack-cli-starter/)** | Clone-and-go terminal agent: client-side ReAct loop over MCP tools | TypeScript, Ink, MCP |
 | **[E2B CLI Agent](examples/e2b_cli/)** | Autonomous CLI agent with E2B cloud sandboxes for code execution and file I/O | TypeScript, E2B |
 | **[Convex Real-time App](examples/convex_app/)** | AI todo assistant with real-time updates backed by Convex | React, Convex, TypeScript |
-| **[Composio FastAPI](examples/composio_fast_api/)** | 100+ OAuth apps as agent tools via MCP + Composio | Python, FastAPI |
-| **[Local-Hosted Tools](examples/local_hosted_tools/)** | Function-tool starter over FastAPI + ngrok; image-editing demo | Python, FastAPI |
-| **[Search Agent CLI](examples/search_agent_cli/)** | Streaming CLI agent with web search | Python, Typer |
-| **[Structured Output (Python)](examples/structured_output_python/)** | Type-safe structured responses via Pydantic + `answerFormat` | Python, Pydantic |
-| **[Structured Output (TypeScript)](examples/structured_output_typescript/)** | Type-safe structured responses via Zod + `answerFormat` | TypeScript, Zod |
+| **[Composio FastAPI](examples/composio_fast_api/)** | 100+ OAuth apps as agent tools via Composio, executed in a client-side loop | Python, FastAPI |
+| **[Local-Hosted Tools](examples/local_hosted_tools/)** | Client-side tool loop with local Python functions; image-editing demo | Python |
+| **[Search Agent CLI](examples/search_agent_cli/)** | Streaming CLI agent with client-side web search | Python |
+| **[Structured Output (Python)](examples/structured_output_python/)** | Type-safe structured responses via Pydantic + `response_format` | Python, Pydantic |
+| **[Structured Output (TypeScript)](examples/structured_output_typescript/)** | Type-safe structured responses via Zod + `response_format` | TypeScript, Zod |
 | **[Getting Started Notebook](examples/getting_started_notebook/)** | Colab walkthrough — no setup required | Python, Jupyter |
 | **[City of Boston Getting Started](examples/city_of_boston_getting_started/)** | Colab notebook tailored to the City of Boston POC | Python, Jupyter |
-| **[Val.Town Example](examples/valtown_example_script/)** | Subconscious from a Val.Town automation script | TypeScript, Val.Town |
 
 ### Adding Your Own Example
 
@@ -123,20 +122,7 @@ npx create-subconscious-app --list                  # list all available example
 
 ## Skills
 
-Skills are reusable knowledge packages that give agents specialized capabilities like coding standards, domain expertise, and workflow guidelines. Pass skill names in your run request and the agent loads instructions on demand via progressive disclosure.
-
-```python
-run = client.run(
-    engine="tim",
-    input={
-        "instructions": "Review this code for security issues",
-        "skills": ["security-review", "coding-standards"],
-    },
-    options={"await_completion": True},
-)
-```
-
-Manage skills in the [dashboard](https://www.subconscious.dev/platform/skills), import from GitHub, or create them with the AI skill builder. See the [Skills docs](https://docs.subconscious.dev/core-concepts/skills) for details.
+Skills are reusable knowledge packages that give agents specialized capabilities like coding standards, domain expertise, and workflow guidelines. Manage them in the [dashboard](https://www.subconscious.dev/platform/skills), import from GitHub, or create them with the AI skill builder. See the [Skills docs](https://docs.subconscious.dev/core-concepts/skills) for how to attach them to a run.
 
 ## Webhooks
 
@@ -147,89 +133,37 @@ Get a POST when runs complete instead of polling. Two options:
 
 Manage subscriptions in the [dashboard](https://www.subconscious.dev/platform/webhooks) or via the API (`POST /v1/webhooks/subscriptions`). Supports event filtering, enable/disable, HMAC-SHA256 signing, and a delivery log. See the [webhooks docs](https://docs.subconscious.dev/core-concepts/async-webhooks).
 
-## Engines
+## Model
 
-| Engine | API Name | Type | Best For |
-|--------|----------|------|----------|
-| **TIM** | `tim` | Unified | Flagship engine for a wide range of tasks |
-| **TIM-Edge** | `tim-edge` | Unified | Speed, efficiency, search-heavy workloads |
-| **TIM-Claude** | `tim-claude` | Compound | Complex reasoning backed by Claude Sonnet (supports images) |
-| **TIM-Claude-Heavy** | `tim-claude-heavy` | Compound | Maximum capability, backed by Claude Opus (supports images) |
-| **TIM-OSS-Local** | `tim-oss-local` | Compound | Tool-calling with TIM-trained OSS models |
-| **TIM-1.5** | `tim-1.5` | Compound | Tool-calling with large OSS models |
-
-Start with `tim` for most applications; reach for `tim-claude` when you need deeper reasoning or image input.
+There is one model: **`subconscious/tim-qwen3.6-27b`** — a fine-tuned Qwen-3.6 trained for recursive, tool-using reasoning, served behind an OpenAI-compatible endpoint. `/v1/models` reports `supported_features: ["tools", "json_mode", "structured_outputs", "reasoning"]`.
 
 ## Tools
 
-Subconscious agents can use three types of tools:
-
-### Platform Tools (built-in, no setup required)
-
-| Tool | API Name | Description |
-|------|----------|-------------|
-| Fast Search | `fast_search` | Fast search for simple factual lookups |
-| Web Search | `web_search` | Comprehensive web search for detailed research |
-| Fresh Search | `fresh_search` | Search content from the last 7 days |
-| Page Reader | `page_reader` | Extract content from a webpage URL |
-| Find Similar | `find_similar` | Find pages similar to a given URL |
-| People Search | `people_search` | Search for people, profiles, and bios |
-| Company Search | `company_search` | Search for companies and business details |
-| News Search | `news_search` | Search for news articles and press coverage |
-| Tweet Search | `tweet_search` | Search tweets and X discussions |
-| Research Paper Search | `research_paper_search` | Search academic papers and studies |
-| Google Search | `google_search` | Search the web using Google |
-
-### Function Tools (your own HTTP endpoints)
-
-When the agent decides to use a tool, Subconscious makes an HTTP POST to the URL you provide — no tool-call loop on your side.
+Subconscious supports **standard OpenAI function tools**. You pass a `tools` array; when the model wants one, the reply comes back with `tool_calls`. You run the function and send the result back as a `role: "tool"` message — Subconscious does not execute tools for you, so the loop is client-side.
 
 ```python
-tool = {
+tools = [{
     "type": "function",
-    "name": "get_weather",
-    "description": "Get current weather for a location",
-    "url": "https://api.example.com/weather",
-    "method": "POST",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {"type": "string", "description": "City name"},
+    "function": {
+        "name": "get_weather",
+        "description": "Get current weather for a city",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
         },
-        "required": ["location"],
     },
-}
+}]
+
+resp = client.chat.completions.create(
+    model="subconscious/tim-qwen3.6-27b",
+    messages=[{"role": "user", "content": "What's the weather in Boston?"}],
+    tools=tools,
+)
+# resp.choices[0].message.tool_calls -> run them, append role:"tool" results, loop.
 ```
 
-### MCP Tools (Model Context Protocol)
-
-Connect to any [MCP](https://modelcontextprotocol.io/) server:
-
-```python
-mcp_tool = {
-    "type": "mcp",
-    "url": "https://mcp.example.com/mcp",
-    "allowed_tools": ["read_example_tool", "write_example_tool"],
-    "auth": {
-        "type": "bearer",
-        "token": "your-bearer-token",
-    },
-}
-```
-
-```typescript
-const mcpTool = {
-    type: 'mcp',
-    url: 'https://mcp.example.com/mcp',
-    allowedTools: ['read_example_tool', 'write_example_tool'],
-    auth: {
-        type: 'bearer',
-        token: 'your-bearer-token',
-    },
-};
-```
-
-> Requires the latest [subconscious](https://www.npmjs.com/package/subconscious) (Node.js) or [subconscious-sdk](https://pypi.org/project/subconscious-sdk/) (Python).
+Want **MCP** tools? Connect to the MCP server client-side, convert its tools to OpenAI function tools, and dispatch `tool_calls` back to it — see the [`hack-cli-starter`](examples/hack-cli-starter/) and [Boston notebook](examples/city_of_boston_getting_started/) examples.
 
 ## Documentation & Resources
 

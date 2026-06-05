@@ -147,7 +147,7 @@ export async function withRetry<T>(
   for (let attempt = 0; attempt < options.maxAttempts; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
       const isLastAttempt = attempt === options.maxAttempts - 1;
@@ -232,7 +232,7 @@ export async function withRetrySafe<T>(
       onRetry
     );
     return { success: true, result, attempts };
-  } catch (error: any) {
+  } catch (error: unknown) {
     return {
       success: false,
       error: error instanceof Error ? error : new Error(String(error)),

@@ -6,6 +6,7 @@
  */
 
 import * as readline from "readline";
+import { exec } from "child_process";
 import { promises as fs } from "fs";
 import { homedir } from "os";
 import { join } from "path";
@@ -56,17 +57,17 @@ async function saveKeys(config: StoredConfig): Promise<void> {
 }
 
 /**
- * Open URL in default browser (works on macOS, Windows, and Linux)
+ * Open URL in default browser (works on macOS, Windows, and Linux).
+ * Fire-and-forget — failures are intentionally ignored.
  */
 function openBrowser(url: string): void {
-  const { exec } = require("child_process");
   // Windows: `start` treats first quoted arg as window title, so we pass empty title ""
   // macOS: `open` works directly
   // Linux: `xdg-open` is the standard
-  const cmd = process.platform === "darwin" 
-    ? `open "${url}"` 
-    : process.platform === "win32" 
-      ? `start "" "${url}"` 
+  const cmd = process.platform === "darwin"
+    ? `open "${url}"`
+    : process.platform === "win32"
+      ? `start "" "${url}"`
       : `xdg-open "${url}"`;
   exec(cmd);
 }

@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-05-26T18:40:17.170Z",
+  "generated": "2026-06-04T19:54:30.842Z",
   "examples": [
     {
       "name": "city_of_boston_getting_started",
@@ -17,7 +17,7 @@
         }
       },
       "setup": [
-        "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb"
+        "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/city_of_boston_getting_started/Boston%20Subconscious%20Quickstart.ipynb"
       ]
     },
     {
@@ -61,8 +61,8 @@
       },
       "setup": [
         "npm install",
-        "echo \"SUBCONSCIOUS_API_KEY=your_key\" > .env.local",
         "npx convex dev --once",
+        "# Set SUBCONSCIOUS_API_KEY=your_key in the Convex Dashboard (Settings > Environment Variables)",
         "npm run dev"
       ]
     },
@@ -134,38 +134,42 @@
     },
     {
       "name": "local_hosted_tools",
-      "displayName": "Local-Hosted Tools Starter",
-      "description": "Starter template for locally hosted Subconscious tools via FastAPI + ngrok; image editing app example",
+      "displayName": "Local Image Editing Tools",
+      "description": "Image editing demo using a client-side ReAct loop against the Subconscious API — no server, no tunnel required.",
       "language": "python",
-      "framework": "FastAPI",
+      "framework": "OpenAI SDK",
       "tags": [
-        "local"
+        "local",
+        "image",
+        "tools"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {
-          "required": true
-        },
-        "NGROK_AUTHTOKEN": {
           "required": true,
-          "url": "https://dashboard.ngrok.com/get-started/your-authtoken"
+          "url": "https://subconscious.dev/platform"
         }
       },
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
-        "export NGROK_AUTHTOKEN=your_ngrok_token",
         "python main.py"
       ]
     },
     {
       "name": "search_agent_cli",
       "displayName": "Search Agent CLI",
-      "description": "CLI agent with web search capabilities powered by Subconscious",
+      "description": "CLI agent with client-side web search powered by Subconscious (OpenAI-compatible API)",
       "language": "python",
-      "framework": "Search",
+      "framework": "OpenAI SDK",
       "tags": [
         "local"
       ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
@@ -181,6 +185,12 @@
       "tags": [
         "local"
       ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
@@ -208,33 +218,14 @@
       ]
     },
     {
-      "name": "valtown_example_script",
-      "displayName": "Val.Town Example",
-      "description": "Learn how to use the Subconscious API with automation scripts on Val.Town",
-      "language": "typescript",
-      "framework": "Val.Town",
-      "tags": [
-        "cloud"
-      ],
-      "envVars": {
-        "SUBCONSCIOUS_API_KEY": {
-          "required": true
-        }
-      },
-      "setup": [
-        "--urlname 'Val.Town Repo' --url https://www.val.town/x/subconscious_ajaya/subconscious-getting-started"
-      ]
-    },
-    {
       "name": "vercel-template",
       "displayName": "Next.js + Subconscious Starter",
       "description": "Full-stack Next.js app with Subconscious agent integration — includes API routes, streaming UI, tool calling, and one-click Vercel deploy",
       "language": "typescript",
       "framework": "Next.js",
       "tags": [
-        "typescript",
-        "web",
-        "local"
+        "local",
+        "web"
       ],
       "envVars": {
         "SUBCONSCIOUS_API_KEY": {

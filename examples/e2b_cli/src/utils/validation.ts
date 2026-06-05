@@ -147,13 +147,18 @@ export async function validateFilePath(
         `Unusual file extension: ${ext}. Allowed: ${config.allowedExtensions.join(", ")}`
       );
     }
-  } catch (error: any) {
-    if (error.code === "ENOENT") {
-      result.errors.push(`File not found: ${filePath}`);
-    } else if (error.code === "EACCES") {
-      result.errors.push(`Permission denied: ${filePath}`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      const errno = (error as NodeJS.ErrnoException).code;
+      if (errno === "ENOENT") {
+        result.errors.push(`File not found: ${filePath}`);
+      } else if (errno === "EACCES") {
+        result.errors.push(`Permission denied: ${filePath}`);
+      } else {
+        result.errors.push(`Cannot access file: ${error.message}`);
+      }
     } else {
-      result.errors.push(`Cannot access file: ${error.message}`);
+      result.errors.push(`Cannot access file: ${String(error)}`);
     }
     result.valid = false;
   }

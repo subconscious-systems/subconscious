@@ -1,14 +1,14 @@
 # Subconscious Agent Runner
 
-Deploy a multi-hop reasoning agent powered by [Subconscious](https://subconscious.dev) to Vercel in one click.
+Deploy a reasoning agent powered by [Subconscious](https://subconscious.dev) to Vercel in one click.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/subconscious-systems/subconscious/tree/main/examples/vercel-template&env=SUBCONSCIOUS_API_KEY&envDescription=Get%20your%20API%20key%20at%20https://subconscious.dev/platform&project-name=subconscious-agent&repository-name=subconscious-agent)
 
 ## What you get
 
-- **Agent Runner UI** — submit tasks and watch the agent reason, use tools, and produce results in real-time
-- **Live execution trace** — see each reasoning step, tool invocation, and conclusion as they stream in
-- **Self-hosted tools** — Calculator and WebReader deploy as API routes alongside your agent
+- **Agent Runner UI** — submit tasks and watch the agent use tools and produce results in real-time
+- **Streaming answers** — the final response streams token-by-token as it arrives
+- **Local tools** — Calculator and WebReader run inside the API route, no tunneling or separate infra needed
 - **Tool panel** — view available tools and live activity during agent runs
 - **One environment variable** — just `SUBCONSCIOUS_API_KEY`
 
@@ -21,97 +21,63 @@ Deploy a multi-hop reasoning agent powered by [Subconscious](https://subconsciou
 ## Local development
 
 ```bash
-git clone <your-repo-url>
-cd subconscious-agent
+git clone https://github.com/subconscious-systems/subconscious
+cd subconscious/examples/vercel-template
 npm install
 cp .env.example .env.local
-```
-
-Add your API key to `.env.local`, then:
-
-```bash
+# Edit .env.local and replace your_key with your actual API key
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-That's it. `npm run dev` automatically creates a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) so Subconscious can reach your self-hosted tools — no ngrok, no signup, no config. The tunnel URL is printed in your terminal.
+## Adding tools
 
-If you don't need self-hosted tools (e.g. only using platform tools), you can skip the tunnel:
+Tools are defined in `lib/tools.ts` as plain async functions — no external infra needed.
 
-```bash
-npm run dev:no-tunnel
-```
+1. Write an async handler function that receives `params` and returns a plain object
+2. Add a `ToolDefinition` entry to the `TOOLS` array (name, description, parameters schema)
+3. Register the handler in `TOOL_HANDLERS`
 
-## Self-hosted tools
+## Model
 
-Your tools live as API routes inside this same app — no separate infra.
-
-| Tool | Route | What it does |
-|------|-------|--------------|
-| Calculator | `POST /api/tools/calculator` | Evaluates math expressions |
-| WebReader | `POST /api/tools/web-reader` | Fetches a URL and returns clean text |
-
-**Adding a new tool:**
-
-1. Add a `tool({ ... })` entry in `lib/tools.ts` with name, description,
-   parameters, and handler — that's it, one file
-2. Deploy
-
-## Engines
-
-Set `SUBCONSCIOUS_ENGINE` in `.env.local` to switch models:
-
-| Engine | Best for |
-|--------|----------|
-| `tim` | Most use cases (default) |
-| `tim-edge` | Speed and efficiency |
-| `tim-claude` | Complex reasoning (Claude Sonnet, multimodal) |
-| `tim-claude-heavy` | Maximum capability (Claude Opus, multimodal) |
-
-Full list at [docs.subconscious.dev/engines](https://docs.subconscious.dev/engines).
+The app uses the `subconscious/tim-qwen3.6-27b` model via the Subconscious OpenAI-compatible
+API at `https://api.subconscious.dev/v1`. This is the only model — there is no engine
+selection. The API is fully compatible with the `openai` npm SDK and supports native
+OpenAI function tools (`tools` / `tool_calls`).
 
 ## Project structure
 
 ```
 app/
 ├── api/
-│   ├── agent/
-│   │   ├── route.ts                # Sync agent endpoint
-│   │   └── stream/route.ts         # Streaming SSE endpoint (used by UI)
-│   └── tools/
-│       ├── calculator/route.ts     # Self-hosted calculator
-│       └── web-reader/route.ts     # Self-hosted web reader
+│   └── agent/
+│       ├── route.ts                # Sync agent endpoint (ReAct loop)
+│       └── stream/route.ts         # Streaming SSE endpoint (used by UI)
 ├── layout.tsx
 ├── page.tsx
 └── globals.css
 
 lib/
-├── subconscious.ts                 # SDK singleton
-├── tools.ts                        # Tool config (platform + self-hosted)
-├── types.ts                        # Request/response types
-└── stream-parser.ts                # Incremental JSON stream parser
+├── subconscious.ts                 # OpenAI client singleton + constants
+├── tools.ts                        # Tool definitions + local handlers
+├── types.ts                        # Request/response types + message builder
+└── stream-parser.ts                # SSE stream utilities
 
 components/
 ├── AgentRunner.tsx                 # Task input + execution orchestrator
 ├── RunResult.tsx                   # Completed run display (collapsible)
-├── ReasoningDisplay.tsx            # Live reasoning step timeline
 ├── ToolPanel.tsx                   # Tool registry + live activity
 └── StreamingText.tsx               # Streaming text + loading indicator
-
-scripts/
-└── dev-tunnel.mjs                  # Auto-tunnel for local development
 ```
 
 ## Environment variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SUBCONSCIOUS_API_KEY` | **Yes** | — | API key from [subconscious.dev/platform](https://subconscious.dev/platform) |
-| `SUBCONSCIOUS_ENGINE` | No | `tim` | Which engine to use |
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SUBCONSCIOUS_API_KEY` | **Yes** | API key from [subconscious.dev/platform](https://subconscious.dev/platform) |
 
 ## Learn more
 
 - [Subconscious Docs](https://docs.subconscious.dev)
 - [Get an API key](https://subconscious.dev/platform)
-- [Node.js SDK](https://github.com/subconscious-systems/subconscious-node)

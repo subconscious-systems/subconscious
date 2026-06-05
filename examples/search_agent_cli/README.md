@@ -1,216 +1,146 @@
-# Getting Started Search Agent
+# Search Agent CLI
 
-A Python command-line interface (CLI) that demonstrates how to use [Subconscious's AI agents](https://subconscious.dev) to perform deep web research. This CLI showcases Subconscious's tool-calling abilities and streaming capabilities.
+A Python command-line interface (CLI) that answers research questions using a
+client-side ReAct (Reason + Act) agent loop backed by the
+[Subconscious AI platform](https://subconscious.dev).
+
+## Architecture
+
+Subconscious exposes an **OpenAI Chat Completions-compatible** endpoint
+(`https://api.subconscious.dev/v1`) that supports standard OpenAI function
+tools. All tool execution happens client-side:
+
+1. The model receives a native `tools` list and decides when to call
+   `web_search`.
+2. When it emits `tool_calls`, the CLI executes the real DuckDuckGo search
+   locally (via the `ddgs` package — no API key required) and feeds each
+   result back as a `role: "tool"` message.
+3. The loop repeats until the model returns a plain content reply with no
+   `tool_calls`.
+
+**Model:** `subconscious/tim-qwen3.6-27b`
 
 ## Features
 
-- 🔍 **Deep Research**: Perform comprehensive web research with multi-source information gathering
-- 🧠 **Live Thinking Feedback**: See the agent's thoughts in real-time as it reasons through your question
-- 🌊 **Streaming**: See results in real-time as they're generated, with live thought updates
-- ⚡ **Error Handling**: User-friendly error messages with actionable guidance
+- **Client-side ReAct loop** — no server-side tools needed
+- **Live progress** — see each search query as it runs
+- **DuckDuckGo search** — real web results with no extra API key
+- **Timeout protection** — configurable wall-clock limit
+- **User-friendly error messages** — authentication, rate-limit, and
+  unexpected errors all shown clearly
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.9 or higher
 - A Subconscious API key ([get one here](https://www.subconscious.dev/platform))
 
 ### Setup
 
-1. **Clone or navigate to this directory**:
+1. Navigate to this directory:
 
    ```bash
    cd search_agent_cli
    ```
 
-2. **Install dependencies**:
+2. Install dependencies:
 
    ```bash
    pip install .
    ```
 
-   Or using `uv`:
+3. Set your API key:
 
    ```bash
-   uv pip install .
+   export SUBCONSCIOUS_API_KEY=your_key
    ```
 
-3. **Set your API key**:
+   Or create a `.env` file in this directory:
 
-   ```bash
-   export SUBCONSCIOUS_API_KEY='your-api-key-here'
+   ```
+   SUBCONSCIOUS_API_KEY=your_key
    ```
 
-   Or create a config file at `~/.subconscious/config` with your API key.
-
-## Quick Start
-
-### Basic Usage (Streaming with Live Thoughts)
-
-The simplest way to use the CLI - just ask a question and see results stream in real-time:
-
-```bash
-python cli.py "What are the latest developments in quantum computing?"
-```
-
-This will show:
-
-- 💭 Thoughts appearing in dim text as the agent thinks
-- The final answer streaming in real-time
-
-## Usage Examples
-
-### Example 1: Basic Research Query
-
-```bash
-python cli.py "What are the latest developments in quantum computing and how might they impact cryptography?"
-```
-
-**Output:**
-
-````
-💭 Starting with a methodical plan: I'll define objectives...
-💭 The official documentation will provide authoritative information...
-💭 I need to search multiple sources for diverse perspectives...
-
-Answer:
-
-[comprehensive answer streams in real-time]
-
-✓ Complete
-
-### Usage
-
-Stream search results in real-time with live thought feedback. You'll see the agent's thoughts appear as it reasons through your question.
-
-**Usage:**
-
-```bash
-python cli.py QUESTION
-````
-
-**Arguments:**
-
-- `QUESTION` (required): The research question to answer
-
-**What You'll See:**
-
-- 💭 Thoughts appearing in dim text as the agent thinks
-- Answer streaming in real-time
-- Citations at the end
-
-**Available Search Tools:**
-
-The agent automatically has access to all these tools and chooses which to use:
-
-- **Platform Tools**: `parallel_search` (Subconscious's precision search)
-- **Custom Providers**: `exa`, `google`, `jina`, `tavily`, `serper`, `parallel`
-
-You don't need to specify which tools to use - the agent decides automatically based on your query.
-
-## How It Works
-
-### Research Process
-
-The agent follows this methodology:
-
-1. **Analyze the question**: Break down complex questions into sub-questions
-2. **Multi-source research**: Query multiple sources for diverse perspectives
-3. **Evaluate credibility**: Assess source reliability and prefer authoritative sources
-4. **Cross-reference**: Verify facts across multiple sources
-5. **Synthesize**: Combine information into coherent narratives
-6. **Cite sources**: Include URLs and references for all factual claims
-7. **Suggest follow-ups**: Provide questions for deeper exploration
-
-### Available Search Tools
-
-The agent automatically has access to all these tools and intelligently selects which ones to use:
-
-**Platform Tools** (hosted by Subconscious):
-
-- `parallel_search` - Precision search from authoritative sources
-
-**Custom Search Providers**:
-
-- `exa` - Exa AI for fast, accurate answers from high-quality sources
-- `google` - Google Search API for comprehensive results
-- `jina` - Jina AI for semantic search capabilities
-- `tavily` - Tavily for research-focused search results
-- `serper` - Serper API for Google search results
-- `parallel` - Parallel Web Systems for precision search
-
-You don't need to choose which tools to use - the agent decides automatically based on your query and the type of information needed.
-
-### Streaming with Live Thoughts
-
-When using the CLI, you'll see:
-
-- **Thoughts** (💭): The agent's internal reasoning as it thinks through your question, displayed in dim text
-- **Answer**: The final answer streaming in real-time as it's generated
-- **Citations**: Automatically extracted sources at the end
-
-## Troubleshooting
-
-### Authentication Error
-
-If you see an authentication error:
-
-1. Verify your API key at https://www.subconscious.dev/platform
-2. Check that `SUBCONSCIOUS_API_KEY` is set correctly:
-   ```bash
-   echo $SUBCONSCIOUS_API_KEY
-   ```
-3. Make sure the API key is set correctly in your environment
-
-### Rate Limit Error
-
-If you hit rate limits:
-
-1. Wait a few moments before retrying
-2. Check your usage at https://www.subconscious.dev/platform
-3. Consider upgrading your plan if needed
-
-### No Results Returned
-
-If a run completes but returns no results:
-
-- The query might be too vague or too specific
-- Try rephrasing the question
-- Check that the engine is available (some engines may be in preview)
-
-## Advanced Usage
-
-The CLI streams results in real-time with live thoughts. Simply ask your question:
+## Usage
 
 ```bash
 python cli.py "Your research question here"
 ```
 
+With a custom timeout (seconds):
+
+```bash
+python cli.py "Your question" --timeout 180
+```
+
+### Example
+
+```bash
+python cli.py "What are the latest developments in AI agents?"
+```
+
+**Output:**
+
+```
+Searching: latest AI agents developments 2024
+Searching: recent AI agent research breakthroughs
+
+Answer:
+
+[answer streams in after the search loop completes]
+
+Complete
+```
+
+## How It Works
+
+```
+User question
+      |
+      v
+  [ Model ]  <-- messages + native function tools
+      |
+  message.tool_calls set?
+      |             |
+     YES            NO
+      |             |
+  web_search        v
+  (DuckDuckGo)   Print answer
+      |
+  Append role="tool" result messages
+      |
+  Loop to [ Model ]
+```
+
+The loop runs for at most 15 steps before raising an error.
+
+## Troubleshooting
+
+### Authentication Error
+
+1. Verify your key at https://www.subconscious.dev/platform
+2. Check the variable is exported:
+   ```bash
+   echo $SUBCONSCIOUS_API_KEY
+   ```
+
+### Rate Limit Error
+
+Wait a moment and retry. Check your usage at
+https://www.subconscious.dev/platform.
+
+### No Answer Returned
+
+- Try rephrasing the question
+- Increase the timeout: `--timeout 600`
+
 ## Learn More
 
 - **Documentation**: https://docs.subconscious.dev
-- **Mental Model**: https://docs.subconscious.dev/mental-model
 - **API Reference**: https://docs.subconscious.dev/api-reference
 - **Platform Dashboard**: https://www.subconscious.dev/platform
-
-## Contributing
-
-This is a demonstration project. Feel free to:
-
-- Modify it for your own use cases
-- Add new search providers or tools
-- Enhance the streaming experience
-- Improve error handling
-- Add new features or rigor levels
 
 ## License
 
 Apache-2.0
-
-## Support
-
-For questions and support:
-
-- Documentation: https://docs.subconscious.dev
-- Meet with an engineer: https://calendly.com/jack-subconscious/

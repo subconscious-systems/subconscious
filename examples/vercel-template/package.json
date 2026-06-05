@@ -1,15 +1,20 @@
 {
   "name": "subconscious-vercel-template",
   "displayName": "Next.js + Subconscious Starter",
-  "description": "Full-stack Next.js app with Subconscious agent integration — includes API routes, streaming UI, tool calling, and one-click Vercel deploy",
+  "description": "Full-stack Next.js app with Subconscious agent integration \u2014 includes API routes, streaming UI, tool calling, and one-click Vercel deploy",
   "version": "1.0.0",
   "private": true,
   "subconscious": {
     "language": "typescript",
     "framework": "Next.js",
-    "tags": ["typescript", "web", "local"],
+    "tags": [
+      "local",
+      "web"
+    ],
     "envVars": {
-      "SUBCONSCIOUS_API_KEY": { "required": true }
+      "SUBCONSCIOUS_API_KEY": {
+        "required": true
+      }
     }
   },
   "setup": [
@@ -19,8 +24,7 @@
     "npm run dev"
   ],
   "scripts": {
-    "dev": "node scripts/dev-tunnel.mjs",
-    "dev:no-tunnel": "next dev",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "type-check": "tsc --noEmit",
@@ -28,9 +32,9 @@
   },
   "dependencies": {
     "next": "^15.0.0",
+    "openai": "^4.103.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "subconscious": "latest"
+    "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -39,7 +43,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^15",
-    "localtunnel": "^2.0.2",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

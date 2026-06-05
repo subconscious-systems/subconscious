@@ -1,10 +1,8 @@
 /**
- * Stream parser for Subconscious agent responses.
+ * Utilities for parsing and displaying Subconscious reasoning responses.
  *
- * When you call client.stream(), Subconscious sends SSE events:
- *   { type: "delta", content: "..." }
- *
- * The content chunks concatenate into a JSON object like:
+ * When the model includes a reasoning block, the content may contain
+ * a structured JSON object like:
  *
  *   {
  *     "reasoning": [{
@@ -21,9 +19,12 @@
  *     "answer": "The final response."
  *   }
  *
- * This module parses that response incrementally:
+ * parseStreamContent handles this incrementally:
  *   - During streaming (JSON incomplete): regex-based flat extraction
  *   - After streaming (JSON complete): full tree parse with depth
+ *
+ * formatToolParams and formatToolResult are used by the tool activity
+ * panels to render tool invocations in a readable format.
  */
 
 // ─── Types ───────────────────────────────────────────────────────
