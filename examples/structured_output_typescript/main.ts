@@ -74,9 +74,8 @@ async function analyzeSentiment(text: string): Promise<SentimentAnalysis> {
       },
     },
     // Disable thinking so the response is plain JSON, not a prose preamble + JSON.
-    // @ts-expect-error chat_template_kwargs is a Subconscious extension
     chat_template_kwargs: { enable_thinking: false },
-  });
+  } as OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming);
 
   const content = completion.choices[0]?.message?.content ?? "";
   // Validate with Zod — parse() throws a ZodError with a clear message if the

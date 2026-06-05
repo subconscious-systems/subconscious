@@ -8,14 +8,12 @@ The ``TOOL_REGISTRY`` list exposes the JSON-schema descriptions that the
 agent loop injects into the system prompt.
 """
 
-import logging
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageFont
 
-logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -121,10 +119,8 @@ def adjust_curves(
 
         result = Image.merge("RGB", (new_r, new_g, new_b))
         _save_image(result, image_path)
-        logger.info("adjust_curves: channel=%s shadows=%d midtones=%d highlights=%d", channel, shadows, midtones, highlights)
         return {"status": "success"}
     except Exception as exc:
-        logger.error("adjust_curves failed: %s", exc)
         return {"status": "error", "message": str(exc)}
 
 
@@ -140,10 +136,8 @@ def adjust_exposure(image_path: str, stops: float = 0.0) -> dict[str, Any]:
         factor = 2.0 ** stops
         result = ImageEnhance.Brightness(img).enhance(factor)
         _save_image(result, image_path)
-        logger.info("adjust_exposure: stops=%s", stops)
         return {"status": "success"}
     except Exception as exc:
-        logger.error("adjust_exposure failed: %s", exc)
         return {"status": "error", "message": str(exc)}
 
 
@@ -160,10 +154,8 @@ def adjust_contrast(image_path: str, amount: float = 0.0) -> dict[str, Any]:
         factor = 1.0 + amount / 100.0
         result = ImageEnhance.Contrast(img).enhance(factor)
         _save_image(result, image_path)
-        logger.info("adjust_contrast: amount=%s", amount)
         return {"status": "success"}
     except Exception as exc:
-        logger.error("adjust_contrast failed: %s", exc)
         return {"status": "error", "message": str(exc)}
 
 
@@ -180,10 +172,8 @@ def adjust_saturation(image_path: str, amount: float = 0.0) -> dict[str, Any]:
         factor = 1.0 + amount / 100.0
         result = ImageEnhance.Color(img).enhance(factor)
         _save_image(result, image_path)
-        logger.info("adjust_saturation: amount=%s", amount)
         return {"status": "success"}
     except Exception as exc:
-        logger.error("adjust_saturation failed: %s", exc)
         return {"status": "error", "message": str(exc)}
 
 
@@ -195,10 +185,8 @@ def blur(image_path: str, radius: float = 2.0) -> dict[str, Any]:
         img = _load_image(image_path)
         result = img.filter(ImageFilter.GaussianBlur(radius=radius))
         _save_image(result, image_path)
-        logger.info("blur: radius=%s", radius)
         return {"status": "success"}
     except Exception as exc:
-        logger.error("blur failed: %s", exc)
         return {"status": "error", "message": str(exc)}
 
 
@@ -245,10 +233,8 @@ def add_text(
 
         draw.text((draw_x, y), text, fill=fill, font=font)
         _save_image(img, image_path)
-        logger.info("add_text: text=%r x=%d y=%d", text, x, y)
         return {"status": "success"}
     except Exception as exc:
-        logger.error("add_text failed: %s", exc)
         return {"status": "error", "message": str(exc)}
 
 
