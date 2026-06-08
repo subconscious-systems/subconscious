@@ -9,7 +9,7 @@ const program = new Command();
 
 program
   .name("sub")
-  .description("subconscious agent CLI — a hackathon starter")
+  .description("subconscious agent CLI — a clone-and-go starter")
   .version("0.1.0");
 
 for (const register of COMMANDS) register(program);

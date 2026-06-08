@@ -28,7 +28,7 @@ export class McpManager {
 
   /**
    * Connect to every server, tolerating individual failures. One misconfigured
-   * MCP must never take down the REPL — hackathon users WILL misconfigure them,
+   * MCP must never take down the REPL — users WILL misconfigure them,
    * so we log to stderr and keep going.
    */
   async connectAll(servers: McpServer[]): Promise<void> {

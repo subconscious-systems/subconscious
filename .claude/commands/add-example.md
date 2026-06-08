@@ -30,7 +30,7 @@ Found 8 example directories, 7 in manifest.
 
 The argument `$ARGUMENTS` is a natural-language reference to a project in `examples/`. Match it against the directory list from Step 0:
 
-1. Match by exact name, partial name, or description (e.g. "the convex one" → `convex_app`, "python search" → `search_agent_cli`, "the new one" → the one not in the manifest)
+1. Match by exact name, partial name, or description (e.g. "the convex one" → `convex_app`, "the cli one" → `cli_agent`, "the new one" → the one not in the manifest)
 2. If the user says something like "the new one" or "the one I just made", match it to whichever directory is NOT yet in the manifest
 3. If ambiguous, show the inventory from Step 0 and ask the user to pick
 

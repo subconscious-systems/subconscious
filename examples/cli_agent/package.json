@@ -1,8 +1,8 @@
 {
-  "name": "hack-cli-starter",
+  "name": "cli-agent",
   "version": "0.1.0",
-  "displayName": "Hack CLI Starter",
-  "description": "Clone-and-go Subconscious agent CLI: a polished Ink REPL with client-side MCP tool-calling. Build your hackathon agent in 5 minutes.",
+  "displayName": "CLI Agent",
+  "description": "Clone-and-go Subconscious agent CLI: a polished Ink REPL with client-side MCP tool-calling.",
   "type": "module",
   "private": true,
   "license": "MIT",
@@ -49,8 +49,7 @@
     "cli",
     "mcp",
     "ink",
-    "starter",
-    "hackathon"
+    "starter"
   ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
