@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-06-05T18:46:52.402Z",
+  "generated": "2026-06-08T17:47:18.483Z",
   "examples": [
     {
       "name": "city_of_boston_getting_started",
@@ -22,10 +22,10 @@
     },
     {
       "name": "composio_fast_api",
-      "displayName": "Composio FastAPI Server",
-      "description": "Connect 100+ Apps to your Agents with Subconscious + Composio as OAuth provider",
+      "displayName": "Composio Agent (client-side)",
+      "description": "Connect 100+ Apps to your Agents with Subconscious + Composio as OAuth provider (client-side, no server)",
       "language": "python",
-      "framework": "FastAPI",
+      "framework": "CLI",
       "tags": [
         "local"
       ],
@@ -35,14 +35,15 @@
         },
         "COMPOSIO_API_KEY": {
           "required": true,
-          "url": "https://platform.composio.dev/settings"
+          "url": "https://dashboard.composio.dev"
         }
       },
       "setup": [
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "export COMPOSIO_API_KEY=your_composio_key",
-        "uvicorn main:app --reload"
+        "python main.py connect github",
+        "python main.py run 'Star the composiohq/composio repo'"
       ]
     },
     {
