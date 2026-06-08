@@ -10,8 +10,13 @@
     "framework": "E2B",
     "tags": ["local"],
     "envVars": {
-      "SUBCONSCIOUS_API_KEY": { "required": true },
-      "E2B_API_KEY": { "required": true, "url": "https://e2b.dev" }
+      "SUBCONSCIOUS_API_KEY": {
+        "required": true
+      },
+      "E2B_API_KEY": {
+        "required": true,
+        "url": "https://e2b.dev"
+      }
     }
   },
   "setup": [
@@ -46,8 +51,8 @@
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
-    "openai": "^4.104.0",
-    "@e2b/sdk": "^2.0.0"
+    "e2b": "^2.28.0",
+    "openai": "^4.104.0"
   },
   "devDependencies": {
     "@types/bun": "latest",

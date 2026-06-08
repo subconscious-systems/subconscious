@@ -1,4 +1,4 @@
-import { Sandbox } from "@e2b/sdk";
+import { Sandbox } from "e2b";
 import { promises as fs } from "fs";
 import * as path from "path";
 import type { ExecutionResult } from "../types/agent";
