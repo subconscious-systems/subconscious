@@ -400,7 +400,7 @@ def connect(user_id: str, toolkit: str) -> str:
     if not configs:
         raise RuntimeError(
             f"No auth config for '{toolkit}'. Create one (free, Composio-managed OAuth) "
-            f"at https://dashboard.composio.dev -> Auth Configs, then retry."
+            f"at https://dashboard.composio.dev/auth-configs (+ Create), then retry."
         )
     req = composio().connected_accounts.link(user_id=user_id, auth_config_id=configs[0].id)
     url = getattr(req, "redirect_url", None) or getattr(req, "redirectUrl", None)

@@ -62,13 +62,12 @@ This is the step people miss. Before the agent can touch an app, that app needs 
 **Auth Config** in Composio — this is what tells Composio how to log users in. Without
 it, `connect github` fails with *"No auth config for 'github'."*
 
-In the [Composio dashboard](https://dashboard.composio.dev):
+Open [**Auth Configs** in the Composio dashboard](https://dashboard.composio.dev/auth-configs):
 
-1. Go to **Auth Configs** in the left sidebar (or open the app under **Toolkits**).
-2. Click **Create Auth Config** and pick the app (e.g. **GitHub**).
-3. Choose **Use Composio-managed auth** — Composio provides the OAuth app, so you don't
+1. Click **+ Create** (top-right) and pick the app (e.g. **GitHub**).
+2. Choose **Composio-managed** auth — Composio provides the OAuth app, so you don't
    need to register your own OAuth credentials. (You *can* bring your own for production.)
-4. Save. Repeat for any other app you want the agent to use (Gmail, Slack, …).
+3. Create. Repeat for any other app you want the agent to use (Gmail, Slack, …).
 
 That's the whole Composio setup. You only do it once per app.
 
