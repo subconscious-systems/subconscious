@@ -1,8 +1,8 @@
-# sub · a Subconscious agent CLI starter
+# sub · a Subconscious agent CLI
 
-A clone-and-go starter for building agents on [Subconscious](https://www.subconscious.dev).
+A clone-and-go CLI agent built on [Subconscious](https://www.subconscious.dev).
 You get a good-looking terminal chat agent that connects to **MCP** tools and runs a
-real ReAct loop — structured so you can drop your hackathon idea on top without
+real ReAct loop — structured so you can drop your own idea on top without
 fighting the scaffold.
 
 ![sub — the REPL with the built-in filesystem and weather tools](assets/demo.png)
@@ -13,7 +13,7 @@ fighting the scaffold.
 
 ```bash
 git clone https://github.com/subconscious-systems/subconscious
-cd subconscious/examples/hack-cli-starter
+cd subconscious/examples/cli_agent
 
 npm install && npm run build && npm link   # `sub` is now on your PATH
 
@@ -71,7 +71,7 @@ The agent's whole toolset is one list: [`src/tools/index.ts`](src/tools/index.ts
 
 ### Add your own
 
-Most hackathon projects are "an agent + one tool." A tool is a name + a description (the
+Most agent projects are "an agent + one tool." A tool is a name + a description (the
 agent reads it to decide when to use it) + a Zod input schema + a handler:
 
 ```ts

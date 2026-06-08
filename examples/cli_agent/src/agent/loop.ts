@@ -9,7 +9,7 @@
 //      manager, feed the results back as `role: "tool"` messages, and loop.
 //   3. If it replies with plain content (no tool_calls), that's the final answer.
 //
-// This is the pattern you'll reuse for your hackathon project. To change where
+// This is the pattern you'll reuse for your own project. To change where
 // tools come from or how they run, edit mcp/client.ts — this file stays the same.
 
 import type OpenAI from "openai";
