@@ -1,7 +1,0 @@
-.env
-auth.json
-history.jsonl
-version.json
-sessions/
-log/
-*.log

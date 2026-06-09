@@ -16,7 +16,7 @@
       "name": "OpenCode",
       "protocol": "openai",
       "install": "npm i -g opencode-ai",
-      "launch": "./run.sh",
+      "launch": "opencode",
       "configEnv": "OPENCODE_CONFIG_CONTENT",
       "env": {
         "SUBCONSCIOUS_API_KEY": "your_key"

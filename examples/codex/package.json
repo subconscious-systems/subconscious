@@ -17,10 +17,8 @@
       "protocol": "openai",
       "install": "npm i -g @openai/codex",
       "launch": "codex",
-      "configFile": "config.toml",
       "env": {
-        "SUBCONSCIOUS_API_KEY": "your_key",
-        "CODEX_HOME": "."
+        "SUBCONSCIOUS_API_KEY": "your_key"
       }
     }
   },
