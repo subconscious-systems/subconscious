@@ -26,7 +26,8 @@
   },
   "setup": [
     "export SUBCONSCIOUS_API_KEY=your_key",
-    "export CODEX_HOME=$(pwd)",
+    "export CODEX_HOME=$(mktemp -d)",
+    "printf 'model = \"subconscious/tim-qwen3.6-27b\"\\nmodel_provider = \"subconscious\"\\n[model_providers.subconscious]\\nname = \"Subconscious\"\\nbase_url = \"https://api.subconscious.dev/v1\"\\nenv_key = \"SUBCONSCIOUS_API_KEY\"\\n' > \"$CODEX_HOME/config.toml\"",
     "codex"
   ]
 }
