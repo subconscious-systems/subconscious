@@ -25,7 +25,6 @@
     }
   },
   "setup": [
-    "npm i -g @openai/codex",
     "export SUBCONSCIOUS_API_KEY=your_key",
     "export CODEX_HOME=$(pwd)",
     "codex"
