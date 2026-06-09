@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-06-09T19:32:43.544Z",
+  "generated": "2026-06-09T19:57:23.156Z",
   "examples": [
     {
       "name": "aider",
@@ -32,7 +32,6 @@
         }
       },
       "setup": [
-        "python -m pip install aider-install && aider-install",
         "export OPENAI_API_BASE=https://api.subconscious.dev/v1",
         "export OPENAI_API_KEY=your_key",
         "aider --model openai/subconscious/tim-qwen3.6-27b"
@@ -120,7 +119,6 @@
         }
       },
       "setup": [
-        "npm i -g @anthropic-ai/claude-code",
         "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
         "export ANTHROPIC_AUTH_TOKEN=your_key",
         "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",
@@ -181,7 +179,6 @@
         }
       },
       "setup": [
-        "npm i -g @openai/codex",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "export CODEX_HOME=$(pwd)",
         "codex"
@@ -330,7 +327,6 @@
         }
       },
       "setup": [
-        "npm i -g opencode-ai",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "chmod +x run.sh",
         "./run.sh"

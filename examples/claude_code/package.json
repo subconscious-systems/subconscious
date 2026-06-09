@@ -26,7 +26,6 @@
     }
   },
   "setup": [
-    "npm i -g @anthropic-ai/claude-code",
     "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
     "export ANTHROPIC_AUTH_TOKEN=your_key",
     "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",

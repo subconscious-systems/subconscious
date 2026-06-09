@@ -24,7 +24,6 @@
     }
   },
   "setup": [
-    "npm i -g opencode-ai",
     "export SUBCONSCIOUS_API_KEY=your_key",
     "chmod +x run.sh",
     "./run.sh"

@@ -24,7 +24,6 @@
     }
   },
   "setup": [
-    "python -m pip install aider-install && aider-install",
     "export OPENAI_API_BASE=https://api.subconscious.dev/v1",
     "export OPENAI_API_KEY=your_key",
     "aider --model openai/subconscious/tim-qwen3.6-27b"
