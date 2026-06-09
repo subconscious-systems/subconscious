@@ -104,6 +104,8 @@ for (const folder of fs.readdirSync(examplesDir)) {
     if (meta.framework || pkg.framework) example.framework = meta.framework || pkg.framework;
     if (meta.tags || pkg.tags) example.tags = meta.tags || pkg.tags;
     if (meta.envVars || pkg.envVars) example.envVars = meta.envVars || pkg.envVars;
+    if (meta.category) example.category = meta.category;
+    if (meta.agent) example.agent = meta.agent;
 
     if (pkg.setup && Array.isArray(pkg.setup)) {
       example.setup = pkg.setup;

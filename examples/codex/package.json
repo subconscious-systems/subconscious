@@ -1,0 +1,33 @@
+{
+  "name": "codex-subconscious",
+  "version": "0.1.0",
+  "displayName": "Codex + Subconscious",
+  "description": "Run the Codex CLI on your hosted Subconscious model via a custom OpenAI-compatible provider.",
+  "subconscious": {
+    "language": "shell",
+    "framework": "Codex",
+    "category": "coding-agent",
+    "tags": ["local", "cli", "agents"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true, "url": "https://subconscious.dev/platform" }
+    },
+    "agent": {
+      "id": "codex",
+      "name": "Codex CLI",
+      "protocol": "openai",
+      "install": "npm i -g @openai/codex",
+      "launch": "codex",
+      "configFile": "config.toml",
+      "env": {
+        "SUBCONSCIOUS_API_KEY": "your_key",
+        "CODEX_HOME": "."
+      }
+    }
+  },
+  "setup": [
+    "npm i -g @openai/codex",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "export CODEX_HOME=$(pwd)",
+    "codex"
+  ]
+}

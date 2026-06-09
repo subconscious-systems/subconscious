@@ -1,0 +1,32 @@
+{
+  "name": "aider-subconscious",
+  "version": "0.1.0",
+  "displayName": "Aider + Subconscious",
+  "description": "Run Aider on your hosted Subconscious model — no code changes, just env vars.",
+  "subconscious": {
+    "language": "shell",
+    "framework": "Aider",
+    "category": "coding-agent",
+    "tags": ["local", "cli", "agents"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true, "url": "https://subconscious.dev/platform" }
+    },
+    "agent": {
+      "id": "aider",
+      "name": "Aider",
+      "protocol": "openai",
+      "install": "python -m pip install aider-install && aider-install",
+      "launch": "aider --model openai/subconscious/tim-qwen3.6-27b",
+      "env": {
+        "OPENAI_API_BASE": "https://api.subconscious.dev/v1",
+        "OPENAI_API_KEY": "your_key"
+      }
+    }
+  },
+  "setup": [
+    "python -m pip install aider-install && aider-install",
+    "export OPENAI_API_BASE=https://api.subconscious.dev/v1",
+    "export OPENAI_API_KEY=your_key",
+    "aider --model openai/subconscious/tim-qwen3.6-27b"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "claude-code-subconscious",
+  "version": "0.1.0",
+  "displayName": "Claude Code + Subconscious",
+  "description": "Run Claude Code on your hosted Subconscious model — no code changes, just env vars.",
+  "subconscious": {
+    "language": "shell",
+    "framework": "Claude Code",
+    "category": "coding-agent",
+    "tags": ["local", "cli", "agents"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true, "url": "https://subconscious.dev/platform" }
+    },
+    "agent": {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "protocol": "anthropic",
+      "install": "npm i -g @anthropic-ai/claude-code",
+      "launch": "claude",
+      "env": {
+        "ANTHROPIC_BASE_URL": "https://api.subconscious.dev",
+        "ANTHROPIC_AUTH_TOKEN": "your_key",
+        "ANTHROPIC_MODEL": "subconscious/tim-qwen3.6-27b",
+        "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b"
+      }
+    }
+  },
+  "setup": [
+    "npm i -g @anthropic-ai/claude-code",
+    "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
+    "export ANTHROPIC_AUTH_TOKEN=your_key",
+    "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",
+    "claude"
+  ]
+}
