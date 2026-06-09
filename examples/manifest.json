@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-06-09T20:07:14.004Z",
+  "generated": "2026-06-09T20:14:26.179Z",
   "examples": [
     {
       "name": "aider",
@@ -172,10 +172,8 @@
         "protocol": "openai",
         "install": "npm i -g @openai/codex",
         "launch": "codex",
-        "configFile": "config.toml",
         "env": {
-          "SUBCONSCIOUS_API_KEY": "your_key",
-          "CODEX_HOME": "."
+          "SUBCONSCIOUS_API_KEY": "your_key"
         }
       },
       "setup": [
@@ -321,7 +319,7 @@
         "name": "OpenCode",
         "protocol": "openai",
         "install": "npm i -g opencode-ai",
-        "launch": "./run.sh",
+        "launch": "opencode",
         "configEnv": "OPENCODE_CONFIG_CONTENT",
         "env": {
           "SUBCONSCIOUS_API_KEY": "your_key"

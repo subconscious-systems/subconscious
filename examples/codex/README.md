@@ -1,23 +1,15 @@
 # Codex + Subconscious
 
 Run the [Codex CLI](https://developers.openai.com/codex) on your hosted
-Subconscious model. This folder ships a `config.toml` that registers Subconscious
-as a custom OpenAI-compatible provider; `CODEX_HOME` points Codex at it (so your
-global `~/.codex` is untouched).
+Subconscious model. Codex routes through a custom provider defined in a config
+file, so we write a throwaway one to a temp `CODEX_HOME` — your real `~/.codex`
+is untouched. Assumes Codex is already installed.
 
 ```bash
-npm i -g @openai/codex
 export SUBCONSCIOUS_API_KEY=your_key            # https://subconscious.dev/platform
-export CODEX_HOME=$(pwd)                          # use this folder's config.toml
-codex                                             # interactive
-codex exec "summarize README.md"                  # one-shot
+export CODEX_HOME=$(mktemp -d)
+printf 'model = "subconscious/tim-qwen3.6-27b"\nmodel_provider = "subconscious"\n[model_providers.subconscious]\nname = "Subconscious"\nbase_url = "https://api.subconscious.dev/v1"\nenv_key = "SUBCONSCIOUS_API_KEY"\n' > "$CODEX_HOME/config.toml"
+codex
 ```
 
-Helper:
-
-```bash
-./run.sh                  # interactive
-./run.sh exec "..."       # one-shot
-```
-
-Swap the model by editing `model = "..."` in `config.toml`.
+Swap models by changing `model` in the written config.
