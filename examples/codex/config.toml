@@ -1,0 +1,7 @@
+model = "subconscious/tim-qwen3.6-27b"
+model_provider = "subconscious"
+
+[model_providers.subconscious]
+name = "Subconscious"
+base_url = "https://api.subconscious.dev/v1"
+env_key = "SUBCONSCIOUS_API_KEY"

@@ -1,0 +1,36 @@
+[project]
+name = "browser-automation-starter"
+version = "0.1.0"
+description = "Give a Subconscious agent a real cloud browser — Browserbase or Kernel — via a client-side tool loop. Flip one env var to switch backends."
+requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv>=1.0.0",
+    "openai>=1.40.0",
+    "playwright>=1.40.0",
+    "browserbase>=1.0.0",
+    "kernel>=0.10.0",
+]
+
+[project.optional-dependencies]
+dev = []
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.subconscious]
+display_name = "Browser Automation (Browserbase / Kernel)"
+language = "python"
+framework = "Playwright"
+tags = ["local", "browser", "tools"]
+envVars = { SUBCONSCIOUS_API_KEY = { required = true, url = "https://subconscious.dev/platform" }, BROWSERBASE_API_KEY = { required = true, url = "https://browserbase.com" }, KERNEL_API_KEY = { required = false, url = "https://onkernel.com" } }
+setup = [
+    "pip install .",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "export BROWSER_PROVIDER=browserbase",
+    "export BROWSERBASE_API_KEY=your_browserbase_key",
+    "python main.py 'Go to news.ycombinator.com and list the top 5 story titles'",
+]

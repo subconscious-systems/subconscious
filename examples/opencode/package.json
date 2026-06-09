@@ -1,0 +1,32 @@
+{
+  "name": "opencode-subconscious",
+  "version": "0.1.0",
+  "displayName": "OpenCode + Subconscious",
+  "description": "Run OpenCode on your hosted Subconscious model — registered as a custom provider, injected non-invasively (nothing written to your OpenCode config).",
+  "subconscious": {
+    "language": "shell",
+    "framework": "OpenCode",
+    "category": "coding-agent",
+    "tags": ["local", "cli", "agents"],
+    "envVars": {
+      "SUBCONSCIOUS_API_KEY": { "required": true, "url": "https://subconscious.dev/platform" }
+    },
+    "agent": {
+      "id": "opencode",
+      "name": "OpenCode",
+      "protocol": "openai",
+      "install": "npm i -g opencode-ai",
+      "launch": "./run.sh",
+      "configEnv": "OPENCODE_CONFIG_CONTENT",
+      "env": {
+        "SUBCONSCIOUS_API_KEY": "your_key"
+      }
+    }
+  },
+  "setup": [
+    "npm i -g opencode-ai",
+    "export SUBCONSCIOUS_API_KEY=your_key",
+    "chmod +x run.sh",
+    "./run.sh"
+  ]
+}

@@ -1,7 +1,75 @@
 {
   "version": 2,
-  "generated": "2026-06-08T18:58:38.256Z",
+  "generated": "2026-06-09T19:32:43.544Z",
   "examples": [
+    {
+      "name": "aider",
+      "displayName": "Aider + Subconscious",
+      "description": "Run Aider on your hosted Subconscious model — no code changes, just env vars.",
+      "language": "shell",
+      "framework": "Aider",
+      "tags": [
+        "local",
+        "cli",
+        "agents"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
+      "category": "coding-agent",
+      "agent": {
+        "id": "aider",
+        "name": "Aider",
+        "protocol": "openai",
+        "install": "python -m pip install aider-install && aider-install",
+        "launch": "aider --model openai/subconscious/tim-qwen3.6-27b",
+        "env": {
+          "OPENAI_API_BASE": "https://api.subconscious.dev/v1",
+          "OPENAI_API_KEY": "your_key"
+        }
+      },
+      "setup": [
+        "python -m pip install aider-install && aider-install",
+        "export OPENAI_API_BASE=https://api.subconscious.dev/v1",
+        "export OPENAI_API_KEY=your_key",
+        "aider --model openai/subconscious/tim-qwen3.6-27b"
+      ]
+    },
+    {
+      "name": "browser_automation",
+      "displayName": "Browser Automation (Browserbase / Kernel)",
+      "description": "Give a Subconscious agent a real cloud browser — Browserbase or Kernel — via a client-side tool loop. Flip one env var to switch backends.",
+      "language": "python",
+      "framework": "Playwright",
+      "tags": [
+        "local",
+        "browser",
+        "tools"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        },
+        "BROWSERBASE_API_KEY": {
+          "required": true,
+          "url": "https://browserbase.com"
+        },
+        "KERNEL_API_KEY": {
+          "url": "https://onkernel.com"
+        }
+      },
+      "setup": [
+        "pip install .",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "export BROWSER_PROVIDER=browserbase",
+        "export BROWSERBASE_API_KEY=your_browserbase_key",
+        "python main.py 'Go to news.ycombinator.com and list the top 5 story titles'"
+      ]
+    },
     {
       "name": "city_of_boston_getting_started",
       "displayName": "City of Boston Subconscious Getting Started",
@@ -18,6 +86,45 @@
       },
       "setup": [
         "--urlname 'Open in Colab' --url https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/city_of_boston_getting_started/Boston%20Subconscious%20Quickstart.ipynb"
+      ]
+    },
+    {
+      "name": "claude_code",
+      "displayName": "Claude Code + Subconscious",
+      "description": "Run Claude Code on your hosted Subconscious model — no code changes, just env vars.",
+      "language": "shell",
+      "framework": "Claude Code",
+      "tags": [
+        "local",
+        "cli",
+        "agents"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
+      "category": "coding-agent",
+      "agent": {
+        "id": "claude-code",
+        "name": "Claude Code",
+        "protocol": "anthropic",
+        "install": "npm i -g @anthropic-ai/claude-code",
+        "launch": "claude",
+        "env": {
+          "ANTHROPIC_BASE_URL": "https://api.subconscious.dev",
+          "ANTHROPIC_AUTH_TOKEN": "your_key",
+          "ANTHROPIC_MODEL": "subconscious/tim-qwen3.6-27b",
+          "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b"
+        }
+      },
+      "setup": [
+        "npm i -g @anthropic-ai/claude-code",
+        "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
+        "export ANTHROPIC_AUTH_TOKEN=your_key",
+        "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",
+        "claude"
       ]
     },
     {
@@ -41,6 +148,43 @@
         "npm link",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "sub"
+      ]
+    },
+    {
+      "name": "codex",
+      "displayName": "Codex + Subconscious",
+      "description": "Run the Codex CLI on your hosted Subconscious model via a custom OpenAI-compatible provider.",
+      "language": "shell",
+      "framework": "Codex",
+      "tags": [
+        "local",
+        "cli",
+        "agents"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
+      "category": "coding-agent",
+      "agent": {
+        "id": "codex",
+        "name": "Codex CLI",
+        "protocol": "openai",
+        "install": "npm i -g @openai/codex",
+        "launch": "codex",
+        "configFile": "config.toml",
+        "env": {
+          "SUBCONSCIOUS_API_KEY": "your_key",
+          "CODEX_HOME": "."
+        }
+      },
+      "setup": [
+        "npm i -g @openai/codex",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "export CODEX_HOME=$(pwd)",
+        "codex"
       ]
     },
     {
@@ -154,6 +298,42 @@
         "pip install .",
         "export SUBCONSCIOUS_API_KEY=your_key",
         "python main.py"
+      ]
+    },
+    {
+      "name": "opencode",
+      "displayName": "OpenCode + Subconscious",
+      "description": "Run OpenCode on your hosted Subconscious model — registered as a custom provider, injected non-invasively (nothing written to your OpenCode config).",
+      "language": "shell",
+      "framework": "OpenCode",
+      "tags": [
+        "local",
+        "cli",
+        "agents"
+      ],
+      "envVars": {
+        "SUBCONSCIOUS_API_KEY": {
+          "required": true,
+          "url": "https://subconscious.dev/platform"
+        }
+      },
+      "category": "coding-agent",
+      "agent": {
+        "id": "opencode",
+        "name": "OpenCode",
+        "protocol": "openai",
+        "install": "npm i -g opencode-ai",
+        "launch": "./run.sh",
+        "configEnv": "OPENCODE_CONFIG_CONTENT",
+        "env": {
+          "SUBCONSCIOUS_API_KEY": "your_key"
+        }
+      },
+      "setup": [
+        "npm i -g opencode-ai",
+        "export SUBCONSCIOUS_API_KEY=your_key",
+        "chmod +x run.sh",
+        "./run.sh"
       ]
     },
     {
