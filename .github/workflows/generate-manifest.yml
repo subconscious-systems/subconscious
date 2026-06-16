@@ -34,7 +34,7 @@ jobs:
             if (!ex.displayName) errors.push(ex.name + ': missing displayName');
             if (!ex.description) errors.push(ex.name + ': missing description');
             if (!ex.language) errors.push(ex.name + ': missing language');
-            if (!['typescript', 'python'].includes(ex.language)) errors.push(ex.name + ': language must be typescript or python');
+            if (!['typescript', 'python', 'shell'].includes(ex.language)) errors.push(ex.name + ': language must be typescript, python, or shell');
             if (!ex.tags || !ex.tags.length) errors.push(ex.name + ': missing tags');
             if (!ex.setup || !ex.setup.length) errors.push(ex.name + ': missing setup');
             // Every setup step must be a runnable command or a comment
