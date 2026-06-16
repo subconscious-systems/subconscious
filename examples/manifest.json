@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-06-16T18:22:36.085Z",
+  "generated": "2026-06-16T18:26:16.671Z",
   "examples": [
     {
       "name": "aider",
@@ -115,13 +115,15 @@
           "ANTHROPIC_BASE_URL": "https://api.subconscious.dev",
           "ANTHROPIC_AUTH_TOKEN": "your_key",
           "ANTHROPIC_MODEL": "subconscious/tim-qwen3.6-27b",
-          "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b"
+          "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b",
+          "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "150000"
         }
       },
       "setup": [
         "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
         "export ANTHROPIC_AUTH_TOKEN=your_key",
         "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",
+        "export CLAUDE_CODE_AUTO_COMPACT_WINDOW=150000",
         "claude"
       ]
     },
