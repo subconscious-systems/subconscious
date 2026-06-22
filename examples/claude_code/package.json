@@ -21,7 +21,8 @@
         "ANTHROPIC_BASE_URL": "https://api.subconscious.dev",
         "ANTHROPIC_AUTH_TOKEN": "your_key",
         "ANTHROPIC_MODEL": "subconscious/tim-qwen3.6-27b",
-        "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b"
+        "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b",
+        "DISABLE_AUTO_COMPACT": "true"
       }
     }
   },
@@ -29,6 +30,7 @@
     "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
     "export ANTHROPIC_AUTH_TOKEN=your_key",
     "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",
+    "export DISABLE_AUTO_COMPACT=true",
     "claude"
   ]
 }
