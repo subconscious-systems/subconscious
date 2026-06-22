@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-06-16T18:22:36.085Z",
+  "generated": "2026-06-22T21:39:29.058Z",
   "examples": [
     {
       "name": "aider",
@@ -115,13 +115,16 @@
           "ANTHROPIC_BASE_URL": "https://api.subconscious.dev",
           "ANTHROPIC_AUTH_TOKEN": "your_key",
           "ANTHROPIC_MODEL": "subconscious/tim-qwen3.6-27b",
-          "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b"
+          "ANTHROPIC_SMALL_FAST_MODEL": "subconscious/tim-qwen3.6-27b",
+          "DISABLE_AUTO_COMPACT": "true"
         }
       },
       "setup": [
         "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
         "export ANTHROPIC_AUTH_TOKEN=your_key",
         "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",
+        "export ANTHROPIC_SMALL_FAST_MODEL=subconscious/tim-qwen3.6-27b",
+        "export DISABLE_AUTO_COMPACT=true",
         "claude"
       ]
     },
@@ -320,7 +323,8 @@
         "launch": "opencode",
         "configEnv": "OPENCODE_CONFIG_CONTENT",
         "env": {
-          "SUBCONSCIOUS_API_KEY": "your_key"
+          "SUBCONSCIOUS_API_KEY": "your_key",
+          "OPENCODE_CONFIG_CONTENT": "{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"subconscious\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Subconscious\",\"options\":{\"baseURL\":\"https://api.subconscious.dev/v1\",\"apiKey\":\"{env:SUBCONSCIOUS_API_KEY}\"},\"models\":{\"subconscious/tim-qwen3.6-27b\":{\"name\":\"Subconscious\",\"tools\":true}}}},\"model\":\"subconscious/subconscious/tim-qwen3.6-27b\"}"
         }
       },
       "setup": [

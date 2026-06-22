@@ -1,0 +1,71 @@
+{
+  "defaults": {
+    "model": "subconscious/tim-qwen3.6-27b",
+    "baseUrl": "https://api.subconscious.dev",
+    "baseUrlV1": "https://api.subconscious.dev/v1",
+    "keyPlaceholder": "your_key",
+    "platformUrl": "https://subconscious.dev/platform"
+  },
+  "agents": [
+    {
+      "id": "claude-code", "exampleDir": "claude_code", "name": "Claude Code",
+      "aliases": ["claude", "claudecode"],
+      "displayName": "Claude Code + Subconscious",
+      "description": "Run Claude Code on your hosted Subconscious model — no code changes, just env vars.",
+      "framework": "Claude Code", "language": "shell", "category": "coding-agent",
+      "tags": ["local", "cli", "agents"], "protocol": "anthropic",
+      "homepage": "https://docs.anthropic.com/en/docs/claude-code",
+      "bin": "claude", "install": "npm i -g @anthropic-ai/claude-code", "launch": "claude",
+      "env": {
+        "ANTHROPIC_BASE_URL": "{baseUrl}", "ANTHROPIC_AUTH_TOKEN": "{apiKey}",
+        "ANTHROPIC_MODEL": "{model}", "ANTHROPIC_SMALL_FAST_MODEL": "{model}",
+        "DISABLE_AUTO_COMPACT": "true"
+      }
+    },
+    {
+      "id": "opencode", "exampleDir": "opencode", "name": "OpenCode",
+      "aliases": ["open-code"],
+      "displayName": "OpenCode + Subconscious",
+      "description": "Run OpenCode on your hosted Subconscious model — registered as a custom provider, injected non-invasively (nothing written to your OpenCode config).",
+      "framework": "OpenCode", "language": "shell", "category": "coding-agent",
+      "tags": ["local", "cli", "agents"], "protocol": "openai",
+      "homepage": "https://opencode.ai",
+      "bin": "opencode", "install": "npm i -g opencode-ai", "launch": "opencode",
+      "configEnv": "OPENCODE_CONFIG_CONTENT",
+      "env": {
+        "SUBCONSCIOUS_API_KEY": "{apiKey}",
+        "OPENCODE_CONFIG_CONTENT": { "$json": {
+          "$schema": "https://opencode.ai/config.json",
+          "provider": { "subconscious": {
+            "npm": "@ai-sdk/openai-compatible", "name": "Subconscious",
+            "options": { "baseURL": "{baseUrlV1}", "apiKey": "{env:SUBCONSCIOUS_API_KEY}" },
+            "models": { "{model}": { "name": "Subconscious", "tools": true } }
+          } },
+          "model": "subconscious/{model}"
+        } }
+      }
+    },
+    {
+      "id": "aider", "exampleDir": "aider", "name": "Aider", "aliases": [],
+      "displayName": "Aider + Subconscious",
+      "description": "Run Aider on your hosted Subconscious model — no code changes, just env vars.",
+      "framework": "Aider", "language": "shell", "category": "coding-agent",
+      "tags": ["local", "cli", "agents"], "protocol": "openai",
+      "homepage": "https://aider.chat",
+      "bin": "aider", "install": "python -m pip install aider-install && aider-install",
+      "launch": "aider --model openai/{model}",
+      "env": { "OPENAI_API_BASE": "{baseUrlV1}", "OPENAI_API_KEY": "{apiKey}" }
+    },
+    {
+      "id": "codex", "exampleDir": "codex", "name": "Codex CLI", "aliases": [],
+      "displayName": "Codex + Subconscious",
+      "description": "Run the Codex CLI on your hosted Subconscious model via a custom OpenAI-compatible provider.",
+      "framework": "Codex", "language": "shell", "category": "coding-agent",
+      "tags": ["local", "cli", "agents"], "protocol": "openai",
+      "homepage": "https://developers.openai.com/codex",
+      "bin": "codex", "install": "npm i -g @openai/codex",
+      "launch": "codex -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url={baseUrlV1} -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_provider=subconscious -c model={model}",
+      "env": { "SUBCONSCIOUS_API_KEY": "{apiKey}" }
+    }
+  ]
+}

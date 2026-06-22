@@ -7,9 +7,16 @@
     "language": "shell",
     "framework": "Aider",
     "category": "coding-agent",
-    "tags": ["local", "cli", "agents"],
+    "tags": [
+      "local",
+      "cli",
+      "agents"
+    ],
     "envVars": {
-      "SUBCONSCIOUS_API_KEY": { "required": true, "url": "https://subconscious.dev/platform" }
+      "SUBCONSCIOUS_API_KEY": {
+        "required": true,
+        "url": "https://subconscious.dev/platform"
+      }
     },
     "agent": {
       "id": "aider",

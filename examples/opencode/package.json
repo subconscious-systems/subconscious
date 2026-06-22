@@ -7,9 +7,16 @@
     "language": "shell",
     "framework": "OpenCode",
     "category": "coding-agent",
-    "tags": ["local", "cli", "agents"],
+    "tags": [
+      "local",
+      "cli",
+      "agents"
+    ],
     "envVars": {
-      "SUBCONSCIOUS_API_KEY": { "required": true, "url": "https://subconscious.dev/platform" }
+      "SUBCONSCIOUS_API_KEY": {
+        "required": true,
+        "url": "https://subconscious.dev/platform"
+      }
     },
     "agent": {
       "id": "opencode",
@@ -19,7 +26,8 @@
       "launch": "opencode",
       "configEnv": "OPENCODE_CONFIG_CONTENT",
       "env": {
-        "SUBCONSCIOUS_API_KEY": "your_key"
+        "SUBCONSCIOUS_API_KEY": "your_key",
+        "OPENCODE_CONFIG_CONTENT": "{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"subconscious\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Subconscious\",\"options\":{\"baseURL\":\"https://api.subconscious.dev/v1\",\"apiKey\":\"{env:SUBCONSCIOUS_API_KEY}\"},\"models\":{\"subconscious/tim-qwen3.6-27b\":{\"name\":\"Subconscious\",\"tools\":true}}}},\"model\":\"subconscious/subconscious/tim-qwen3.6-27b\"}"
       }
     }
   },

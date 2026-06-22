@@ -1,6 +1,6 @@
 {
   "name": "subconscious-cli",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "CLI for Subconscious — log in and launch coding agents (Claude Code, OpenCode, Aider, Codex) on your hosted models",
   "bin": {
     "subconscious": "./bin/cli.js",

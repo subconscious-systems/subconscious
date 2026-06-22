@@ -7,9 +7,16 @@
     "language": "shell",
     "framework": "Claude Code",
     "category": "coding-agent",
-    "tags": ["local", "cli", "agents"],
+    "tags": [
+      "local",
+      "cli",
+      "agents"
+    ],
     "envVars": {
-      "SUBCONSCIOUS_API_KEY": { "required": true, "url": "https://subconscious.dev/platform" }
+      "SUBCONSCIOUS_API_KEY": {
+        "required": true,
+        "url": "https://subconscious.dev/platform"
+      }
     },
     "agent": {
       "id": "claude-code",
@@ -30,6 +37,7 @@
     "export ANTHROPIC_BASE_URL=https://api.subconscious.dev",
     "export ANTHROPIC_AUTH_TOKEN=your_key",
     "export ANTHROPIC_MODEL=subconscious/tim-qwen3.6-27b",
+    "export ANTHROPIC_SMALL_FAST_MODEL=subconscious/tim-qwen3.6-27b",
     "export DISABLE_AUTO_COMPACT=true",
     "claude"
   ]
