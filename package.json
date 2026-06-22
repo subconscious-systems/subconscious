@@ -1,0 +1,9 @@
+{
+  "name": "subconscious-repo",
+  "private": true,
+  "scripts": {
+    "generate:agents": "node scripts/generate-agents.js",
+    "generate:manifest": "node scripts/generate-manifest.js",
+    "generate": "node scripts/generate-agents.js"
+  }
+}

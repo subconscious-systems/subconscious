@@ -6,7 +6,8 @@
 - `examples/manifest.json` — auto-generated manifest consumed by the templates page at subconscious.dev/templates
 - `scripts/generate-manifest.js` — reads example metadata → outputs manifest.json
 - `create-subconscious-app/` — `npx create-subconscious-app` CLI scaffolder
-- `cli/` — `npx subconscious-cli`: login/logout/whoami plus a launcher for coding agents (`subconscious claude-code`, `open-code`, `aider`, `codex`). The agent registry in `cli/bin/agents.js` mirrors the `subconscious.agent` block of each `examples/<agent>` — keep them in sync.
+- `cli/` — `npx subconscious-cli`: login/logout/whoami plus a launcher for coding agents (`subconscious claude-code`, `open-code`, `aider`, `codex`).
+- `agents/registry.json` — the single source of truth for coding-agent configs (install/env/launch). The CLI runtime data (`cli/bin/registry.generated.json`) and each example's `subconscious.agent` + `setup` blocks are GENERATED from it. Edit `agents/registry.json`, then run `pnpm generate` (or `node scripts/generate-agents.js`) to regenerate the CLI data, example blocks, and manifest. Do not hand-edit the generated outputs.
 
 ## Adding examples
 

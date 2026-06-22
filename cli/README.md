@@ -31,8 +31,12 @@ the agent's own config — the provider is passed in-memory for that run only.
 | `subconscious aider`       | Aider       | `python -m pip install aider-install && aider-install` |
 | `subconscious codex`       | Codex CLI   | `npm i -g @openai/codex`                               |
 
-If the underlying agent isn't installed, the CLI tells you the exact install
-command. Anything after the agent name is forwarded straight to it:
+If the underlying agent isn't installed and you're in an interactive terminal,
+the CLI offers to install it for you (just press Enter) and launches it once the
+install succeeds. In a non-interactive context (CI) it instead prints the exact
+install command and exits without running anything.
+
+Anything after the agent name is forwarded straight to it:
 
 ```bash
 subconscious claude-code --resume
@@ -47,6 +51,16 @@ set `SUBCONSCIOUS_MODEL` in your environment:
 ```bash
 subconscious open-code --model subconscious/tim-qwen3.6-27b
 export SUBCONSCIOUS_MODEL=subconscious/tim-qwen3.6-27b
+```
+
+### Pointing at a different endpoint
+
+By default the CLI targets `https://api.subconscious.dev`. Override the base URL
+per run (or for a whole session) with `SUBCONSCIOUS_BASE_URL` — it flows to both
+the Anthropic-style base and the OpenAI-compatible `/v1` base:
+
+```bash
+SUBCONSCIOUS_BASE_URL=http://localhost:9999 subconscious claude-code
 ```
 
 ## Auth commands
