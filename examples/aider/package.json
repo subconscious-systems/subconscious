@@ -22,7 +22,7 @@
       "id": "aider",
       "name": "Aider",
       "protocol": "openai",
-      "install": "python -m pip install aider-install && aider-install",
+      "install": "python3 -m pip install aider-install && aider-install",
       "launch": "aider --model openai/subconscious/tim-qwen3.6-27b",
       "env": {
         "OPENAI_API_BASE": "https://api.subconscious.dev/v1",

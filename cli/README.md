@@ -24,17 +24,34 @@ subconscious open-code
 point the agent at Subconscious, and exec's the real CLI. Nothing is written to
 the agent's own config — the provider is passed in-memory for that run only.
 
-| Command                    | Launches    | Requires (install)                                     |
-| -------------------------- | ----------- | ------------------------------------------------------ |
-| `subconscious claude-code` | Claude Code | `npm i -g @anthropic-ai/claude-code`                   |
-| `subconscious open-code`   | OpenCode    | `npm i -g opencode-ai`                                 |
-| `subconscious aider`       | Aider       | `python -m pip install aider-install && aider-install` |
-| `subconscious codex`       | Codex CLI   | `npm i -g @openai/codex`                               |
+Install commands are **OS-specific** — the CLI picks the right one for your
+platform automatically. The table below shows the macOS/Linux command; on
+Windows the equivalent native installer is used instead.
+
+| Command                    | Launches    | Requires (install, macOS/Linux)                         |
+| -------------------------- | ----------- | ------------------------------------------------------- |
+| `subconscious claude-code` | Claude Code | `curl -fsSL https://claude.ai/install.sh \| bash`       |
+| `subconscious open-code`   | OpenCode    | `npm i -g opencode-ai`                                  |
+| `subconscious aider`       | Aider       | `python3 -m pip install aider-install && aider-install` |
+| `subconscious codex`       | Codex CLI   | `npm i -g @openai/codex`                                |
+
+Claude Code uses its **native installer** (the `curl`/`irm` script above), with
+`npm i -g @anthropic-ai/claude-code` kept as an automatic fallback if the native
+installer fails.
 
 If the underlying agent isn't installed and you're in an interactive terminal,
-the CLI offers to install it for you (just press Enter) and launches it once the
-install succeeds. In a non-interactive context (CI) it instead prints the exact
-install command and exits without running anything.
+the CLI offers to install it for you (just press Enter), runs the right
+installer for your OS (trying the fallback if the primary fails), and launches
+it once the install succeeds. In a non-interactive context (CI) it instead
+prints the exact install command (and any fallback) and exits without running
+anything.
+
+Freshly-installed binaries (e.g. Aider and Claude Code land in `~/.local/bin`,
+npm globals in the npm prefix) often aren't on your current shell's `PATH` yet.
+The CLI looks in those common locations and launches the agent anyway. If it
+still can't find the binary right after install, it tells you to **open a new
+terminal** (or add the printed dir to `PATH`) and re-run the command — the
+install itself succeeded.
 
 Anything after the agent name is forwarded straight to it:
 

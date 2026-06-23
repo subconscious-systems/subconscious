@@ -22,7 +22,7 @@
       "id": "claude-code",
       "name": "Claude Code",
       "protocol": "anthropic",
-      "install": "npm i -g @anthropic-ai/claude-code",
+      "install": "curl -fsSL https://claude.ai/install.sh | bash",
       "launch": "claude",
       "env": {
         "ANTHROPIC_BASE_URL": "https://api.subconscious.dev",

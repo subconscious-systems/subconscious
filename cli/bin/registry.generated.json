@@ -29,7 +29,12 @@
       "protocol": "anthropic",
       "homepage": "https://docs.anthropic.com/en/docs/claude-code",
       "bin": "claude",
-      "install": "npm i -g @anthropic-ai/claude-code",
+      "install": {
+        "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
+        "linux": "curl -fsSL https://claude.ai/install.sh | bash",
+        "win32": "powershell -ExecutionPolicy Bypass -Command \"irm https://claude.ai/install.ps1 | iex\"",
+        "fallback": "npm i -g @anthropic-ai/claude-code"
+      },
       "launch": "claude",
       "env": {
         "ANTHROPIC_BASE_URL": "{baseUrl}",
@@ -59,7 +64,11 @@
       "protocol": "openai",
       "homepage": "https://opencode.ai",
       "bin": "opencode",
-      "install": "npm i -g opencode-ai",
+      "install": {
+        "darwin": "npm i -g opencode-ai",
+        "linux": "npm i -g opencode-ai",
+        "win32": "npm i -g opencode-ai"
+      },
       "launch": "opencode",
       "configEnv": "OPENCODE_CONFIG_CONTENT",
       "env": {
@@ -106,7 +115,11 @@
       "protocol": "openai",
       "homepage": "https://aider.chat",
       "bin": "aider",
-      "install": "python -m pip install aider-install && aider-install",
+      "install": {
+        "darwin": "python3 -m pip install aider-install && aider-install",
+        "linux": "python3 -m pip install aider-install && aider-install",
+        "win32": "python -m pip install aider-install && aider-install"
+      },
       "launch": "aider --model openai/{model}",
       "env": {
         "OPENAI_API_BASE": "{baseUrlV1}",
@@ -131,7 +144,11 @@
       "protocol": "openai",
       "homepage": "https://developers.openai.com/codex",
       "bin": "codex",
-      "install": "npm i -g @openai/codex",
+      "install": {
+        "darwin": "npm i -g @openai/codex",
+        "linux": "npm i -g @openai/codex",
+        "win32": "npm i -g @openai/codex"
+      },
       "launch": "codex -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url={baseUrlV1} -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_provider=subconscious -c model={model}",
       "env": {
         "SUBCONSCIOUS_API_KEY": "{apiKey}"

@@ -50,7 +50,10 @@ function buildAgentBlock(agent) {
     id: agent.id,
     name: agent.name,
     protocol: agent.protocol,
-    install: agent.install,
+    // The templates page expects a string. Flatten the per-OS install object
+    // to the representative posix command (linux == darwin for our agents).
+    // The fallback / full object are intentionally omitted here.
+    install: agent.install.linux,
     launch: substitute(agent.launch, displayCtx),
   };
   if (agent.configEnv) block.configEnv = agent.configEnv;
