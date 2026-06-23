@@ -10,10 +10,11 @@
  * single source of truth `agents/registry.json`. Run `pnpm generate` to update.
  */
 
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { c } from './colors.js';
@@ -53,8 +54,29 @@ function substitute(value, ctx) {
   return value;
 }
 
+/**
+ * Resolve the install command for the current OS from a per-OS install object.
+ * Falls back to the linux command, then any string value present, if the exact
+ * `process.platform` key is missing. Tolerates a legacy plain-string `install`.
+ * Returns `{ command, fallback }` where `fallback` may be undefined.
+ */
+function resolveInstall(install) {
+  if (typeof install === 'string') return { command: install, fallback: undefined };
+  if (!install || typeof install !== 'object') return { command: undefined, fallback: undefined };
+  const command =
+    install[process.platform] ||
+    install.linux ||
+    Object.values(install).find((v) => typeof v === 'string');
+  return { command, fallback: install.fallback };
+}
+
 // --- Build the in-memory registry + alias index.
-const AGENTS = registry.agents;
+// Each agent gets a resolved per-OS `install` (string) plus optional
+// `installFallback`, while keeping the original per-OS object available.
+const AGENTS = registry.agents.map((agent) => {
+  const { command, fallback } = resolveInstall(agent.install);
+  return { ...agent, install: command, installFallback: fallback };
+});
 const BY_ALIAS = new Map();
 for (const agent of AGENTS) {
   BY_ALIAS.set(agent.id, agent);
@@ -107,25 +129,83 @@ function extractModel(argv) {
   return { model, rest };
 }
 
-/** Is `bin` an executable resolvable on PATH? */
-async function isOnPath(bin) {
-  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
-  const exts =
-    process.platform === 'win32'
-      ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
-      : [''];
+/**
+ * Common locations a freshly-installed coding-agent binary lands in but which
+ * are often NOT on the current process's PATH (e.g. aider/claude install into
+ * `~/.local/bin`; npm globals into the npm prefix bin). Best-effort, deduped.
+ */
+function candidateBinDirs() {
+  const home = os.homedir();
+  const dirs = [];
+
+  if (process.platform === 'win32') {
+    if (process.env.APPDATA) dirs.push(path.join(process.env.APPDATA, 'npm'));
+    if (process.env.USERPROFILE) {
+      dirs.push(path.join(process.env.USERPROFILE, '.local', 'bin'));
+    }
+    if (home) dirs.push(path.join(home, '.local', 'bin'));
+  } else {
+    dirs.push(path.join(home, '.local', 'bin'));
+    dirs.push('/opt/homebrew/bin');
+    dirs.push('/usr/local/bin');
+  }
+
+  // npm global bin (best-effort — npm may be absent).
+  try {
+    const prefix = execFileSync('npm', ['prefix', '-g'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (prefix) {
+      dirs.push(process.platform === 'win32' ? prefix : path.join(prefix, 'bin'));
+    }
+  } catch {
+    // npm not available — skip.
+  }
+
+  // Dedupe, drop empties.
+  return [...new Set(dirs.filter(Boolean))];
+}
+
+/** Executable extensions to probe (Windows uses PATHEXT). */
+function binExts() {
+  return process.platform === 'win32'
+    ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';')
+    : [''];
+}
+
+/**
+ * Resolve `bin` against PATH plus the candidate bin dirs. Returns the directory
+ * containing the executable if found, otherwise null. Searching the candidate
+ * dirs lets us find binaries installed this session that aren't on PATH yet.
+ */
+async function resolveBinPath(bin) {
+  const pathDirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  const dirs = [...pathDirs, ...candidateBinDirs()];
+  const exts = binExts();
   for (const dir of dirs) {
     for (const ext of exts) {
       const candidate = path.join(dir, bin + ext);
       try {
         await fs.access(candidate, fsConstants.F_OK);
-        return true;
+        return dir;
       } catch {
         // keep scanning
       }
     }
   }
-  return false;
+  return null;
+}
+
+/**
+ * Build a PATH string with `extraDirs` prepended (deduped against PATH).
+ * Returns the augmented PATH value for use in a child env.
+ */
+function augmentPath(extraDirs) {
+  const current = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  const seen = new Set(current);
+  const prepend = extraDirs.filter((d) => d && !seen.has(d));
+  return [...prepend, ...current].join(path.delimiter);
 }
 
 /** Ask a yes/no question on the TTY. Empty answer counts as yes. */
@@ -149,14 +229,29 @@ function runInstaller(install) {
   });
 }
 
+/** Print the resolved install command (plus any fallback) for an agent. */
+function printInstallCommands(agent) {
+  console.error(`    ${c.cyan}${agent.install}${c.reset}`);
+  if (agent.installFallback) {
+    console.error(`  ${c.dim}or, as a fallback:${c.reset}`);
+    console.error(`    ${c.cyan}${agent.installFallback}${c.reset}`);
+  }
+  console.error('');
+}
+
 /**
- * Ensure the agent's binary is on PATH. If missing:
- *   - interactive TTY: offer to run the installer, then re-check PATH
- *   - non-interactive: print the install command and exit 127
- * Returns true if the bin is available (proceed to launch).
+ * Ensure the agent's binary is resolvable. If missing:
+ *   - interactive TTY: offer to run the per-OS installer (with fallback), then
+ *     re-resolve against PATH + candidate dirs.
+ *   - non-interactive: print the resolved install command (+ fallback) and
+ *     exit 127 without running anything.
+ *
+ * Returns the directory containing the bin (to prepend to the child's PATH) on
+ * success. May exit the process on failure or when manual action is needed.
  */
 async function ensureInstalled(agent) {
-  if (await isOnPath(agent.bin)) return true;
+  const existing = await resolveBinPath(agent.bin);
+  if (existing) return existing;
 
   const interactive = process.stdin.isTTY && process.stdout.isTTY;
 
@@ -165,7 +260,7 @@ async function ensureInstalled(agent) {
       `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${agent.bin}\` not found on PATH).${c.reset}`,
     );
     console.error(`  Install it with:\n`);
-    console.error(`    ${c.cyan}${agent.install}${c.reset}\n`);
+    printInstallCommands(agent);
     process.exit(127);
   }
 
@@ -173,25 +268,37 @@ async function ensureInstalled(agent) {
   const ok = await askYesNo(`  Install it now? ${c.dim}[Y/n]${c.reset} `);
   if (!ok) {
     console.error(`\n  No problem. Install it yourself with:\n`);
-    console.error(`    ${c.cyan}${agent.install}${c.reset}\n`);
+    printInstallCommands(agent);
     process.exit(127);
   }
 
   console.error(`\n  ${c.dim}Running ${c.reset}${c.cyan}${agent.install}${c.reset}\n`);
-  const installed = await runInstaller(agent.install);
+  let installed = await runInstaller(agent.install);
 
-  if (installed && (await isOnPath(agent.bin))) return true;
-
-  if (installed) {
+  // Primary failed and a fallback exists — try it once.
+  if (!installed && agent.installFallback) {
     console.error(
-      `\n  ${c.red}Install finished but \`${agent.bin}\` still isn't on your PATH.${c.reset}`,
+      `\n  ${c.dim}That didn't work. Trying the fallback: ${c.reset}${c.cyan}${agent.installFallback}${c.reset}\n`,
     );
-    console.error(`  ${c.dim}You may need to restart your shell or adjust PATH.${c.reset}\n`);
-  } else {
-    console.error(`\n  ${c.red}Install failed.${c.reset} Try it manually:\n`);
-    console.error(`    ${c.cyan}${agent.install}${c.reset}\n`);
+    installed = await runInstaller(agent.installFallback);
   }
-  process.exit(127);
+
+  if (!installed) {
+    console.error(`\n  ${c.red}Install failed.${c.reset} Try it manually:\n`);
+    printInstallCommands(agent);
+    process.exit(127);
+  }
+
+  // PATH hardening: the freshly-installed binary is often not on the current
+  // process's PATH. Re-resolve against PATH + candidate dirs.
+  const found = await resolveBinPath(agent.bin);
+  if (found) return found;
+
+  console.error(
+    `\n  ${c.dim}Installed ${agent.name}, but it isn't on this shell's PATH yet. ` +
+      `Open a new terminal (or add a bin dir to PATH) and re-run \`subconscious ${agent.id}\`.${c.reset}\n`,
+  );
+  process.exit(0);
 }
 
 /**
@@ -210,14 +317,18 @@ export async function runAgent(agent, argv) {
     process.exit(1);
   }
 
-  await ensureInstalled(agent);
+  const binDir = await ensureInstalled(agent);
 
   const ctx = buildContext(auth.key, model);
   const launch = substituteString(agent.launch, ctx);
   const [bin, ...launchArgs] = launch.split(' ').filter(Boolean);
   const envMap = substitute(agent.env, ctx);
 
-  const env = { ...process.env, ...envMap };
+  // Prepend the resolved bin dir + candidate dirs to the child's PATH so the
+  // agent (and any subprocess it spawns) resolves correctly this session, even
+  // if it was installed into a dir not yet on the parent shell's PATH.
+  const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
+  const env = { ...process.env, ...envMap, PATH: augmentPath(extraDirs) };
   const args = [...launchArgs, ...rest];
 
   console.log(
@@ -231,7 +342,7 @@ export async function runAgent(agent, argv) {
       console.error(
         `\n  ${c.red}Could not launch \`${bin}\`.${c.reset} Install it with:\n`,
       );
-      console.error(`    ${c.cyan}${agent.install}${c.reset}\n`);
+      printInstallCommands(agent);
       process.exit(127);
     }
     console.error(`\n  ${c.red}${err.message}${c.reset}\n`);

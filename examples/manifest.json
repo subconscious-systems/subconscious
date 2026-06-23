@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-06-22T21:39:29.058Z",
+  "generated": "2026-06-23T13:54:44.133Z",
   "examples": [
     {
       "name": "aider",
@@ -24,7 +24,7 @@
         "id": "aider",
         "name": "Aider",
         "protocol": "openai",
-        "install": "python -m pip install aider-install && aider-install",
+        "install": "python3 -m pip install aider-install && aider-install",
         "launch": "aider --model openai/subconscious/tim-qwen3.6-27b",
         "env": {
           "OPENAI_API_BASE": "https://api.subconscious.dev/v1",
@@ -109,7 +109,7 @@
         "id": "claude-code",
         "name": "Claude Code",
         "protocol": "anthropic",
-        "install": "npm i -g @anthropic-ai/claude-code",
+        "install": "curl -fsSL https://claude.ai/install.sh | bash",
         "launch": "claude",
         "env": {
           "ANTHROPIC_BASE_URL": "https://api.subconscious.dev",
