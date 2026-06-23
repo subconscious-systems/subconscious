@@ -14,5 +14,11 @@ claude
 
 Swap models by changing `ANTHROPIC_MODEL`.
 
+## Auto-compaction
+
 `DISABLE_AUTO_COMPACT=true` turns off Claude Code's client-side context-window
-auto-compaction so the hosted Subconscious model manages context itself.
+auto-compaction. Claude Code only auto-detects a model's context window for
+first-party Anthropic endpoints, so on a custom `ANTHROPIC_BASE_URL` it falls
+back to a hardcoded 200K default and would compact at the wrong threshold.
+Rather than pin a window, we disable compaction entirely: Subconscious prunes
+context server-side, so the client never needs to compact.
