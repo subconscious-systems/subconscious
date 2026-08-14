@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "type": "command",
+        "command": "HOOK_SH_PATH",
+        "timeout": 2
+      }
+    ],
+    "PreCompact": [
+      {
+        "type": "command",
+        "command": "HOOK_SH_PATH",
+        "timeout": 2
+      }
+    ]
+  }
+}

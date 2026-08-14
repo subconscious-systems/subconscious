@@ -23,16 +23,16 @@
       "name": "Aider",
       "protocol": "openai",
       "install": "python3 -m pip install aider-install && aider-install",
-      "launch": "aider --model openai/subconscious/tim-qwen3.6-27b",
+      "launch": "aider --model openai/subconscious/glm-5.2",
       "env": {
-        "OPENAI_API_BASE": "https://api.subconscious.dev/v1",
+        "OPENAI_API_BASE": "https://api-dev.subconscious.dev/v1",
         "OPENAI_API_KEY": "your_key"
       }
     }
   },
   "setup": [
-    "export OPENAI_API_BASE=https://api.subconscious.dev/v1",
+    "export OPENAI_API_BASE=https://api-dev.subconscious.dev/v1",
     "export OPENAI_API_KEY=your_key",
-    "aider --model openai/subconscious/tim-qwen3.6-27b"
+    "aider --model openai/subconscious/glm-5.2"
   ]
 }

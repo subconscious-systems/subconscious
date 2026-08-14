@@ -9,7 +9,7 @@ Assumes Codex is already installed.
 export SUBCONSCIOUS_API_KEY=your_key            # https://subconscious.dev/platform
 codex \
   -c model_providers.subconscious.name=Subconscious \
-  -c model_providers.subconscious.base_url=https://api.subconscious.dev/v1 \
+  -c model_providers.subconscious.base_url=https://api-dev.subconscious.dev/v1 \
   -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY \
   -c model_provider=subconscious \
   -c model=subconscious/tim-qwen3.6-27b

@@ -2,7 +2,7 @@
  * Subconscious OpenAI-compatible client (singleton).
  *
  * Subconscious exposes an OpenAI Chat Completions API at:
- *   https://api.subconscious.dev/v1
+ *   https://api-dev.subconscious.dev/v1
  *
  * Use the official `openai` npm package and point `baseURL` at the
  * Subconscious endpoint. The only model is `subconscious/tim-qwen3.6-27b`.
@@ -12,7 +12,7 @@
 
 import OpenAI from "openai";
 
-export const SUBCONSCIOUS_BASE_URL = "https://api.subconscious.dev/v1";
+export const SUBCONSCIOUS_BASE_URL = "https://api-dev.subconscious.dev/v1";
 export const SUBCONSCIOUS_MODEL = "subconscious/tim-qwen3.6-27b";
 
 let client: OpenAI | undefined;

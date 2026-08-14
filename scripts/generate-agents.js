@@ -27,6 +27,7 @@ function writeCliData() {
   const out = {
     _generated: 'Source of truth: agents/registry.json. Do not edit by hand.',
     ...registry,
+    agents: registry.agents.filter((agent) => agent.cli !== false),
   };
   const dest = path.join(CLI_BIN_DIR, 'registry.generated.json');
   fs.writeFileSync(dest, JSON.stringify(out, null, 2) + '\n');
@@ -84,6 +85,7 @@ function buildSetup(agent) {
 // --- 2. Examples: rewrite the generated portions of each package.json.
 function writeExamples() {
   for (const agent of registry.agents) {
+    if (!agent.exampleDir) continue;
     const pkgPath = path.join(EXAMPLES_DIR, agent.exampleDir, 'package.json');
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
 

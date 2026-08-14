@@ -5,7 +5,7 @@ OpenAI-compatible endpoint — just env vars and the `--model` flag. Assumes Aid
 is already installed.
 
 ```bash
-export OPENAI_API_BASE=https://api.subconscious.dev/v1
+export OPENAI_API_BASE=https://api-dev.subconscious.dev/v1
 export OPENAI_API_KEY=your_key                  # https://subconscious.dev/platform
 aider --model openai/subconscious/tim-qwen3.6-27b
 ```

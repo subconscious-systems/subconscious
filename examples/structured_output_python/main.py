@@ -17,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 load_dotenv()
 
-BASE_URL = "https://api.subconscious.dev/v1"
+BASE_URL = "https://api-dev.subconscious.dev/v1"
 MODEL = "subconscious/tim-qwen3.6-27b"
 
 _api_key = os.environ.get("SUBCONSCIOUS_API_KEY")

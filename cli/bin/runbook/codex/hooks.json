@@ -1,0 +1,29 @@
+{
+  "description": "Report Codex auto/manual compaction to the Subconscious API Gateway.",
+  "hooks": {
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_SH_PATH",
+            "timeout": 3,
+            "statusMessage": "Reporting compaction start"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HOOK_SH_PATH",
+            "timeout": 3,
+            "statusMessage": "Reporting compaction end"
+          }
+        ]
+      }
+    ]
+  }
+}

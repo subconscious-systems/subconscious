@@ -36,7 +36,7 @@ npm install openai
 pip install openai
 ```
 
-Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform). The base URL is `https://api.subconscious.dev/v1` and the model is `subconscious/tim-qwen3.6-27b`.
+Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform). The base URL is `https://api-dev.subconscious.dev/v1` and the default model is `subconscious/glm-5.2`.
 
 ### Run your first agent
 
@@ -46,12 +46,12 @@ Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/pla
 import OpenAI from 'openai';
 
 const client = new OpenAI({
-  baseURL: 'https://api.subconscious.dev/v1',
+  baseURL: 'https://api-dev.subconscious.dev/v1',
   apiKey: process.env.SUBCONSCIOUS_API_KEY,
 });
 
 const completion = await client.chat.completions.create({
-  model: 'subconscious/tim-qwen3.6-27b',
+  model: 'subconscious/glm-5.2',
   messages: [{ role: 'user', content: 'Explain what an API is in 3 sentences.' }],
 });
 
@@ -64,12 +64,12 @@ console.log(completion.choices[0].message.content);
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://api.subconscious.dev/v1",
+    base_url="https://api-dev.subconscious.dev/v1",
     api_key="your-api-key",
 )
 
 completion = client.chat.completions.create(
-    model="subconscious/tim-qwen3.6-27b",
+    model="subconscious/glm-5.2",
     messages=[{"role": "user", "content": "Explain what an API is in 3 sentences."}],
 )
 
@@ -80,7 +80,14 @@ print(completion.choices[0].message.content)
 
 ## Model
 
-There is one model: **`subconscious/tim-qwen3.6-27b`** — a fine-tuned Qwen-3.6 trained for recursive, tool-using reasoning, served behind an OpenAI-compatible endpoint. `/v1/models` reports `supported_features: ["tools", "json_mode", "structured_outputs", "reasoning"]`.
+Available models include:
+
+- **`subconscious/glm-5.2`** (default)
+- **`subconscious/tim-qwen3.6-27b`**
+- **`subconscious/deepseek-v4-flash-marathon`**
+
+They are served behind the OpenAI-compatible endpoint. `/v1/models` reports
+the supported features for each model.
 
 ## Tools
 
@@ -101,7 +108,7 @@ tools = [{
 }]
 
 resp = client.chat.completions.create(
-    model="subconscious/tim-qwen3.6-27b",
+    model="subconscious/glm-5.2",
     messages=[{"role": "user", "content": "What's the weather in Boston?"}],
     tools=tools,
 )
@@ -114,30 +121,55 @@ Want **MCP** tools? Connect to the MCP server client-side, convert its tools to 
 
 Developer-facing tooling for building on Subconscious:
 
-- **`cli/`** — `subconscious-cli`: log in and launch coding agents against your hosted Subconscious model
+- **`cli/`** — `subconscious-cli`: use `subc` to authenticate and run the packaged coding-agent integrations
 - **`examples/`** — runnable example agents and templates
 - **`create-subconscious-app/`** — scaffold a new project from any example
 - **`scripts/`** — repo tooling (example manifest generation)
 
 ## CLI
 
-Log in to Subconscious from your terminal, then launch your favorite coding agent against your hosted Subconscious model — no per-agent config required.
+Log in to Subconscious from your terminal, then launch or configure coding agents with the setup maintained in `ol-runbook`.
 
 ```bash
-npx subconscious-cli login          # sign in, saves your API key
-npx subconscious-cli claude-code    # launch Claude Code on Subconscious
+npm install -g subconscious-cli
+subc login                           # sign in, saves your API key
+subc claude                          # launch normal Claude Code on Subconscious
+subc setup                           # configure all six agent integrations
 ```
 
-`subconscious <agent>` resolves your saved API key, injects the env vars that point the agent at Subconscious, and exec's the real CLI — nothing is written to the agent's own config.
+`subc <agent>` resolves your saved API key and dispatches the packaged
+`ol-runbook` integration. Terminal agents, including Pi, launch directly;
+Cursor and Copilot run their user-level setup. Login also creates a secure
+default profile with all shared and per-agent runbook environment settings.
 
-| Command | Launches |
+| Command | Behavior |
 |---------|----------|
-| `subconscious claude-code` | Claude Code |
-| `subconscious open-code` | OpenCode |
-| `subconscious aider` | Aider |
-| `subconscious codex` | Codex CLI |
+| `subc claude` | Launch Claude Code |
+| `subc codex` | Launch Codex CLI |
+| `subc opencode` | Launch OpenCode |
+| `subc cursor` | Configure Cursor hooks |
+| `subc copilot` | Configure VS Code Copilot endpoint + hooks |
+| `subc pi` | Launch Pi using the provider configured by `subc setup` |
 
-Other commands: `logout` removes your saved key, `whoami` shows your current auth status. Keys are saved to `~/.subcon/config.json` (owner-read-only); `SUBCONSCIOUS_API_KEY` takes precedence. See [`cli/README.md`](cli/) for details.
+Use `subc help <agent>` or `subc <agent> --help` for agent-specific integration
+help. Use `subc settings` to interactively choose/create a profile and edit its
+shared or per-agent settings; the wizard validates values and masks API keys.
+Agent-specific credentials override the shared profile key and also work when
+no shared key is configured.
+
+Persistent setup can apply to every integration or one agent at a time:
+
+```bash
+subc setup
+subc setup codex status
+subc setup opencode uninstall
+```
+
+Other commands: `update-key <key>` replaces your saved key, `update-url <url>`
+automatically changes the active profile's gateway, `logout` removes the key,
+and `whoami` shows your current auth status. Keys are saved to
+`~/.subconscious/config.json` (owner-read-only); `SUBCONSCIOUS_API_KEY` takes
+precedence. See [`cli/README.md`](cli/) for details.
 
 ## Examples
 

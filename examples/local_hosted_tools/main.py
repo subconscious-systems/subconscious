@@ -25,7 +25,7 @@ from tools import OPENAI_TOOL_SPECS, TOOL_FUNCTIONS
 
 load_dotenv()
 
-BASE_URL = "https://api.subconscious.dev/v1"
+BASE_URL = "https://api-dev.subconscious.dev/v1"
 MODEL = "subconscious/tim-qwen3.6-27b"
 MAX_STEPS = 12
 WORKSPACE = Path(__file__).parent / "workspace"

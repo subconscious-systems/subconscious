@@ -116,7 +116,7 @@ add one line.** (Tools work this way too — see [Tools](#tools) above.)
 ## How tools work (why it's built this way)
 
 Subconscious exposes an **OpenAI-compatible** chat endpoint
-(`https://api.subconscious.dev/v1`, model `subconscious/tim-qwen3.6-27b`). It speaks
+(`https://api-dev.subconscious.dev/v1`, model `subconscious/tim-qwen3.6-27b`). It speaks
 the protocol you already know — including standard **function tools**: you pass a
 `tools` array and the model replies with `tool_calls`.
 

@@ -1,9 +1,9 @@
 /**
  * Coding-agent launcher.
  *
- * `subconscious <agent>` resolves your saved API key, injects the env vars that
- * point the agent at your hosted Subconscious model, and exec's the real CLI —
- * nothing is written to the agent's own config.
+ * `subc <agent>` resolves your saved API key and dispatches the vendored
+ * ol-runbook integration. Terminal agents launch ephemerally; IDE/config-based
+ * agents run their setup scripts.
  *
  * There is NO hardcoded agent data here: everything is read from
  * `registry.generated.json` (shipped under `bin/`), which is generated from the
@@ -17,14 +17,21 @@ import { constants as fsConstants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
 import { getApiKey } from './auth.js';
+import { profileSettingsForAgent, resolvedProfileValues } from './profiles.js';
 
 // --- Registry (single source of truth, generated copy shipped in the package).
 const registry = JSON.parse(
   readFileSync(new URL('./registry.generated.json', import.meta.url), 'utf-8'),
 );
 const DEFAULTS = registry.defaults;
+const SUPPORTED_MODELS =
+  Array.isArray(DEFAULTS.models) && DEFAULTS.models.length
+    ? DEFAULTS.models
+    : [DEFAULTS.model];
+const RUNBOOK_DIR = fileURLToPath(new URL('./runbook/', import.meta.url));
 
 // --- Token substitution — same rules as scripts/lib/registry.js.
 // Replaces {apiKey}, {model}, {baseUrl}, {baseUrlV1}. NEVER touches {env:...}.
@@ -73,13 +80,16 @@ function resolveInstall(install) {
 // --- Build the in-memory registry + alias index.
 // Each agent gets a resolved per-OS `install` (string) plus optional
 // `installFallback`, while keeping the original per-OS object available.
-const AGENTS = registry.agents.map((agent) => {
-  const { command, fallback } = resolveInstall(agent.install);
-  return { ...agent, install: command, installFallback: fallback };
-});
+const AGENTS = registry.agents
+  .filter((agent) => agent.cli !== false)
+  .map((agent) => {
+    const { command, fallback } = resolveInstall(agent.install);
+    return { ...agent, install: command, installFallback: fallback };
+  });
 const BY_ALIAS = new Map();
 for (const agent of AGENTS) {
   BY_ALIAS.set(agent.id, agent);
+  if (agent.command) BY_ALIAS.set(agent.command, agent);
   for (const alias of agent.aliases || []) BY_ALIAS.set(alias, agent);
 }
 
@@ -88,7 +98,169 @@ export function resolveAgent(name) {
 }
 
 export function agentList() {
-  return AGENTS.map((a) => ({ name: a.name, alias: a.id }));
+  return AGENTS.map((a) => ({
+    name: a.name,
+    alias: a.command || a.id,
+    action: a.runbook?.mode === 'setup' ? 'Configure' : 'Launch',
+  }));
+}
+
+export function setupAgentList() {
+  return AGENTS.filter((agent) => agent.runbook?.setupScript);
+}
+
+const SETUP_ACTIONS = new Set(['install', 'status', 'uninstall']);
+const SETUP_HELPER_ACTIONS = new Set(['use', 'env', 'unset']);
+const SETUP_HELPER_AGENT_IDS = new Set(['claude-code', 'codex']);
+
+export function parseSetupRequest(argv = []) {
+  const [first, ...rest] = argv;
+  if (!first || SETUP_ACTIONS.has(first)) {
+    if (rest.length) {
+      throw new Error('Agent-specific setup options require a target agent');
+    }
+    return {
+      agents: setupAgentList(),
+      args: first ? [first] : [],
+      action: first || 'install',
+      targeted: false,
+    };
+  }
+
+  const agent = resolveAgent(first);
+  if (!agent) throw new Error(`Unknown coding agent or setup action: ${first}`);
+  if (!agent.runbook?.setupScript) {
+    throw new Error(`No persistent setup integration is available for ${agent.name}`);
+  }
+
+  const requestedAction = rest[0];
+  const helperAction = SETUP_HELPER_ACTIONS.has(requestedAction);
+  if (helperAction && !SETUP_HELPER_AGENT_IDS.has(agent.id)) {
+    throw new Error(`${agent.name} does not support the '${requestedAction}' setup action`);
+  }
+  if (
+    requestedAction &&
+    !requestedAction.startsWith('-') &&
+    !SETUP_ACTIONS.has(requestedAction) &&
+    !helperAction
+  ) {
+    throw new Error(`Unknown setup action for ${agent.name}: ${requestedAction}`);
+  }
+
+  return {
+    agents: [agent],
+    args: rest,
+    action:
+      SETUP_ACTIONS.has(requestedAction) || helperAction ? requestedAction : 'install',
+    targeted: true,
+  };
+}
+
+const AGENT_HELP = {
+  'claude-code': {
+    usage: 'subc [--profile NAME] claude [integration options] [Claude arguments...]',
+    behavior: 'Launches Claude Code with the active Subconscious profile and model picker.',
+    options: [
+      ['--model MODEL', 'Override the profile model for this launch'],
+      ['--compact-window N', 'Override the Claude auto-compact window'],
+      ['--max-context-tokens N', 'Override the maximum context tokens'],
+      ['-- ARGS...', 'Pass remaining arguments to Claude Code'],
+    ],
+  },
+  codex: {
+    usage: 'subc [--profile NAME] codex [integration options] [Codex arguments...]',
+    behavior: 'Launches Codex with a temporary Subconscious provider catalog and compaction hooks.',
+    options: [
+      ['--model MODEL', 'Override the profile model for this launch'],
+      ['--context-window N', 'Override catalog context_window'],
+      ['--max-context-window N', 'Override catalog max_context_window'],
+      ['--auto-compact-token-limit N', 'Override the automatic compaction threshold'],
+      ['--reasoning-effort LEVEL', 'Use none, low, medium, high, or max'],
+      ['--external-tools', 'Enable Codex apps/plugins for this launch'],
+      ['--subagents', 'Use the pinned legacy Codex subagent mode'],
+      ['-- ARGS...', 'Pass remaining arguments to Codex'],
+    ],
+  },
+  opencode: {
+    usage: 'subc [--profile NAME] opencode [OpenCode arguments...]',
+    behavior: 'Launches OpenCode with an ephemeral provider containing every Subconscious model.',
+    options: [
+      ['--model MODEL', 'Override the profile model for this launch'],
+      ['ARGS...', 'Pass arguments directly to OpenCode'],
+    ],
+  },
+  cursor: {
+    usage: 'subc [--profile NAME] cursor [install|status|uninstall]',
+    behavior: 'Manages Cursor correlation hooks; model endpoint setup is completed in Cursor Settings.',
+    options: [
+      ['install', 'Install or update the Cursor hooks (default action)'],
+      ['status', 'Inspect the installed hook configuration'],
+      ['uninstall', 'Remove only the Subconscious Cursor hooks'],
+    ],
+  },
+  copilot: {
+    usage: 'subc [--profile NAME] copilot [install|status|uninstall]',
+    behavior: 'Manages the VS Code model provider and Copilot correlation hooks.',
+    options: [
+      ['install', 'Install or update the provider and hooks (default action)'],
+      ['status', 'Inspect the installed provider and hooks'],
+      ['uninstall', 'Remove the Subconscious provider and hooks'],
+    ],
+  },
+  pi: {
+    usage: 'subc [--profile NAME] pi [Pi arguments...]',
+    behavior: 'Launches Pi read-only against the provider previously configured by subc setup.',
+    options: [
+      ['--model MODEL', 'Override the profile model for this launch'],
+      ['ARGS...', 'Pass arguments directly to Pi'],
+    ],
+  },
+};
+
+export function isAgentHelpRequest(argv = []) {
+  return ['help', '-h', '--help'].includes(argv[0]);
+}
+
+function displayProfileValue(setting, value, values) {
+  if (setting.type === 'secret') {
+    if (value) return '(set)';
+    return setting.key !== 'API_KEY' && values.API_KEY ? '(shared key)' : '(not set)';
+  }
+  return value || '(auto)';
+}
+
+export function printAgentHelp(agent, profile) {
+  const details = AGENT_HELP[agent.id] || {
+    usage: `subc [--profile NAME] ${agent.command || agent.id} [arguments...]`,
+    behavior: agent.description,
+    options: [],
+  };
+  const settings = profileSettingsForAgent(agent.id);
+  const values = resolvedProfileValues(profile);
+  const optionWidth = Math.max(0, ...details.options.map(([option]) => option.length));
+  const settingWidth = Math.max(0, ...settings.map((setting) => setting.key.length));
+
+  console.log(`\n  ${c.bold}${agent.name} + Subconscious${c.reset}\n`);
+  console.log(`  ${details.behavior}\n`);
+  console.log(`  ${c.bold}Usage${c.reset}\n    ${details.usage}\n`);
+  if (details.options.length) {
+    console.log(`  ${c.bold}Commands and options${c.reset}`);
+    for (const [option, description] of details.options) {
+      console.log(`    ${c.cyan}${option.padEnd(optionWidth)}${c.reset}  ${description}`);
+    }
+    console.log();
+  }
+  console.log(`  ${c.bold}Profile settings${c.reset} ${c.dim}(${profile?.name || 'default'})${c.reset}`);
+  for (const setting of settings) {
+    const value = displayProfileValue(setting, values[setting.key], values);
+    console.log(`    ${c.cyan}${setting.key.padEnd(settingWidth)}${c.reset}  ${value}`);
+    console.log(`    ${' '.repeat(settingWidth)}  ${c.dim}${setting.description}${c.reset}`);
+  }
+  console.log(`\n  Edit these interactively with ${c.cyan}subc --profile ${profile?.name || 'default'} settings${c.reset}.`);
+  if (agent.runbook?.setupScript) {
+    console.log(`  Apply persistent integration setup with ${c.cyan}subc setup ${agent.command || agent.id}${c.reset}.`);
+  }
+  console.log();
 }
 
 /**
@@ -97,8 +269,12 @@ export function agentList() {
  *   baseUrl   — SUBCONSCIOUS_BASE_URL → registry default
  *   baseUrlV1 — `${baseUrl}/v1` (so an override flows to both)
  */
-function buildContext(apiKey, model) {
-  const baseUrl = process.env.SUBCONSCIOUS_BASE_URL?.trim() || DEFAULTS.baseUrl;
+function buildContext(apiKey, model, profile) {
+  const baseUrl = (
+    process.env.SUBCONSCIOUS_BASE_URL?.trim() ||
+    profile?.values?.GATEWAY_URL?.trim() ||
+    DEFAULTS.baseUrl
+  ).replace(/\/+$/, '');
   return { apiKey, model, baseUrl, baseUrlV1: `${baseUrl}/v1` };
 }
 
@@ -107,8 +283,9 @@ function buildContext(apiKey, model) {
  * args (so it sets the Subconscious model rather than reaching the agent).
  * Falls back to SUBCONSCIOUS_MODEL, then the registry default.
  */
-function extractModel(argv) {
-  let model = process.env.SUBCONSCIOUS_MODEL?.trim() || DEFAULTS.model;
+function extractModel(argv, profile) {
+  let model =
+    process.env.SUBCONSCIOUS_MODEL?.trim() || profile?.values?.MODEL?.trim() || DEFAULTS.model;
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -253,6 +430,16 @@ async function ensureInstalled(agent) {
   const existing = await resolveBinPath(agent.bin);
   if (existing) return existing;
 
+  // Agents without an installer are launch-only. Their setup integration may
+  // configure the provider, but `subc <agent>` must never install the binary.
+  if (!agent.install) {
+    console.error(
+      `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${agent.bin}\` not found on PATH).${c.reset}`,
+    );
+    console.error(`  Install ${agent.name} separately, then re-run ${c.cyan}subc ${agent.command || agent.id}${c.reset}.\n`);
+    process.exit(127);
+  }
+
   const interactive = process.stdin.isTTY && process.stdout.isTTY;
 
   if (!interactive) {
@@ -296,30 +483,213 @@ async function ensureInstalled(agent) {
 
   console.error(
     `\n  ${c.dim}Installed ${agent.name}, but it isn't on this shell's PATH yet. ` +
-      `Open a new terminal (or add a bin dir to PATH) and re-run \`subconscious ${agent.id}\`.${c.reset}\n`,
+      `Open a new terminal (or add a bin dir to PATH) and re-run \`subc ${agent.command || agent.id}\`.${c.reset}\n`,
   );
   process.exit(0);
+}
+
+/** Resolve and validate a script inside the packaged ol-runbook snapshot. */
+function runbookScriptPath(agent, relativeScript = agent.runbook.script) {
+  const script = path.resolve(RUNBOOK_DIR, relativeScript);
+  const relative = path.relative(RUNBOOK_DIR, script);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Invalid runbook script path for ${agent.name}`);
+  }
+  return script;
+}
+
+/** Spawn a runbook script and mirror its exit status/signals. */
+function spawnRunbook(agent, args, env, relativeScript) {
+  return new Promise((resolve, reject) => {
+    const script = runbookScriptPath(agent, relativeScript);
+    const child = spawn('bash', [script, ...args], { stdio: 'inherit', env });
+
+    child.on('error', (error) => {
+      if (error.code === 'ENOENT') {
+        reject(
+          new Error('The ol-runbook integrations require `bash`, but it was not found on PATH.'),
+        );
+        return;
+      }
+      reject(error);
+    });
+
+    child.on('exit', (code, signal) => {
+      if (signal) {
+        process.kill(process.pid, signal);
+        return;
+      }
+      if (code) process.exitCode = code;
+      resolve(code ?? 0);
+    });
+  });
+}
+
+function isSetupWithoutAuth(argv) {
+  return ['status', 'uninstall', 'use', 'env', 'unset', '-h', '--help'].includes(argv[0]);
+}
+
+function optionValue(argv, name) {
+  const index = argv.indexOf(name);
+  return index >= 0 ? argv[index + 1]?.trim() || null : null;
+}
+
+function agentApiKeySetting(agent) {
+  return profileSettingsForAgent(agent.id).find(
+    (setting) => setting.key !== 'API_KEY' && setting.key.endsWith('_API_KEY'),
+  );
+}
+
+export async function getAgentApiKey(profile, agent) {
+  const specificSetting = agentApiKeySetting(agent);
+  const specificKey = specificSetting?.key;
+  const specificEnvKey = specificKey && process.env[specificKey]?.trim();
+  if (specificEnvKey) return { key: specificEnvKey, source: `${specificKey} env var` };
+
+  const sharedEnvKey = process.env.SUBCONSCIOUS_API_KEY?.trim();
+  if (sharedEnvKey) {
+    return { key: sharedEnvKey, source: 'SUBCONSCIOUS_API_KEY env var' };
+  }
+
+  const profileKey = specificKey && profile?.values?.[specificKey]?.trim();
+  if (profileKey) return { key: profileKey, source: profile.path };
+
+  return getApiKey(profile);
+}
+
+async function requireApiKey(profile, agent) {
+  const auth = await getAgentApiKey(profile, agent);
+  if (auth) return auth.key;
+  const login =
+    profile?.name && profile.name !== 'default'
+      ? `subc --profile ${profile.name} login`
+      : 'subc login';
+
+  console.error(`\n  ${c.red}Not logged in.${c.reset}`);
+  console.error(
+    `  Run ${c.cyan}${login}${c.reset} (or set ${c.dim}SUBCONSCIOUS_API_KEY${c.reset}) first.\n`,
+  );
+  process.exitCode = 1;
+  return null;
+}
+
+const CLAUDE_MODEL_PICKER_KEYS = [
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME',
+  'ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL_NAME',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION',
+];
+
+function claudeModelPickerEnv(agent, ctx) {
+  if (agent.id !== 'claude-code') return {};
+  const configured = substitute(agent.env || {}, ctx);
+  return Object.fromEntries(
+    CLAUDE_MODEL_PICKER_KEYS.map((key) => [key, configured[key]]).filter(([, value]) => value),
+  );
+}
+
+function runbookEnv(apiKey, model, binDir, profile, agent) {
+  const ctx = buildContext(apiKey, model, profile);
+  const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
+  const specificApiKey = agentApiKeySetting(agent)?.key;
+  return {
+    ...(profile?.values || {}),
+    ...process.env,
+    ...claudeModelPickerEnv(agent, ctx),
+    GATEWAY_URL: ctx.baseUrl,
+    API_KEY: apiKey,
+    ...(specificApiKey ? { [specificApiKey]: apiKey } : {}),
+    MODEL: model,
+    SUBCONSCIOUS_MODELS: SUPPORTED_MODELS.join('\n'),
+    MBTA_ENV_FILE: os.devNull,
+    PATH: augmentPath(extraDirs),
+  };
+}
+
+async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runbook.script) {
+  if (isSetupWithoutAuth(argv)) {
+    return spawnRunbook(agent, argv, {
+      ...(profile?.values || {}),
+      ...process.env,
+      MBTA_ENV_FILE: os.devNull,
+    }, relativeScript);
+  }
+
+  const { model, rest } = extractModel(argv, profile);
+  const apiKey = optionValue(rest, '--api-key') || (await requireApiKey(profile, agent));
+  if (!apiKey) return 1;
+  const ctx = buildContext(apiKey, model, profile);
+  const authArgs = substitute(agent.runbook.authArgs || [], ctx);
+
+  console.log(
+    `  ${c.dim}Configuring ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}for Subconscious (${model})${c.reset}\n`,
+  );
+  const code = await spawnRunbook(
+    agent,
+    [...authArgs, ...rest],
+    runbookEnv(apiKey, model, undefined, profile, agent),
+    relativeScript,
+  );
+  const installed = !['status', 'uninstall'].includes(rest[0]);
+  if (code !== 0 || !installed) return code;
+
+  if (agent.id === 'cursor') {
+    const modelList = SUPPORTED_MODELS.map(
+      (supportedModel) => `    ${c.cyan}${supportedModel}${c.reset}`,
+    ).join('\n');
+    console.log(
+      `\n  ${c.bold}Finish in Cursor Settings${c.reset}\n` +
+        `  Enable OpenAI API Key Override, then use:\n` +
+        `    Base URL: ${c.cyan}${ctx.baseUrl}${c.reset}\n` +
+        `  Add the available custom models:\n${modelList}\n` +
+        `  Select ${c.cyan}${model}${c.reset} for this profile.\n` +
+        `  Paste your Subconscious API key there, then fully restart Cursor.\n`,
+    );
+  } else if (agent.id === 'pi') {
+    console.log(`\n  ${c.dim}Start a fresh session with ${c.reset}${c.cyan}subc pi${c.reset}${c.dim}.${c.reset}\n`);
+  }
+  return code;
 }
 
 /**
  * Launch a coding agent against Subconscious. `argv` is everything after the
  * agent name; unknown flags pass straight through to the underlying CLI.
  */
-export async function runAgent(agent, argv) {
-  const { model, rest } = extractModel(argv);
-
-  const auth = await getApiKey();
-  if (!auth) {
-    console.error(`\n  ${c.red}Not logged in.${c.reset}`);
-    console.error(
-      `  Run ${c.cyan}subconscious login${c.reset} (or set ${c.dim}SUBCONSCIOUS_API_KEY${c.reset}) first.\n`,
-    );
-    process.exit(1);
+export async function runAgent(agent, argv, options = {}) {
+  const profile = options.profile;
+  if (options.setup) {
+    if (!agent.runbook?.setupScript) {
+      throw new Error(`No setup integration is available for ${agent.name}`);
+    }
+    return runRunbookSetup(agent, argv, profile, agent.runbook.setupScript);
   }
+  if (isAgentHelpRequest(argv)) {
+    printAgentHelp(agent, profile);
+    return 0;
+  }
+  if (agent.runbook?.mode === 'setup') {
+    return runRunbookSetup(agent, argv, profile);
+  }
+
+  const { model, rest } = extractModel(argv, profile);
+  const apiKey = await requireApiKey(profile, agent);
+  if (!apiKey) return 1;
 
   const binDir = await ensureInstalled(agent);
 
-  const ctx = buildContext(auth.key, model);
+  if (agent.runbook?.mode === 'launch') {
+    console.log(
+      `  ${c.dim}Launching ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}on Subconscious ${c.reset}${c.dim}(${model})${c.reset}\n`,
+    );
+    return spawnRunbook(agent, rest, runbookEnv(apiKey, model, binDir, profile, agent));
+  }
+
+  const ctx = buildContext(apiKey, model, profile);
   const launch = substituteString(agent.launch, ctx);
   const [bin, ...launchArgs] = launch.split(' ').filter(Boolean);
   const envMap = substitute(agent.env, ctx);
@@ -328,7 +698,12 @@ export async function runAgent(agent, argv) {
   // agent (and any subprocess it spawns) resolves correctly this session, even
   // if it was installed into a dir not yet on the parent shell's PATH.
   const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
-  const env = { ...process.env, ...envMap, PATH: augmentPath(extraDirs) };
+  const env = {
+    ...(profile?.values || {}),
+    ...process.env,
+    ...envMap,
+    PATH: augmentPath(extraDirs),
+  };
   const args = [...launchArgs, ...rest];
 
   console.log(
