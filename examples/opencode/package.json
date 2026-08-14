@@ -27,15 +27,15 @@
       "configEnv": "OPENCODE_CONFIG_CONTENT",
       "env": {
         "SUBCONSCIOUS_API_KEY": "your_key",
-        "SUBCONSCIOUS_GATEWAY_URL": "https://api-dev.subconscious.dev",
-        "OPENCODE_CONFIG_CONTENT": "{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"subconscious\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Subconscious Gateway\",\"options\":{\"baseURL\":\"https://api-dev.subconscious.dev/v1\",\"apiKey\":\"{env:SUBCONSCIOUS_API_KEY}\",\"headers\":{\"x-subconscious-client\":\"opencode\"}},\"models\":{\"subconscious/glm-5.2\":{\"name\":\"subconscious/glm-5.2\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/tim-qwen3.6-27b\":{\"name\":\"subconscious/tim-qwen3.6-27b\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/deepseek-v4-flash-marathon\":{\"name\":\"subconscious/deepseek-v4-flash-marathon\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}}}}},\"model\":\"subconscious/subconscious/glm-5.2\"}"
+        "SUBCONSCIOUS_GATEWAY_URL": "https://api.subconscious.dev",
+        "OPENCODE_CONFIG_CONTENT": "{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"subconscious\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Subconscious Gateway\",\"options\":{\"baseURL\":\"https://api.subconscious.dev/v1\",\"apiKey\":\"{env:SUBCONSCIOUS_API_KEY}\",\"headers\":{\"x-subconscious-client\":\"opencode\"}},\"models\":{\"subconscious/glm-5.2\":{\"name\":\"subconscious/glm-5.2\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/tim-qwen3.6-27b\":{\"name\":\"subconscious/tim-qwen3.6-27b\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/deepseek-v4-flash-marathon\":{\"name\":\"subconscious/deepseek-v4-flash-marathon\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}}}}},\"model\":\"subconscious/subconscious/glm-5.2\"}"
       }
     }
   },
   "setup": [
     "export SUBCONSCIOUS_API_KEY=your_key",
-    "export SUBCONSCIOUS_GATEWAY_URL=https://api-dev.subconscious.dev",
-    "export OPENCODE_CONFIG_CONTENT='{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"subconscious\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Subconscious Gateway\",\"options\":{\"baseURL\":\"https://api-dev.subconscious.dev/v1\",\"apiKey\":\"{env:SUBCONSCIOUS_API_KEY}\",\"headers\":{\"x-subconscious-client\":\"opencode\"}},\"models\":{\"subconscious/glm-5.2\":{\"name\":\"subconscious/glm-5.2\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/tim-qwen3.6-27b\":{\"name\":\"subconscious/tim-qwen3.6-27b\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/deepseek-v4-flash-marathon\":{\"name\":\"subconscious/deepseek-v4-flash-marathon\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}}}}},\"model\":\"subconscious/subconscious/glm-5.2\"}'",
+    "export SUBCONSCIOUS_GATEWAY_URL=https://api.subconscious.dev",
+    "export OPENCODE_CONFIG_CONTENT='{\"$schema\":\"https://opencode.ai/config.json\",\"provider\":{\"subconscious\":{\"npm\":\"@ai-sdk/openai-compatible\",\"name\":\"Subconscious Gateway\",\"options\":{\"baseURL\":\"https://api.subconscious.dev/v1\",\"apiKey\":\"{env:SUBCONSCIOUS_API_KEY}\",\"headers\":{\"x-subconscious-client\":\"opencode\"}},\"models\":{\"subconscious/glm-5.2\":{\"name\":\"subconscious/glm-5.2\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/tim-qwen3.6-27b\":{\"name\":\"subconscious/tim-qwen3.6-27b\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}},\"subconscious/deepseek-v4-flash-marathon\":{\"name\":\"subconscious/deepseek-v4-flash-marathon\",\"tools\":true,\"limit\":{\"context\":5000000,\"output\":65536}}}}},\"model\":\"subconscious/subconscious/glm-5.2\"}'",
     "opencode"
   ]
 }

@@ -70,7 +70,7 @@ ${agents}
   ${c.bold}Examples${c.reset}
     ${c.dim}$${c.reset} subc login
     ${c.dim}$${c.reset} subc update-key sk-...
-    ${c.dim}$${c.reset} subc update-url https://api-dev.subconscious.dev
+    ${c.dim}$${c.reset} subc update-url https://api.subconscious.dev
     ${c.dim}$${c.reset} subc setup
     ${c.dim}$${c.reset} subc settings
     ${c.dim}$${c.reset} subc models

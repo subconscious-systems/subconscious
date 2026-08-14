@@ -42,7 +42,7 @@ Tools are defined in `lib/tools.ts` as plain async functions — no external inf
 ## Model
 
 The app uses the `subconscious/tim-qwen3.6-27b` model via the Subconscious OpenAI-compatible
-API at `https://api-dev.subconscious.dev/v1`. This is the only model — there is no engine
+API at `https://api.subconscious.dev/v1`. This is the only model — there is no engine
 selection. The API is fully compatible with the `openai` npm SDK and supports native
 OpenAI function tools (`tools` / `tool_calls`).
 

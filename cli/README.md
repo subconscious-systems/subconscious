@@ -211,7 +211,7 @@ other catalogs. Cursor requires adding the three model IDs in its OpenAI API
 Key Override settings; `subc cursor` prints the complete list and the model
 selected by the active profile.
 
-The default gateway is `https://api-dev.subconscious.dev`. Profiles containing
+The default gateway is `https://api.subconscious.dev`. Profiles containing
 the former exact default (`https://api.subconscious.dev`) migrate automatically;
 custom gateway URLs are preserved. Override the active gateway with
 `SUBCONSCIOUS_BASE_URL`:
@@ -234,7 +234,7 @@ also maintains `~/.subconscious/config.json`.
 ```bash
 subc login
 subc update-key sk-new-key-...
-subc update-url https://api-dev.subconscious.dev
+subc update-url https://api.subconscious.dev
 subc whoami
 subc logout
 ```
@@ -256,7 +256,7 @@ set, it continues to override the updated saved key.
 command is needed:
 
 ```bash
-subc update-url https://api-dev.subconscious.dev
+subc update-url https://api.subconscious.dev
 ```
 
 If `SUBC_PROFILE` already selects a named profile, that active profile is

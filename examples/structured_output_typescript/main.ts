@@ -12,7 +12,7 @@ import * as readline from "node:readline/promises";
 import OpenAI from "openai";
 import { z } from "zod";
 
-const BASE_URL = "https://api-dev.subconscious.dev/v1";
+const BASE_URL = "https://api.subconscious.dev/v1";
 const MODEL = "subconscious/tim-qwen3.6-27b";
 const MAX_TOKENS = 512;
 

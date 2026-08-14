@@ -36,7 +36,7 @@ npm install openai
 pip install openai
 ```
 
-Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform). The base URL is `https://api-dev.subconscious.dev/v1` and the default model is `subconscious/glm-5.2`.
+Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform). The base URL is `https://api.subconscious.dev/v1` and the default model is `subconscious/glm-5.2`.
 
 ### Run your first agent
 
@@ -46,7 +46,7 @@ Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/pla
 import OpenAI from 'openai';
 
 const client = new OpenAI({
-  baseURL: 'https://api-dev.subconscious.dev/v1',
+  baseURL: 'https://api.subconscious.dev/v1',
   apiKey: process.env.SUBCONSCIOUS_API_KEY,
 });
 
@@ -64,7 +64,7 @@ console.log(completion.choices[0].message.content);
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://api-dev.subconscious.dev/v1",
+    base_url="https://api.subconscious.dev/v1",
     api_key="your-api-key",
 )
 

@@ -18,7 +18,7 @@ the whole thing is one file, `main.py`.
 import openai
 
 client = openai.OpenAI(
-    base_url="https://api-dev.subconscious.dev/v1",   # ← the only difference from OpenAI
+    base_url="https://api.subconscious.dev/v1",   # ← the only difference from OpenAI
     api_key="sky_...",
 )
 

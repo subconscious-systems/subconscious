@@ -23,16 +23,16 @@
       "name": "Codex CLI",
       "protocol": "openai",
       "install": "npm i -g @openai/codex",
-      "launch": "codex -c model=subconscious/glm-5.2 -c model_provider=subconscious -c web_search=disabled -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url=https://api-dev.subconscious.dev/v1 -c model_providers.subconscious.wire_api=responses -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_providers.subconscious.stream_idle_timeout_ms=300000",
+      "launch": "codex -c model=subconscious/glm-5.2 -c model_provider=subconscious -c web_search=disabled -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url=https://api.subconscious.dev/v1 -c model_providers.subconscious.wire_api=responses -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_providers.subconscious.stream_idle_timeout_ms=300000",
       "env": {
         "SUBCONSCIOUS_API_KEY": "your_key",
-        "SUBCONSCIOUS_GATEWAY_URL": "https://api-dev.subconscious.dev"
+        "SUBCONSCIOUS_GATEWAY_URL": "https://api.subconscious.dev"
       }
     }
   },
   "setup": [
     "export SUBCONSCIOUS_API_KEY=your_key",
-    "export SUBCONSCIOUS_GATEWAY_URL=https://api-dev.subconscious.dev",
-    "codex -c model=subconscious/glm-5.2 -c model_provider=subconscious -c web_search=disabled -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url=https://api-dev.subconscious.dev/v1 -c model_providers.subconscious.wire_api=responses -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_providers.subconscious.stream_idle_timeout_ms=300000"
+    "export SUBCONSCIOUS_GATEWAY_URL=https://api.subconscious.dev",
+    "codex -c model=subconscious/glm-5.2 -c model_provider=subconscious -c web_search=disabled -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url=https://api.subconscious.dev/v1 -c model_providers.subconscious.wire_api=responses -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_providers.subconscious.stream_idle_timeout_ms=300000"
   ]
 }

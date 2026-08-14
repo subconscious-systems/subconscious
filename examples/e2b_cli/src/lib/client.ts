@@ -8,7 +8,7 @@
 
 import OpenAI from "openai";
 
-export const DEFAULT_BASE_URL = "https://api-dev.subconscious.dev/v1";
+export const DEFAULT_BASE_URL = "https://api.subconscious.dev/v1";
 export const DEFAULT_MODEL = "subconscious/tim-qwen3.6-27b";
 
 /**

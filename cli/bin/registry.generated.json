@@ -7,8 +7,8 @@
       "subconscious/tim-qwen3.6-27b",
       "subconscious/deepseek-v4-flash-marathon"
     ],
-    "baseUrl": "https://api-dev.subconscious.dev",
-    "baseUrlV1": "https://api-dev.subconscious.dev/v1",
+    "baseUrl": "https://api.subconscious.dev",
+    "baseUrlV1": "https://api.subconscious.dev/v1",
     "keyPlaceholder": "your_key",
     "platformUrl": "https://subconscious.dev/platform"
   },

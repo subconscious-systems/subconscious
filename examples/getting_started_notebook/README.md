@@ -5,7 +5,7 @@ Interactive Colab notebook to learn Subconscious from scratch — no experience 
 <a href="https://colab.research.google.com/github/subconscious-systems/subconscious/blob/main/examples/getting_started_notebook/Subconscious%20Quickstart.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
 
 Subconscious is **OpenAI-compatible**, so the notebook uses the official `openai`
-SDK pointed at `https://api-dev.subconscious.dev/v1`.
+SDK pointed at `https://api.subconscious.dev/v1`.
 
 ## What's Inside
 

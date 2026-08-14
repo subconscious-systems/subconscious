@@ -68,7 +68,7 @@ test('profiles are created securely and preserve agent-specific settings', async
   assert.equal(created.exists, true);
   assert.equal(created.values.API_KEY, 'shared-secret');
   assert.equal(created.values.MODEL, registry.defaults.model);
-  assert.equal(created.values.GATEWAY_URL, 'https://api-dev.subconscious.dev');
+  assert.equal(created.values.GATEWAY_URL, 'https://api.subconscious.dev');
   assert.equal((await fs.stat(created.path)).mode & 0o777, 0o600);
 
   const updated = await profiles.updateProfile('work', {
@@ -107,7 +107,7 @@ test('the former default gateway migrates while custom gateways are preserved', 
 
   const migrated = await profiles.loadProfile('legacy-default');
   const custom = await profiles.loadProfile('custom-gateway');
-  assert.equal(migrated.values.GATEWAY_URL, 'https://api-dev.subconscious.dev');
+  assert.equal(migrated.values.GATEWAY_URL, 'https://api.subconscious.dev');
   assert.equal(custom.values.GATEWAY_URL, 'https://gateway.example');
   assert.equal((await fs.stat(migrated.path)).mode & 0o777, 0o600);
 });

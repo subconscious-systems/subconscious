@@ -25,7 +25,7 @@ import type { GenericActionCtx, AnyDataModel } from "convex/server";
 // Constants
 // ---------------------------------------------------------------------------
 
-const SUBCONSCIOUS_BASE_URL = "https://api-dev.subconscious.dev/v1";
+const SUBCONSCIOUS_BASE_URL = "https://api.subconscious.dev/v1";
 const SUBCONSCIOUS_MODEL = "subconscious/tim-qwen3.6-27b";
 const MAX_TOOL_STEPS = 12;
 

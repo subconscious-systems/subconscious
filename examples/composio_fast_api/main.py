@@ -5,7 +5,7 @@ WHAT THIS TEACHES
 Subconscious is an OpenAI-compatible LLM API. If you know the OpenAI SDK, you
 already know Subconscious — you just point the client at a different base URL:
 
-    client = openai.OpenAI(base_url="https://api-dev.subconscious.dev/v1", api_key=...)
+    client = openai.OpenAI(base_url="https://api.subconscious.dev/v1", api_key=...)
 
 Subconscious runs the *model*, but it does NOT run tools for you. So to build an
 agent you run a small "tool loop" yourself (this file). The loop:
@@ -48,7 +48,7 @@ from composio.core.provider._openai import OpenAIProvider
 
 # ── Config ───────────────────────────────────────────────────────────────────
 
-SUBCONSCIOUS_BASE_URL = "https://api-dev.subconscious.dev/v1"
+SUBCONSCIOUS_BASE_URL = "https://api.subconscious.dev/v1"
 MODEL = "subconscious/tim-qwen3.6-27b"
 
 ENABLE_THINKING = False  # Subconscious-specific. On by default; off = fast, clean tool turns.
