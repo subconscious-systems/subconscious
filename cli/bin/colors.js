@@ -1,12 +1,24 @@
-// ANSI color helpers shared across the CLI.
+// ANSI color helpers shared across the CLI. Keep redirected output machine
+// readable and honor the standard NO_COLOR opt-out.
+const noColor = Object.prototype.hasOwnProperty.call(process.env, 'NO_COLOR');
+const forceColor =
+  process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '0';
+
+export const colorEnabled =
+  !noColor &&
+  process.env.TERM !== 'dumb' &&
+  (forceColor || process.stdout.isTTY === true);
+
+const ansi = (code) => (colorEnabled ? `\x1b[${code}m` : '');
+
 export const c = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  cyan: '\x1b[36m',
-  green: '\x1b[32m',
-  red: '\x1b[31m',
-  yellow: '\x1b[33m',
-  magenta: '\x1b[35m',
-  underline: '\x1b[4m',
+  reset: ansi(0),
+  bold: ansi(1),
+  dim: ansi(2),
+  cyan: ansi(36),
+  green: ansi(32),
+  red: ansi(31),
+  yellow: ansi(33),
+  magenta: ansi(35),
+  underline: ansi(4),
 };

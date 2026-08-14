@@ -1,10 +1,12 @@
 {
   "name": "subconscious-cli",
-  "version": "0.2.1",
-  "description": "CLI for Subconscious — log in and launch coding agents (Claude Code, OpenCode, Aider, Codex) on your hosted models",
+  "version": "0.3.0",
+  "description": "CLI for Subconscious — run Claude Code, Codex, OpenCode, Cursor, Copilot, and Pi with ol-runbook integrations",
   "bin": {
-    "subconscious": "./bin/cli.js",
-    "subconscious-cli": "./bin/cli.js"
+    "subc": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "node --test"
   },
   "files": [
     "bin"
@@ -24,11 +26,14 @@
     "cli",
     "api-key",
     "authentication",
+    "profiles",
     "coding-agent",
     "claude-code",
     "opencode",
-    "aider",
     "codex",
+    "cursor",
+    "copilot",
+    "pi",
     "launcher"
   ],
   "author": "Subconscious Systems",

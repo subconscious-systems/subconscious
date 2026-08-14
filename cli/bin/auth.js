@@ -8,7 +8,8 @@
  *  3. The web app authenticates the user, generates an API key, and
  *     delivers it back to the CLI via a cross-origin fetch to
  *     localhost:{port}/callback?token=...&state=...
- *  4. CLI verifies the `state` matches, saves the key to ~/.subcon/config.json.
+ *  4. CLI verifies the `state`, saves the key to ~/.subconscious/config.json,
+ *     and creates a coding-agent profile under ~/.subconscious/profiles/.
  *
  * Override SUBCONSCIOUS_URL env var for local development.
  */
@@ -20,9 +21,14 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { c } from './colors.js';
+import { clearProfileApiKey, DEFAULT_PROFILE, ensureProfile } from './profiles.js';
 
-const CONFIG_DIR = path.join(os.homedir(), '.subcon');
+const CONFIG_OVERRIDE = process.env.SUBC_CONFIG_DIR?.trim();
+const CONFIG_DIR = CONFIG_OVERRIDE || path.join(os.homedir(), '.subconscious');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
+const LEGACY_CONFIG_FILE = CONFIG_OVERRIDE
+  ? null
+  : path.join(os.homedir(), '.subcon', 'config.json');
 // Defaults to production. Developers set SUBCONSCIOUS_URL=http://localhost:3000 for local dev.
 const PLATFORM_URL = process.env.SUBCONSCIOUS_URL || 'https://www.subconscious.dev';
 
@@ -32,6 +38,17 @@ async function loadConfig() {
   try {
     const content = await fs.readFile(CONFIG_FILE, 'utf-8');
     return JSON.parse(content);
+  } catch (error) {
+    if (error.code !== 'ENOENT' || !LEGACY_CONFIG_FILE) return {};
+  }
+
+  // One-way compatibility migration. Keep the old file untouched so this is
+  // recoverable, but all future writes go to ~/.subconscious.
+  try {
+    const content = await fs.readFile(LEGACY_CONFIG_FILE, 'utf-8');
+    const config = JSON.parse(content);
+    await saveConfig(config);
+    return config;
   } catch {
     return {};
   }
@@ -48,13 +65,20 @@ async function saveConfig(config) {
  * Resolve the active API key. The env var takes precedence over the saved
  * config so CI and per-shell overrides win. Returns null when unauthenticated.
  */
-export async function getApiKey() {
+export async function getApiKey(profile) {
   const envKey = process.env.SUBCONSCIOUS_API_KEY?.trim();
   if (envKey) return { key: envKey, source: 'SUBCONSCIOUS_API_KEY env var' };
 
+  const profileKey = profile?.values?.API_KEY?.trim();
+  if (profileKey) return { key: profileKey, source: profile.path };
+
+  // Named profiles are isolated: an empty/missing key must not silently fall
+  // back to the default credential and send traffic to the wrong account.
+  if (profile?.name && profile.name !== DEFAULT_PROFILE) return null;
+
   const config = await loadConfig();
   if (config.subconscious_api_key) {
-    return { key: config.subconscious_api_key, source: '~/.subcon/config.json' };
+    return { key: config.subconscious_api_key, source: '~/.subconscious/config.json' };
   }
   return null;
 }
@@ -231,15 +255,20 @@ h1{font-size:15px;font-weight:600;margin-bottom:4px;letter-spacing:-.01em}
 
 // ── Commands ────────────────────────────────────────────────────────────
 
-export async function loginCommand() {
-  const existing = await getApiKey();
+export async function loginCommand(_argv = [], options = {}) {
+  const profileName = options.profileName || DEFAULT_PROFILE;
+  const existing = await getApiKey(options.profile);
 
   if (existing) {
+    const profile = await ensureProfile(profileName, existing.key);
+    const logout =
+      profileName === DEFAULT_PROFILE ? 'subc logout' : `subc --profile ${profileName} logout`;
     const masked = existing.key.slice(0, 8) + '...' + existing.key.slice(-4);
     console.log(`\n${c.yellow}Already logged in.${c.reset}`);
     console.log(`  Key: ${c.dim}${masked}${c.reset}`);
+    console.log(`  Profile: ${c.dim}${profile.path}${c.reset}`);
     console.log(
-      `\n  Run ${c.cyan}subconscious logout${c.reset} first to switch accounts.\n`,
+      `\n  Run ${c.cyan}${logout}${c.reset} first to switch accounts.\n`,
     );
     return;
   }
@@ -283,14 +312,23 @@ export async function loginCommand() {
     clearInterval(spinner);
     process.stdout.write('\r' + ' '.repeat(50) + '\r');
 
-    const config = await loadConfig();
-    config.subconscious_api_key = result.token;
-    await saveConfig(config);
+    if (profileName === DEFAULT_PROFILE) {
+      const config = await loadConfig();
+      config.subconscious_api_key = result.token;
+      await saveConfig(config);
+    }
+    const profile = await ensureProfile(profileName, result.token);
 
     const masked = result.token.slice(0, 8) + '...' + result.token.slice(-4);
     console.log(`  ${c.green}${c.bold}✓ Logged in successfully!${c.reset}`);
     console.log(`  ${c.dim}Key: ${masked}${c.reset}`);
-    console.log(`  ${c.dim}Saved to ~/.subcon/config.json${c.reset}`);
+    if (profileName === DEFAULT_PROFILE) {
+      console.log(`  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`);
+    }
+    console.log(`  ${c.dim}Runbook profile: ${profile.path}${c.reset}`);
+    const setup =
+      profileName === DEFAULT_PROFILE ? 'subc setup' : `subc --profile ${profileName} setup`;
+    console.log(`  ${c.dim}Run ${setup} once to configure all coding agents.${c.reset}`);
     console.log();
   } catch (error) {
     clearInterval(spinner);
@@ -300,29 +338,65 @@ export async function loginCommand() {
   }
 }
 
-export async function logoutCommand() {
-  const config = await loadConfig();
+export async function updateApiKeyCommand(argv = [], options = {}) {
+  if (argv.length !== 1 || !argv[0]?.trim()) {
+    throw new Error('Usage: subc update-key <api-key>');
+  }
 
-  if (!config.subconscious_api_key) {
+  const key = argv[0].trim();
+  const profileName = options.profileName || DEFAULT_PROFILE;
+  const profile = await ensureProfile(profileName, key);
+
+  if (profileName === DEFAULT_PROFILE) {
+    const config = await loadConfig();
+    config.subconscious_api_key = key;
+    await saveConfig(config);
+  }
+
+  const masked = key.length <= 12 ? '********' : `${key.slice(0, 8)}...${key.slice(-4)}`;
+  console.log(`\n  ${c.green}${c.bold}✓ API key updated.${c.reset}`);
+  console.log(`  ${c.dim}Profile: ${profile.path}${c.reset}`);
+  console.log(`  ${c.dim}Key:     ${masked}${c.reset}`);
+  if (process.env.SUBCONSCIOUS_API_KEY?.trim()) {
+    console.log(
+      `\n  ${c.yellow}SUBCONSCIOUS_API_KEY is set and will override this saved key.${c.reset}`,
+    );
+  }
+  console.log();
+}
+
+export async function logoutCommand(_argv = [], options = {}) {
+  const profileName = options.profileName || DEFAULT_PROFILE;
+  const config = await loadConfig();
+  const clearedProfile = await clearProfileApiKey(profileName);
+  const clearSavedConfig = profileName === DEFAULT_PROFILE && config.subconscious_api_key;
+
+  if (!clearSavedConfig && !clearedProfile) {
     console.log(`\n  ${c.dim}Not logged in.${c.reset}\n`);
     return;
   }
 
-  delete config.subconscious_api_key;
-  await saveConfig(config);
+  if (clearSavedConfig) {
+    delete config.subconscious_api_key;
+    await saveConfig(config);
+  }
 
   console.log(
-    `\n  ${c.green}✓${c.reset} Logged out. API key removed from ${c.dim}~/.subcon/config.json${c.reset}\n`,
+    `\n  ${c.green}✓${c.reset} Logged out of profile '${profileName}'.${c.reset}\n`,
   );
 }
 
-export async function whoamiCommand() {
-  const auth = await getApiKey();
+export async function whoamiCommand(_argv = [], options = {}) {
+  const auth = await getApiKey(options.profile);
+  const profileFlag =
+    options.profileName && options.profileName !== DEFAULT_PROFILE
+      ? `--profile ${options.profileName} `
+      : '';
 
   if (!auth) {
     console.log(`\n  ${c.dim}Not logged in.${c.reset}`);
     console.log(
-      `  Run ${c.cyan}subconscious login${c.reset} to get started.\n`,
+      `  Run ${c.cyan}subc ${profileFlag}login${c.reset} to get started.\n`,
     );
     return;
   }
@@ -353,7 +427,7 @@ export async function whoamiCommand() {
       console.log(`  ${c.dim}Source: ${source}${c.reset}`);
       console.log();
       console.log(
-        `  Run ${c.cyan}subconscious logout${c.reset} then ${c.cyan}subconscious login${c.reset} to re-authenticate.`,
+        `  Run ${c.cyan}subc ${profileFlag}logout${c.reset} then ${c.cyan}subc ${profileFlag}login${c.reset} to re-authenticate.`,
       );
     }
   } catch {

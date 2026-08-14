@@ -24,7 +24,7 @@ header "Subconscious Package Release Helper"
 
 echo -e "  Which package are you releasing?"
 echo ""
-echo -e "    1) ${CYAN}subconscious-cli${RESET}        — CLI for login/logout/whoami"
+echo -e "    1) ${CYAN}subconscious-cli${RESET}        — subc auth + coding-agent launcher"
 echo -e "    2) ${CYAN}create-subconscious-app${RESET} — scaffolder (npx create-subconscious-app)"
 echo ""
 read -rp "  Enter 1 or 2: " choice

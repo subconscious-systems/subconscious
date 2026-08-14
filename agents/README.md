@@ -1,7 +1,7 @@
 # Agent registry — single source of truth
 
-`registry.json` is the **single source of truth** for every coding-agent
-config (install command, env vars, launch command) used across this repo.
+`registry.json` is the **single source of truth** for coding-agent metadata,
+CLI routing, install commands, and generated example setup blocks.
 
 Everything else is **generated** from it:
 
@@ -9,6 +9,10 @@ Everything else is **generated** from it:
 - Each example's `subconscious.agent` + `setup` blocks in
   `examples/<dir>/package.json`
 - `examples/manifest.json`
+
+The executable CLI integrations themselves are a vendored snapshot of
+`ol-runbook/coding-agents` under `cli/bin/runbook`. Each CLI-enabled registry
+entry points to its script with a `runbook` block.
 
 ## Editing
 
@@ -22,6 +26,10 @@ Do **not** hand-edit the generated CLI data or the `subconscious.agent` /
 `setup` blocks in the example `package.json` files — your changes will be
 overwritten on the next generate.
 
+Agents without an example omit `exampleDir`. Example-only agents use
+`"cli": false`. `command` selects the primary `subc <command>` spelling while
+`aliases` keeps alternate spellings.
+
 ## Tokens
 
 Values may contain placeholder tokens that consumers substitute:
@@ -33,13 +41,17 @@ Values may contain placeholder tokens that consumers substitute:
 | `{baseUrl}`    | `SUBCONSCIOUS_BASE_URL` / default           | real URL               |
 | `{baseUrlV1}`  | `${baseUrl}/v1`                             | real URL               |
 
+`defaults.models` is the catalog printed by `subc models` and injected into the
+packaged coding-agent model pickers; `defaults.model` selects which entry new
+profiles use initially.
+
 `{env:...}` is **OpenCode's own** templating and is preserved verbatim — it is
 never substituted by us.
 
 ## Per-OS install commands
 
-Each agent's `install` is an **object keyed by Node's `process.platform`**
-values, with an optional `fallback`:
+Each auto-installed terminal agent's `install` is an **object keyed by Node's
+`process.platform`** values, with an optional `fallback`:
 
 ```json
 "install": {

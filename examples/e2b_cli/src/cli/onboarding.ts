@@ -2,7 +2,7 @@
  * API Key Onboarding
  * 
  * Interactive setup flow for first-time users to configure their API keys.
- * Keys are saved to ~/.subcon/config.json for future sessions.
+ * Keys are saved to ~/.subconscious/config.json for future sessions.
  */
 
 import * as readline from "readline";
@@ -11,8 +11,9 @@ import { promises as fs } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 
-const CONFIG_DIR = join(homedir(), ".subcon");
+const CONFIG_DIR = join(homedir(), ".subconscious");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
+const LEGACY_CONFIG_FILE = join(homedir(), ".subcon", "config.json");
 
 /** ANSI color codes */
 const c = {
@@ -41,6 +42,15 @@ async function loadSavedKeys(): Promise<StoredConfig> {
   try {
     const content = await fs.readFile(CONFIG_FILE, "utf-8");
     return JSON.parse(content);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") return {};
+  }
+
+  try {
+    const content = await fs.readFile(LEGACY_CONFIG_FILE, "utf-8");
+    const config = JSON.parse(content) as StoredConfig;
+    await saveKeys(config);
+    return config;
   } catch {
     return {};
   }
@@ -197,7 +207,7 @@ ${c.dim}────────────────────────
         subconscious_api_key: subconKey,
         e2b_api_key: e2bKey,
       });
-      console.log(`${c.green}✓${c.reset} Keys saved to ${c.dim}~/.subcon/config.json${c.reset}`);
+      console.log(`${c.green}✓${c.reset} Keys saved to ${c.dim}~/.subconscious/config.json${c.reset}`);
     }
 
     // Set environment variables for this session
