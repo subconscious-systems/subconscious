@@ -32,6 +32,27 @@ const LEGACY_CONFIG_FILE = CONFIG_OVERRIDE
 // Defaults to production. Developers set SUBCONSCIOUS_URL=http://localhost:3000 for local dev.
 const PLATFORM_URL = process.env.SUBCONSCIOUS_URL || 'https://www.subconscious.dev';
 
+// Login callback CORS. After the marketing/platform split, www 307s /cli/auth
+// to the platform host, so the browser Origin is platform even when the CLI
+// still opened www. Keep www so a non-redirected tab still works.
+const CALLBACK_ORIGINS = new Set([
+  'https://www.subconscious.dev',
+  'https://platform.subconscious.dev',
+  'https://dev.subconscious.dev',
+  'https://platform-dev.subconscious.dev',
+]);
+
+export function isAllowedCallbackOrigin(origin, platformUrl = PLATFORM_URL) {
+  if (!origin) return false;
+  if (origin === platformUrl || CALLBACK_ORIGINS.has(origin)) return true;
+  try {
+    const { protocol, hostname } = new URL(origin);
+    return protocol === 'http:' && (hostname === 'localhost' || hostname === '127.0.0.1');
+  } catch {
+    return false;
+  }
+}
+
 // ── Config helpers ──────────────────────────────────────────────────────
 
 async function loadConfig() {
@@ -114,12 +135,10 @@ function startCallbackServer(expectedState) {
     });
 
     const server = http.createServer((req, res) => {
-      // CORS: only allow the web app's origin (production or localhost dev).
+      // CORS: only allow known web-app origins (or localhost dev).
       // This prevents arbitrary websites from hitting this callback.
       const origin = req.headers.origin || '';
-      const allowed =
-        origin === PLATFORM_URL ||
-        origin.startsWith('http://localhost:');
+      const allowed = isAllowedCallbackOrigin(origin);
       res.setHeader(
         'Access-Control-Allow-Origin',
         allowed ? origin : PLATFORM_URL,
