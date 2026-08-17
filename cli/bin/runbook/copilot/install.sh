@@ -434,6 +434,7 @@ case "$COMMAND" in
     USER_DIR="$(detect_vscode_dir)"
     WRITTEN="$(write_config "$USER_DIR")"
     echo "Installed Subconscious Copilot provider into $WRITTEN"
+    echo "Gateway base URL: ${GATEWAY_URL%/}/v1"
     install_hook_script
     write_hooks_env
     write_hooks_json

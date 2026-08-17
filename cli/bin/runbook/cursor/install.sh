@@ -16,7 +16,7 @@
 # Equivalent manual setup (three pieces):
 #
 #   1. Cursor settings → enable "OpenAI API Key Override":
-#        Base URL: https://your-gateway.example
+#        Base URL: https://your-gateway.example/v1
 #        API Key:  sk-gw-...
 #
 #   2. Write ~/.cursor/hooks.json pointing at the hook script:
@@ -53,7 +53,25 @@ if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${CURSOR_API_KEY:-${API_KEY:-}}"
+MODEL="${MODEL:-subconscious/glm-5.2}"
 COMMAND="install"
+
+DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.2
+subconscious/tim-qwen3.6-27b
+subconscious/deepseek-v4-flash-marathon"
+
+SUPPORTED_MODELS=()
+add_supported_model() {
+  local model_id="$1"
+  for existing in "${SUPPORTED_MODELS[@]:-}"; do
+    [[ "$existing" == "$model_id" ]] && return
+  done
+  SUPPORTED_MODELS+=("$model_id")
+}
+add_supported_model "$MODEL"
+while IFS= read -r model_id; do
+  [[ -n "$model_id" ]] && add_supported_model "$model_id"
+done <<< "${SUBCONSCIOUS_MODELS:-$DEFAULT_SUBCONSCIOUS_MODELS}"
 
 usage() {
   cat <<'EOF'
@@ -241,7 +259,16 @@ case "$COMMAND" in
     write_env
     merge_hooks_json
     echo "Installed Subconscious Cursor hooks into $CURSOR_DIR"
-    echo "Restart Cursor to reload hooks.json."
+    echo ""
+    echo "Finish in Cursor Settings"
+    echo "  Enable OpenAI API Key Override, then use:"
+    echo "    Base URL: ${GATEWAY_URL%/}/v1"
+    echo "  Add the available custom models:"
+    for model_id in "${SUPPORTED_MODELS[@]}"; do
+      echo "    ${model_id}"
+    done
+    echo "  Select ${MODEL} for this profile."
+    echo "  Paste your Subconscious API key there, then fully restart Cursor."
     ;;
   uninstall)
     uninstall_hooks

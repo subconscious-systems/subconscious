@@ -666,19 +666,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
   const installed = !['status', 'uninstall'].includes(rest[0]);
   if (code !== 0 || !installed) return code;
 
-  if (agent.id === 'cursor') {
-    const modelList = SUPPORTED_MODELS.map(
-      (supportedModel) => `    ${c.cyan}${supportedModel}${c.reset}`,
-    ).join('\n');
-    console.log(
-      `\n  ${c.bold}Finish in Cursor Settings${c.reset}\n` +
-        `  Enable OpenAI API Key Override, then use:\n` +
-        `    Base URL: ${c.cyan}${ctx.baseUrl}${c.reset}\n` +
-        `  Add the available custom models:\n${modelList}\n` +
-        `  Select ${c.cyan}${model}${c.reset} for this profile.\n` +
-        `  Paste your Subconscious API key there, then fully restart Cursor.\n`,
-    );
-  } else if (agent.id === 'pi') {
+  if (agent.id === 'pi') {
     console.log(`\n  ${c.dim}Start a fresh session with ${c.reset}${c.cyan}subc pi${c.reset}${c.dim}.${c.reset}\n`);
   }
   return code;
