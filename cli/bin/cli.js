@@ -22,17 +22,23 @@ import {
   resolveAgent,
   runAgent,
   agentList,
-  parseSetupRequest,
+  agentCommandName,
   isAgentHelpRequest,
+  parseAgentAction,
 } from './agents.js';
 import {
   configCommand,
   DEFAULT_PROFILE,
   loadProfile,
   modelsCommand,
+  printConfigHelp,
   updateUrlCommand,
   validateProfileName,
 } from './profiles.js';
+
+function isHelpArg(arg) {
+  return arg === 'help' || arg === '-h' || arg === '--help';
+}
 
 function printHelp() {
   const agents = agentList()
@@ -43,6 +49,7 @@ function printHelp() {
 
   ${c.bold}Usage${c.reset}
     ${c.cyan}subc${c.reset} <command> [...args]
+    ${c.cyan}subc${c.reset} <command> help
 
   ${c.bold}Auth${c.reset}
     ${c.cyan}login${c.reset}        Authenticate and save your API key
@@ -51,11 +58,8 @@ function printHelp() {
     ${c.cyan}logout${c.reset}       Remove saved credentials
     ${c.cyan}whoami${c.reset}       Show current authentication status
 
-  ${c.bold}Setup and profiles${c.reset}
-    ${c.cyan}help <agent>${c.reset}  Show coding-agent integration help and settings
-    ${c.cyan}setup${c.reset}        Configure all or one coding-agent integration
-    ${c.cyan}config${c.reset}       Show or update the selected runbook profile
-    ${c.cyan}settings${c.reset}     Edit profile and per-agent settings interactively
+  ${c.bold}Profiles${c.reset}
+    ${c.cyan}config${c.reset}       List profiles, or show/edit one with ${c.dim}-p${c.reset}
     ${c.cyan}models${c.reset}       List available Subconscious models
 
   ${c.bold}Coding agents${c.reset}
@@ -69,17 +73,90 @@ ${agents}
 
   ${c.bold}Examples${c.reset}
     ${c.dim}$${c.reset} subc login
-    ${c.dim}$${c.reset} subc update-key sk-...
-    ${c.dim}$${c.reset} subc update-url https://api.subconscious.dev
-    ${c.dim}$${c.reset} subc setup
-    ${c.dim}$${c.reset} subc settings
-    ${c.dim}$${c.reset} subc models
-    ${c.dim}$${c.reset} subc help codex
+    ${c.dim}$${c.reset} subc config
+    ${c.dim}$${c.reset} subc config help
+    ${c.dim}$${c.reset} subc -p staging config
+    ${c.dim}$${c.reset} subc config edit vim
     ${c.dim}$${c.reset} subc claude
-    ${c.dim}$${c.reset} subc --profile staging codex
-    ${c.dim}$${c.reset} subc codex --model subconscious/glm-5.2
+    ${c.dim}$${c.reset} subc claude help
+    ${c.dim}$${c.reset} subc cursor install
+    ${c.dim}$${c.reset} subc cursor uninstall
+    ${c.dim}$${c.reset} subc pi install
+    ${c.dim}$${c.reset} subc -p staging codex
 
-  ${c.dim}Arguments are forwarded to terminal agents or their runbook setup.${c.reset}
+  ${c.dim}Use subc <command> help for command-specific usage.${c.reset}
+`);
+}
+
+const COMMAND_HELP = {
+  login: `
+Usage:
+  subc login
+  subc -p NAME login
+  subc login help
+
+Authenticate and save an API key to the selected profile.
+`,
+  logout: `
+Usage:
+  subc logout
+  subc -p NAME logout
+  subc logout help
+
+Remove the selected profile's saved API key. Non-secret settings are kept.
+`,
+  whoami: `
+Usage:
+  subc whoami
+  subc -p NAME whoami
+  subc whoami help
+
+Show the current authentication status for the selected profile.
+`,
+  'update-key': `
+Usage:
+  subc update-key <api-key>
+  subc -p NAME update-key <api-key>
+  subc update-key help
+
+Replace the selected profile's shared API key.
+`,
+  'update-url': `
+Usage:
+  subc update-url <gateway-url>
+  subc update-url help
+
+Update the active profile's gateway URL.
+`,
+  models: `
+Usage:
+  subc models
+  subc models help
+
+List available Subconscious models.
+`,
+};
+
+function printRetiredSetup(args = []) {
+  const maybeAgent = resolveAgent(args[0]);
+  const command = maybeAgent ? agentCommandName(maybeAgent) : 'cursor';
+  console.error(`
+  ${c.red}subc setup is no longer used.${c.reset} Use the agent command instead:
+
+    ${c.cyan}subc ${command} install${c.reset}
+    ${c.cyan}subc ${command} uninstall${c.reset}
+    ${c.cyan}subc ${command} help${c.reset}
+`);
+}
+
+function printRetiredSettings() {
+  console.error(`
+  ${c.red}subc settings is no longer used.${c.reset} Use:
+
+    ${c.cyan}subc config${c.reset}                 List profiles
+    ${c.cyan}subc -p NAME config${c.reset}         Show a profile
+    ${c.cyan}subc -p NAME config edit${c.reset}    Open the profile env file
+    ${c.cyan}subc config help${c.reset}
 `);
 }
 
@@ -95,6 +172,7 @@ function extractProfile(argv) {
     process.env.SUBC_PROFILE?.trim() ||
     process.env.MBTA_PROFILE?.trim() ||
     DEFAULT_PROFILE;
+  let profileExplicit = false;
   const args = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -106,39 +184,41 @@ function extractProfile(argv) {
       const value = argv[++i];
       if (!value) throw new Error(`${arg} requires a profile name`);
       profileName = value;
+      profileExplicit = true;
       continue;
     }
     if (arg.startsWith('--profile=')) {
       profileName = arg.slice('--profile='.length);
+      profileExplicit = true;
       continue;
     }
     args.push(arg);
   }
   validateProfileName(profileName);
-  return { args, profileName };
+  return { args, profileName, profileExplicit };
 }
 
 function requireNamedProfile(profile) {
   if (profile.name !== DEFAULT_PROFILE && !profile.exists) {
     throw new Error(
       `Profile '${profile.name}' does not exist. Create it with ` +
-        `subc --profile ${profile.name} config --api-key KEY`,
+        `subc -p ${profile.name} config --api-key KEY`,
     );
   }
 }
 
 async function main() {
   const parsed = extractProfile(process.argv.slice(2));
-  const { args, profileName } = parsed;
+  const { args, profileName, profileExplicit } = parsed;
   const command = args[0];
 
-  if (!command || command === '--help' || command === '-h') {
+  if (!command || command === '--help' || command === '-h' || (command === 'help' && !args[1])) {
     printHelp();
     return;
   }
 
   if (command === 'help') {
-    if (!args[1]) {
+    if (!args[1] || isHelpArg(args[1])) {
       printHelp();
       return;
     }
@@ -156,94 +236,67 @@ async function main() {
     return;
   }
 
+  if (command === 'setup') {
+    printRetiredSetup(args.slice(1));
+    process.exitCode = 1;
+    return;
+  }
+
+  if (command === 'settings') {
+    printRetiredSettings();
+    process.exitCode = 1;
+    return;
+  }
+
   const authHandler = authCommands[command];
   if (authHandler) {
+    if (isHelpArg(args[1])) {
+      console.log(COMMAND_HELP[command]);
+      return;
+    }
     const profile = await loadProfile(profileName);
     await authHandler(args.slice(1), { profile, profileName });
     return;
   }
 
   if (command === 'config') {
-    await configCommand(args.slice(1), profileName);
-    return;
-  }
-
-  if (command === 'settings') {
-    if (['help', '-h', '--help'].includes(args[1])) {
-      console.log(`
-Usage:
-  subc settings
-  subc --profile NAME settings
-  subc --profile NAME config interactive
-
-Interactively choose or create a profile, then edit shared or per-agent settings.
-`);
+    if (isHelpArg(args[1])) {
+      printConfigHelp();
       return;
     }
-    if (args.length > 1) throw new Error('Usage: subc [--profile NAME] settings');
-    await configCommand(['interactive'], profileName);
+    await configCommand(args.slice(1), profileName, { profileExplicit });
     return;
   }
 
   if (command === 'models') {
+    if (isHelpArg(args[1])) {
+      console.log(COMMAND_HELP.models);
+      return;
+    }
     modelsCommand();
     return;
   }
 
   if (command === 'update-url') {
-    await updateUrlCommand(args.slice(1), { profileName });
-    return;
-  }
-
-  if (command === 'setup') {
-    const setupArgs = args.slice(1);
-    if (setupArgs[0] === '-h' || setupArgs[0] === '--help') {
-      console.log(`
-Usage:
-  subc setup [install|status|uninstall]
-  subc setup AGENT [install|status|uninstall] [agent options]
-
-Examples:
-  subc setup                    Configure every coding-agent integration
-  subc setup status             Show every integration's setup status
-  subc setup codex              Configure only Codex
-  subc setup codex status       Show only Codex's setup status
-  subc setup codex --subagents  Configure Codex's legacy subagent mode
-  subc setup codex env          Print persistent Codex exports for sourcing
-`);
+    if (isHelpArg(args[1])) {
+      console.log(COMMAND_HELP['update-url']);
       return;
     }
-    const request = parseSetupRequest(setupArgs);
-    const profile = await loadProfile(profileName);
-    const targetHelp = request.targeted && isAgentHelpRequest(request.args);
-    const persistentHelper = ['use', 'env', 'unset'].includes(request.action);
-    const oneOffApiKey = request.targeted && request.args.includes('--api-key');
-    if (!targetHelp && !persistentHelper && !oneOffApiKey) requireNamedProfile(profile);
-    const failures = [];
-    for (const agent of request.agents) {
-      const code = await runAgent(agent, request.args, { profile, setup: true });
-      if (code) failures.push(agent.name);
-    }
-    if (failures.length) {
-      throw new Error(`Setup failed for: ${failures.join(', ')}`);
-    }
-    if (targetHelp || persistentHelper) return;
-    const subject = request.targeted ? request.agents[0].name : 'Coding-agent';
-    const message =
-      request.action === 'status'
-        ? `${subject} status check complete.`
-        : request.action === 'uninstall'
-          ? `${subject} integration${request.targeted ? '' : 's'} removed.`
-          : `${subject} setup complete.`;
-    console.log(`\n  ${c.green}${c.bold}✓ ${message}${c.reset}\n`);
+    await updateUrlCommand(args.slice(1), { profileName });
     return;
   }
 
   const agent = resolveAgent(command);
   if (agent) {
+    const agentArgs = args.slice(1);
     const profile = await loadProfile(profileName);
-    if (!isAgentHelpRequest(args.slice(1))) requireNamedProfile(profile);
-    await runAgent(agent, args.slice(1), { profile });
+    if (!isAgentHelpRequest(agentArgs)) {
+      const action = parseAgentAction(agent, agentArgs);
+      if (action.action !== 'status' && action.action !== 'uninstall') {
+        requireNamedProfile(profile);
+      }
+    }
+    await runAgent(agent, agentArgs, { profile });
     return;
   }
 

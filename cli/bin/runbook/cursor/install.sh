@@ -58,18 +58,12 @@ COMMAND="install"
 usage() {
   cat <<'EOF'
 Usage:
-  install.sh [install] --gateway-url URL --api-key KEY
-  install.sh uninstall
-  install.sh status
+  subc cursor install [--gateway-url URL] [--api-key KEY]
+  subc cursor uninstall
+  subc cursor status
 
-`install` is the default subcommand and may be omitted.
-
-Installs Cursor hooks (user-wide under ~/.cursor) that POST to /v1/agent-hooks:
-conversation_ensure on each prompt submission so the gateway can group
-Conversations for Cursor traffic, and conversation_compaction on preCompact so
-context accounting restarts at the right turn.
-
-Requires: jq, curl. Restart Cursor after install.
+Installs Cursor hooks (user-wide under ~/.cursor) without replacing other
+hook entries. Requires jq and curl. Restart Cursor after install.
 EOF
 }
 

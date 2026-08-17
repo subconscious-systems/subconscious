@@ -28,7 +28,8 @@ overwritten on the next generate.
 
 Agents without an example omit `exampleDir`. Example-only agents use
 `"cli": false`. `command` selects the primary `subc <command>` spelling while
-`aliases` keeps alternate spellings.
+`aliases` keeps alternate spellings. `runbook.setupActions` lists which of
+`install`, `status`, and `uninstall` the CLI exposes on that agent.
 
 ## Tokens
 

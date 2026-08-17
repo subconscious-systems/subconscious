@@ -1,6 +1,6 @@
 # subconscious-cli
 
-Log in to Subconscious, then run coding agents with the setup maintained in
+Log in to Subconscious, then run coding agents with the integrations maintained in
 [`ol-runbook`](https://github.com/subconscious-systems/ol-runbook).
 
 ## Quick start
@@ -11,38 +11,34 @@ subc login
 subc claude
 ```
 
-Login creates both the saved credential and a ready-to-use `default` runbook
-profile, so Claude Code, Codex, and OpenCode can launch immediately. To apply
-the persistent runbook setup for all six supported agents together, run:
+Login creates both the saved credential and a ready-to-use `default` profile,
+so Claude Code, Codex, and OpenCode can launch immediately. Persistent editor
+and Pi integrations are installed per agent:
 
 ```bash
-subc setup
+subc cursor install
+subc copilot install
+subc pi install
+subc <agent> uninstall
 ```
 
 Top-level help (`subc`, `subc help`, or `subc --help`) displays the
 Subconscious logo as portable ASCII art. Set `NO_COLOR=1` for a
 monochrome version; redirected output automatically uses a plain wordmark.
 
-Each coding agent also has integration-specific help. These commands only read
-the selected profile; they do not authenticate, install, configure, or launch
-anything:
+Every command accepts `help` as a subcommand. These only read the selected
+profile; they do not authenticate, install, configure, or launch anything:
 
 ```bash
-subc help claude
+subc claude help
 subc codex help
-subc opencode --help
-subc help cursor
-subc help copilot
-subc pi -h
+subc cursor help
+subc config help
+subc login help
 ```
 
-Agent help includes launch/setup behavior, supported integration options, and
+Agent help includes launch/install behavior, supported integration options, and
 every relevant profile setting with API keys redacted.
-
-This writes the Claude environment file; Codex provider, catalog, and hooks;
-OpenCode provider and compaction plugin; Cursor and Copilot hooks; and Pi
-provider and compaction extension. It configures integrations but does not
-install the underlying desktop applications or agent binaries.
 
 `subc claude` launches the normal `claude` executable with the Subconscious
 gateway environment applied for that process. Arguments pass through as usual:
@@ -61,16 +57,16 @@ The packaged integrations are synced from `ol-runbook/coding-agents`.
 | Command | Behavior |
 | --- | --- |
 | `subc claude` | Launch Claude Code with the runbook environment, context limits, subagent limits, and OTEL usage reporting |
-| `subc codex` | Launch Codex with the runbook provider, temporary model catalog, and compaction hooks |
+| `subc codex` | Launch Codex with the runbook provider, temporary model catalog, and surgically merged compaction hooks |
 | `subc opencode` | Launch OpenCode with the runbook provider, client header, and context/output limits |
-| `subc cursor` | Install/update the runbook Cursor conversation and compaction hooks |
-| `subc copilot` | Install/update the runbook VS Code custom endpoint and Copilot hooks |
-| `subc pi` | Launch Pi with the Subconscious provider and active profile model; never installs or rewrites configuration |
+| `subc cursor install` | Install/update Cursor conversation and compaction hooks |
+| `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
+| `subc pi install` then `subc pi` | Merge the Pi provider, then launch |
 
 If Claude Code, Codex, or OpenCode is missing, an interactive terminal offers
-to install it before launching. Pi is launch-only: if its executable or
-Subconscious configuration is missing, the CLI exits with instructions instead
-of installing or changing anything.
+to install it before launching. Pi requires `subc pi install` first; if its
+executable or Subconscious provider is missing, the CLI exits with instructions
+instead of installing the binary.
 
 `subc codex` disables Codex apps and plugin tools for that launch by default so
 requests remain below the gateway's 128-tool limit. Core coding tools remain
@@ -79,53 +75,33 @@ gateway with a larger tool limit. It also defaults reasoning effort to `max`,
 which is the highest effort accepted by the Subconscious models; override it
 with `subc codex --reasoning-effort high` when desired.
 
-Cursor and Copilot are setup commands because their runbook integrations write
-user-level configuration. Pi's provider and extension are managed only through
-the aggregate setup command:
+Persistent writes are merge/unmerge only. They never replace a user's
+`config.toml`, `opencode.json`, `models.json`, `hooks.json`, or VS Code
+provider list. Remove Subconscious files with the matching uninstall command:
 
 ```bash
-subc cursor status
 subc cursor uninstall
-subc copilot status
+subc copilot uninstall
+subc pi uninstall
+subc codex uninstall
+subc claude uninstall
+subc opencode uninstall
 ```
 
-You can inspect or remove every persistent integration together too:
+`subc claude uninstall` and `subc opencode uninstall` only clean leftover files
+from older overwrite-style setup. Launch those agents with `subc claude` /
+`subc opencode`; they do not need install.
 
-```bash
-subc setup
-subc setup status
-subc setup uninstall
-```
-
-Target one integration by adding its command name. Agent-specific install
-options pass through to that integration:
-
-```bash
-subc setup codex
-subc setup codex status
-subc setup opencode uninstall
-subc setup codex --subagents
-subc setup claude --compact-window 900000
-```
-
-Claude Code and Codex also expose the runbook's persistent environment helpers:
-
-```bash
-subc setup codex use -- --resume
-source <(subc setup codex env)
-source <(subc setup codex unset)
-```
-
-Run `subc setup AGENT --help` for that integration's complete persistent setup
-options. A one-off `--api-key` passed to targeted setup takes precedence for
-that command but is not saved to the selected profile.
+Inspect a persistent integration with `subc <agent> status`. A one-off
+`--api-key` passed to install takes precedence for that command but is not
+saved to the selected profile.
 
 Cursor still requires enabling its OpenAI API Key Override in Cursor Settings.
 Copilot requires entering the custom endpoint key once through VS Code's
-Manage Language Models UI. The setup scripts print the relevant next steps.
+Manage Language Models UI. The install scripts print the relevant next steps.
 
-The runbook scripts require Bash. Cursor and Copilot setup also require `jq`
-and `curl`; Pi setup requires `jq`.
+The runbook scripts require Bash. Cursor, Copilot, Pi, and Codex hook merge
+also require `jq`; Cursor and Copilot also require `curl`.
 
 ## Runbook profiles
 
@@ -137,46 +113,41 @@ and `curl`; Pi setup requires `jq`.
 
 The file is mode `600` and contains the shared gateway URL, API key, model,
 optional per-agent key overrides, and all Claude/Codex/OpenCode/Pi/Copilot
-context and output settings used by the packaged runbook scripts. You can
-inspect or update it through the CLI:
+context and output settings used by the packaged runbook scripts.
 
 ```bash
-subc config
-subc config --model subconscious/glm-5.2
+subc config                         # list every profile and its file path
+subc -p staging config              # print that path and env file
+subc -p staging config --model subconscious/glm-5.2
 subc config --gateway-url https://gateway.example
 subc config path
-subc config list
+subc config edit                    # open the selected profile in $VISUAL, $EDITOR, vim, or nano
+subc -p staging config edit vim
+subc config edit nano
 ```
 
-Use the interactive settings wizard to choose or create a profile and edit
-shared settings, one agent's complete settings section, or every setting:
-
-```bash
-subc settings
-subc --profile work settings
-subc --profile staging config interactive
-```
-
-The wizard validates URLs, numeric ranges, and enumerated values; masks API-key
-input; and does not write anything until you choose **Save and exit**. Press
-Ctrl-C or choose **Cancel** to discard pending changes. In scripts and CI, keep
-using `subc config --gateway-url`, `--api-key`, and `--model` or edit the
-mode-`600` profile directly.
+`subc config` lists each profile next to its `.env` path. `subc -p NAME config`
+prints that path, then the file (API keys and other secrets redacted). Extra
+`KEY=value` lines in the file are passed through to launches and override
+Subconscious-injected defaults; resolved login identity (`GATEWAY_URL`,
+`API_KEY`, `MODEL`) still comes from login, `--model`, and the matching flags.
+In scripts and CI, keep using `subc config --gateway-url`, `--api-key`, and
+`--model`.
 
 Each agent section can hold its own API key. An agent-specific key takes
 precedence over the shared profile key and can be used on its own, so profiles
 do not need an `API_KEY` when every configured agent has an explicit key.
 
-Named profiles work like mbta profiles:
+Named profiles work like AWS CLI profiles:
 
 ```bash
-subc --profile staging config \
+subc -p staging config \
   --gateway-url https://staging.example \
   --api-key sk-staging-... \
   --model subconscious/glm-5.2
 
-subc --profile staging claude
-subc --profile staging setup
+subc -p staging claude
+subc -p staging cursor install
 ```
 
 You can also select one with `SUBC_PROFILE=staging` (`MBTA_PROFILE` is accepted
@@ -208,7 +179,7 @@ The Claude Code, Codex, OpenCode, Pi, and Copilot integrations register all
 three models with their native model pickers. The profile's `MODEL` remains the
 active model where the agent supports setting one and is listed first in the
 other catalogs. Cursor requires adding the three model IDs in its OpenAI API
-Key Override settings; `subc cursor` prints the complete list and the model
+Key Override settings; `subc cursor install` prints the complete list and the model
 selected by the active profile.
 
 The default gateway is `https://api.subconscious.dev`. Profiles containing
@@ -223,7 +194,8 @@ SUBCONSCIOUS_BASE_URL=http://localhost:9999 subc claude
 Agent-specific runbook tuning variables are also honored, including
 `CLAUDE_CODE_AUTO_COMPACT_WINDOW`, `CODEX_CONTEXT_WINDOW`,
 `OPENCODE_CONTEXT_LIMIT`, `PI_CONTEXT_WINDOW`, and the corresponding output or
-max-context settings.
+max-context settings. Extra `KEY=value` lines in the profile env file are
+passed through the same way and override Subconscious-injected defaults.
 
 ## Authentication
 

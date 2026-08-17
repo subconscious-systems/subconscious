@@ -36,7 +36,8 @@
       "runbook": {
         "mode": "launch",
         "script": "claude-code/run.sh",
-        "setupScript": "claude-code/install.sh"
+        "setupScript": "claude-code/install.sh",
+        "setupActions": ["status", "uninstall"]
       },
       "launch": "claude",
       "env": {
@@ -91,7 +92,8 @@
       "runbook": {
         "mode": "launch",
         "script": "codex/run.sh",
-        "setupScript": "codex/install.sh"
+        "setupScript": "codex/install.sh",
+        "setupActions": ["install", "status", "uninstall"]
       },
       "launch": "codex -c model={model} -c model_provider=subconscious -c web_search=disabled -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url={baseUrlV1} -c model_providers.subconscious.wire_api=responses -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_providers.subconscious.stream_idle_timeout_ms=300000",
       "env": {
@@ -122,7 +124,8 @@
       "runbook": {
         "mode": "launch",
         "script": "opencode/run.sh",
-        "setupScript": "opencode/install.sh"
+        "setupScript": "opencode/install.sh",
+        "setupActions": ["status", "uninstall"]
       },
       "launch": "opencode",
       "configEnv": "OPENCODE_CONFIG_CONTENT",
@@ -191,7 +194,8 @@
       "runbook": {
         "mode": "setup",
         "script": "cursor/install.sh",
-        "setupScript": "cursor/install.sh"
+        "setupScript": "cursor/install.sh",
+        "setupActions": ["install", "status", "uninstall"]
       }
     },
     {
@@ -209,7 +213,8 @@
       "runbook": {
         "mode": "setup",
         "script": "copilot/install.sh",
-        "setupScript": "copilot/install.sh"
+        "setupScript": "copilot/install.sh",
+        "setupActions": ["install", "status", "uninstall"]
       }
     },
     {
@@ -217,7 +222,7 @@
       "command": "pi",
       "name": "Pi",
       "aliases": [],
-      "description": "Launch Pi with the Subconscious provider and active profile model configured by subc setup.",
+      "description": "Launch Pi with the Subconscious provider and active profile model configured by subc pi install.",
       "framework": "Pi",
       "language": "shell",
       "category": "coding-agent",
@@ -228,7 +233,8 @@
       "runbook": {
         "mode": "launch",
         "script": "pi/run.sh",
-        "setupScript": "pi/install.sh"
+        "setupScript": "pi/install.sh",
+        "setupActions": ["install", "status", "uninstall"]
       }
     },
     {

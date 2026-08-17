@@ -133,36 +133,35 @@ Log in to Subconscious from your terminal, then launch or configure coding agent
 ```bash
 npm install -g subconscious-cli
 subc login                           # sign in, saves your API key
-subc claude                          # launch normal Claude Code on Subconscious
-subc setup                           # configure all six agent integrations
+subc claude                          # launch Claude Code on Subconscious
+subc cursor install                  # merge Cursor hooks
 ```
 
 `subc <agent>` resolves your saved API key and dispatches the packaged
-`ol-runbook` integration. Terminal agents, including Pi, launch directly;
-Cursor and Copilot run their user-level setup. Login also creates a secure
-default profile with all shared and per-agent runbook environment settings.
+`ol-runbook` integration. Terminal agents launch directly; Cursor, Copilot, and
+Pi persist a surgical integration with `subc <agent> install`. Login also
+creates a secure default profile.
 
 | Command | Behavior |
 |---------|----------|
 | `subc claude` | Launch Claude Code |
-| `subc codex` | Launch Codex CLI |
+| `subc codex` | Launch Codex CLI (merges compaction hooks) |
 | `subc opencode` | Launch OpenCode |
-| `subc cursor` | Configure Cursor hooks |
-| `subc copilot` | Configure VS Code Copilot endpoint + hooks |
-| `subc pi` | Launch Pi using the provider configured by `subc setup` |
+| `subc cursor install` | Configure Cursor hooks |
+| `subc copilot install` | Configure VS Code Copilot endpoint + hooks |
+| `subc pi install` then `subc pi` | Configure, then launch Pi |
 
-Use `subc help <agent>` or `subc <agent> --help` for agent-specific integration
-help. Use `subc settings` to interactively choose/create a profile and edit its
-shared or per-agent settings; the wizard validates values and masks API keys.
-Agent-specific credentials override the shared profile key and also work when
-no shared key is configured.
-
-Persistent setup can apply to every integration or one agent at a time:
+Use `subc <agent> help` or `subc config help` for command-specific usage.
+`subc config` lists profiles and their `.env` paths; `subc -p NAME config`
+prints the file, and `subc config edit vim` (or `nano`) opens it. Extra keys in
+that file override Subconscious-injected launch defaults. Agent-specific
+credentials override the shared profile key and also work when no shared key is
+configured.
 
 ```bash
-subc setup
-subc setup codex status
-subc setup opencode uninstall
+subc cursor uninstall
+subc pi uninstall
+subc -p staging claude
 ```
 
 Other commands: `update-key <key>` replaces your saved key, `update-url <url>`

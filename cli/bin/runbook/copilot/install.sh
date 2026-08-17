@@ -99,9 +99,9 @@ MARKER="subconscious-hook.sh"
 usage() {
   cat <<'EOF'
 Usage:
-  install.sh [install] [--gateway-url URL] [--api-key KEY] [--model MODEL]
-  install.sh uninstall
-  install.sh status
+  subc copilot install [--gateway-url URL] [--api-key KEY] [--model MODEL]
+  subc copilot uninstall
+  subc copilot status
 
 `install` is the default subcommand. It writes a "Subconscious Gateway"
 Custom Endpoint provider into VS Code's user-wide chatLanguageModels.json

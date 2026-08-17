@@ -64,26 +64,13 @@ MAX_TOKENS="${PI_MAX_TOKENS:-65536}"
 usage() {
   cat <<'EOF'
 Usage:
-  install.sh [install] --gateway-url URL --api-key KEY [--model MODEL]
+  subc pi install [--gateway-url URL] [--api-key KEY] [--model MODEL]
              [--context-window N] [--max-tokens N]
-  install.sh uninstall
-  install.sh status
+  subc pi uninstall
+  subc pi status
 
-`install` is the default subcommand and may be omitted.
-
-Writes a models.json that points Pi at your Subconscious gateway with
-x-subconscious-client: pi and session-affinity headers enabled so the gateway
-can group requests into Conversations.
-
-Also sets model contextWindow (default 5000000) so Pi auto-compaction
-(`contextTokens > contextWindow - reserveTokens`) respects the gateway window,
-and installs an extension that reports compactions so the dashboard can restart
-context accounting at the right turn.
-
-Pi does not send session headers by default; this script enables
-sendSessionAffinityHeaders with sessionAffinityFormat "openai-nosession"
-(sends x-session-affinity without the underscore session_id header that
-strict proxies may drop).
+Merges a Subconscious provider into ~/.pi/agent/models.json without replacing
+other providers. Launch Pi with subc pi after install.
 
 Requires: jq. Restart Pi after install (or /reload for the extension).
 EOF
@@ -115,7 +102,7 @@ while [[ $# -gt 0 ]]; do
       MAX_TOKENS="${2:-}"
       shift 2
       ;;
-    -h|--help)
+    -h|--help|help)
       usage
       exit 0
       ;;
@@ -185,24 +172,30 @@ require_cmds() {
 write_config() {
   mkdir -p "$PI_DIR"
   local base_url="${GATEWAY_URL%/}/v1"
-  local config
-  config=$(cat <<EOF
+  local provider
+  provider=$(cat <<EOF
 {
-  "providers": {
-    "subconscious": {
-      "baseUrl": "${base_url}",
-      "api": "openai-completions",
-      "apiKey": "${API_KEY}",
-      "headers": {
-        "x-subconscious-client": "pi"
-      },
-      "models": [${MODEL_ENTRIES_JSON}]
-    }
-  }
+  "baseUrl": "${base_url}",
+  "api": "openai-completions",
+  "apiKey": "${API_KEY}",
+  "headers": {
+    "x-subconscious-client": "pi"
+  },
+  "models": [${MODEL_ENTRIES_JSON}]
 }
 EOF
 )
-  echo "$config" >"$MODELS_JSON"
+  if [[ -f "$MODELS_JSON" ]]; then
+    local tmp
+    tmp="$(mktemp)"
+    jq --argjson provider "$provider" '
+      .providers = (.providers // {})
+      | .providers.subconscious = $provider
+    ' "$MODELS_JSON" >"$tmp"
+    mv "$tmp" "$MODELS_JSON"
+  else
+    jq -n --argjson provider "$provider" '{providers: {subconscious: $provider}}' >"$MODELS_JSON"
+  fi
   chmod 600 "$MODELS_JSON"
 
   umask 077
@@ -225,11 +218,14 @@ write_extension() {
 }
 
 uninstall_config() {
-  if [[ -f "$MODELS_JSON" ]] && grep -q "$MARKER" "$MODELS_JSON" 2>/dev/null; then
-    rm -f "$MODELS_JSON"
-    echo "Removed $MODELS_JSON"
+  if [[ -f "$MODELS_JSON" ]]; then
+    local tmp
+    tmp="$(mktemp)"
+    jq 'del(.providers.subconscious)' "$MODELS_JSON" >"$tmp"
+    mv "$tmp" "$MODELS_JSON"
+    echo "Removed Subconscious provider from $MODELS_JSON"
   else
-    echo "No Subconscious Pi config found at $MODELS_JSON"
+    echo "No Pi models.json at $MODELS_JSON"
   fi
   rm -f "$EXTENSION_DST" "$ENV_FILE"
 }
@@ -266,7 +262,7 @@ case "$COMMAND" in
     fi
     write_config
     write_extension
-    echo "Installed Subconscious Pi config at $MODELS_JSON"
+    echo "Merged Subconscious Pi provider into $MODELS_JSON"
     if [[ -f "$EXTENSION_DST" ]]; then
       echo "Installed compaction reporting extension at $EXTENSION_DST"
     fi

@@ -11,7 +11,7 @@ also disabled by default to honor the gateway's 128-tool request limit.
 Included integrations:
 
 - `claude-code/install.sh` and `run.sh`
-- `codex/install.sh`, `run.sh`, `hook.sh`, and `hooks.json`
+- `codex/install.sh`, `run.sh`, `hook.sh`, `hooks.json`, and `hooks-lib.sh`
 - `opencode/install.sh`, `run.sh`, and `subconscious-compaction.ts`
 - `cursor/install.sh`, `hook.sh`, and `hooks.json`
 - `copilot/install.sh`, `hook.sh`, and `hooks.json`
@@ -19,6 +19,11 @@ Included integrations:
 
 When the upstream setup changes, update this snapshot and the corresponding
 entries in `agents/registry.json` together.
+
+This snapshot diverges from ol-runbook on Codex/Pi safety: Codex hooks are
+merged into `hooks.json` instead of replacing it, and Pi merges
+`.providers.subconscious` instead of replacing `models.json`. Sync those
+changes upstream in a follow-up.
 
 At runtime `subc` reads `~/.subconscious/profiles/<name>.env` and injects those values
 into these scripts, so users do not need to create a runbook checkout or source
