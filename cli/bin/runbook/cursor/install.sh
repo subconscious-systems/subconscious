@@ -80,8 +80,12 @@ Usage:
   subc cursor uninstall
   subc cursor status
 
-Installs Cursor hooks (user-wide under ~/.cursor) without replacing other
-hook entries. Requires jq and curl. Restart Cursor after install.
+Installs Cursor hooks (user-wide under ~/.cursor) that POST to /v1/agent-hooks:
+conversation_ensure on each prompt submission so the gateway can group
+Conversations for Cursor traffic, and conversation_compaction on preCompact so
+context accounting restarts at the right turn. Existing hook entries are kept.
+
+Requires: jq, curl. Restart Cursor after install.
 EOF
 }
 

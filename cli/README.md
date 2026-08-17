@@ -180,7 +180,9 @@ three models with their native model pickers. The profile's `MODEL` remains the
 active model where the agent supports setting one and is listed first in the
 other catalogs. Cursor requires adding the three model IDs in its OpenAI API
 Key Override settings; `subc cursor install` prints the complete list and the model
-selected by the active profile.
+selected by the active profile. Use the printed `/v1` Base URL in Cursor
+Settings; the profile itself stores the gateway origin so correlation hooks can
+post to `/v1/agent-hooks`.
 
 The default gateway is `https://api.subconscious.dev`. Profiles containing
 the former exact default (`https://api.subconscious.dev`) migrate automatically;
