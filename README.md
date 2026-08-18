@@ -128,7 +128,7 @@ Developer-facing tooling for building on Subconscious:
 
 ## CLI
 
-Log in to Subconscious from your terminal, then launch or configure coding agents with the setup maintained in `ol-runbook`.
+Log in to Subconscious from your terminal, then launch or configure coding agents.
 
 ```bash
 npm install -g subconscious-cli
@@ -137,8 +137,8 @@ subc claude                          # launch Claude Code on Subconscious
 subc cursor install                  # merge Cursor hooks
 ```
 
-`subc <agent>` resolves your saved API key and dispatches the packaged
-`ol-runbook` integration. Terminal agents launch directly; Cursor, Copilot, and
+`subc <agent>` resolves your saved API key and runs the packaged integration.
+Terminal agents launch directly; Cursor, Copilot, and
 Pi persist a surgical integration with `subc <agent> install`. Login also
 creates a secure default profile.
 

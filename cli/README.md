@@ -1,7 +1,6 @@
 # subconscious-cli
 
-Log in to Subconscious, then run coding agents with the integrations maintained in
-[`ol-runbook`](https://github.com/subconscious-systems/ol-runbook).
+Log in to Subconscious, then run coding agents against the Subconscious gateway.
 
 ## Quick start
 
@@ -52,7 +51,7 @@ subc pi
 
 ## Supported agents
 
-The packaged integrations are synced from `ol-runbook/coding-agents`.
+The packaged integrations live in `cli/bin/runbook`.
 
 | Command | Behavior |
 | --- | --- |
@@ -150,8 +149,7 @@ subc -p staging claude
 subc -p staging cursor install
 ```
 
-You can also select one with `SUBC_PROFILE=staging` (`MBTA_PROFILE` is accepted
-as a compatibility fallback). Explicit shell variables
+You can also select one with `SUBC_PROFILE=staging`. Explicit shell variables
 such as `SUBCONSCIOUS_API_KEY`, `SUBCONSCIOUS_BASE_URL`,
 `SUBCONSCIOUS_MODEL`, and agent-specific tuning variables override profile
 values. A command-line `--model` override has the highest model precedence.

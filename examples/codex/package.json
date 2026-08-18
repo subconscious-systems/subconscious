@@ -2,7 +2,7 @@
   "name": "codex-subconscious",
   "version": "0.1.0",
   "displayName": "Codex + Subconscious",
-  "description": "Run Codex on your hosted Subconscious model using the ol-runbook provider, model catalog, and compaction hooks.",
+  "description": "Run Codex on your hosted Subconscious model with a temporary provider catalog and compaction hooks.",
   "subconscious": {
     "language": "shell",
     "framework": "Codex",

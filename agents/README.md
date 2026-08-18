@@ -10,9 +10,8 @@ Everything else is **generated** from it:
   `examples/<dir>/package.json`
 - `examples/manifest.json`
 
-The executable CLI integrations themselves are a vendored snapshot of
-`ol-runbook/coding-agents` under `cli/bin/runbook`. Each CLI-enabled registry
-entry points to its script with a `runbook` block.
+The executable integrations live under `cli/bin/runbook`. Each CLI-enabled
+registry entry points to its script with a `runbook` block.
 
 ## Editing
 

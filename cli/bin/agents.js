@@ -1,8 +1,8 @@
 /**
  * Coding-agent launcher.
  *
- * `subc <agent>` resolves your saved API key and dispatches the vendored
- * ol-runbook integration. Terminal agents launch ephemerally; IDE/config-based
+ * `subc <agent>` resolves your saved API key and runs the packaged integration.
+ * Terminal agents launch ephemerally; IDE/config-based
  * agents and Pi persist a surgical integration via `subc <agent> install`.
  *
  * There is NO hardcoded agent data here: everything is read from
@@ -516,7 +516,7 @@ async function ensureInstalled(agent) {
   process.exit(0);
 }
 
-/** Resolve and validate a script inside the packaged ol-runbook snapshot. */
+/** Resolve and validate a script inside the packaged runbook directory. */
 function runbookScriptPath(agent, relativeScript = agent.runbook.script) {
   const script = path.resolve(RUNBOOK_DIR, relativeScript);
   const relative = path.relative(RUNBOOK_DIR, script);
@@ -535,7 +535,7 @@ function spawnRunbook(agent, args, env, relativeScript) {
     child.on('error', (error) => {
       if (error.code === 'ENOENT') {
         reject(
-          new Error('The ol-runbook integrations require `bash`, but it was not found on PATH.'),
+          new Error('These coding-agent integrations require `bash`, but it was not found on PATH.'),
         );
         return;
       }
@@ -634,7 +634,7 @@ export function runbookEnv(apiKey, model, binDir, profile, agent) {
     ...(specificApiKey ? { [specificApiKey]: apiKey } : {}),
     MODEL: model,
     SUBCONSCIOUS_MODELS: SUPPORTED_MODELS.join('\n'),
-    MBTA_ENV_FILE: os.devNull,
+    SUBC_ENV_FILE: os.devNull,
     PATH: augmentPath(extraDirs),
   };
 }
@@ -644,7 +644,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
     return spawnRunbook(agent, argv, {
       ...(profile?.values || {}),
       ...process.env,
-      MBTA_ENV_FILE: os.devNull,
+      SUBC_ENV_FILE: os.devNull,
     }, relativeScript);
   }
 

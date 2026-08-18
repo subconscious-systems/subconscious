@@ -2,7 +2,7 @@
   "name": "opencode-subconscious",
   "version": "0.1.0",
   "displayName": "OpenCode + Subconscious",
-  "description": "Run OpenCode on your hosted Subconscious model using the ol-runbook provider and context settings.",
+  "description": "Run OpenCode on your hosted Subconscious model with the Subconscious provider and context settings.",
   "subconscious": {
     "language": "shell",
     "framework": "OpenCode",

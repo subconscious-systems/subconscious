@@ -23,7 +23,7 @@
 #   ./run.sh --external-tools          # include Codex apps/plugins (may exceed gateway tool limits)
 #
 # Config: copy ../env.example to ../.env and edit. .env is gitignored.
-# All agents share one coding-agents/.env file.
+# Profile env is injected by subc. A sibling .env is only used when SUBC_ENV_FILE is unset.
 #
 # Or source it to just export the env:
 #   source run.sh
@@ -32,8 +32,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load shared env from coding-agents/.env (gitignored) or env.example.
-SHARED_ENV="${MBTA_ENV_FILE:-${SCRIPT_DIR}/../.env}"
+# Load shared env from SUBC_ENV_FILE, or a sibling .env / env.example.
+SHARED_ENV="${SUBC_ENV_FILE:-${SCRIPT_DIR}/../.env}"
 [[ -f "$SHARED_ENV" ]] || SHARED_ENV="${SCRIPT_DIR}/../env.example"
 if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 

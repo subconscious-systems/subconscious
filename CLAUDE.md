@@ -6,8 +6,8 @@
 - `examples/manifest.json` — auto-generated manifest consumed by the templates page at subconscious.dev/templates
 - `scripts/generate-manifest.js` — reads example metadata → outputs manifest.json
 - `create-subconscious-app/` — `npx create-subconscious-app` CLI scaffolder
-- `cli/` — `subc`: login/logout/whoami, secure mbta-style profiles, and `ol-runbook` integrations for Claude Code, Codex, OpenCode, Cursor, Copilot, and Pi. `subc login` creates the default profile. Persistent integrations use `subc <agent> install` / `subc <agent> uninstall`.
-- `agents/registry.json` — the single source of truth for coding-agent metadata, CLI routing, and generated example setup blocks. The CLI runtime data (`cli/bin/registry.generated.json`) and each example's `subconscious.agent` + `setup` blocks are GENERATED from it. Executable CLI integrations are vendored from `ol-runbook/coding-agents` under `cli/bin/runbook`. Edit `agents/registry.json`, then run `pnpm generate` (or `node scripts/generate-agents.js`) to regenerate the CLI data, example blocks, and manifest. Do not hand-edit the generated outputs.
+- `cli/` — `subc`: login/logout/whoami, named `.env` profiles, and coding-agent integrations for Claude Code, Codex, OpenCode, Cursor, Copilot, and Pi. `subc login` creates the default profile. Persistent integrations use `subc <agent> install` / `subc <agent> uninstall`.
+- `agents/registry.json` — the single source of truth for coding-agent metadata, CLI routing, and generated example setup blocks. The CLI runtime data (`cli/bin/registry.generated.json`) and each example's `subconscious.agent` + `setup` blocks are GENERATED from it. Executable integrations live under `cli/bin/runbook`. Edit `agents/registry.json`, then run `pnpm generate` (or `node scripts/generate-agents.js`) to regenerate the CLI data, example blocks, and manifest. Do not hand-edit the generated outputs.
 
 ## Adding examples
 

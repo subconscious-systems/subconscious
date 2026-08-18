@@ -168,10 +168,7 @@ const authCommands = {
 };
 
 function extractProfile(argv) {
-  let profileName =
-    process.env.SUBC_PROFILE?.trim() ||
-    process.env.MBTA_PROFILE?.trim() ||
-    DEFAULT_PROFILE;
+  let profileName = process.env.SUBC_PROFILE?.trim() || DEFAULT_PROFILE;
   let profileExplicit = false;
   const args = [];
   for (let i = 0; i < argv.length; i++) {

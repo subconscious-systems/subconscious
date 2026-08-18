@@ -20,7 +20,7 @@ function runInstall(home) {
           'subconscious/glm-5.2',
           'subconscious/tim-qwen3.6-27b',
         ].join('\n'),
-        MBTA_ENV_FILE: '/dev/null',
+        SUBC_ENV_FILE: '/dev/null',
       },
       stdio: ['ignore', 'pipe', 'pipe'],
     });

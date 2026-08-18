@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "generated": "2026-08-17T12:12:26.880Z",
+  "generated": "2026-08-18T15:32:40.238Z",
   "examples": [
     {
       "name": "aider",
@@ -90,7 +90,7 @@
     {
       "name": "claude_code",
       "displayName": "Claude Code + Subconscious",
-      "description": "Run Claude Code on your hosted Subconscious model using the ol-runbook environment and telemetry setup.",
+      "description": "Run Claude Code on your hosted Subconscious model with gateway env, context limits, and telemetry.",
       "language": "shell",
       "framework": "Claude Code",
       "tags": [
@@ -196,7 +196,7 @@
     {
       "name": "codex",
       "displayName": "Codex + Subconscious",
-      "description": "Run Codex on your hosted Subconscious model using the ol-runbook provider, model catalog, and compaction hooks.",
+      "description": "Run Codex on your hosted Subconscious model with a temporary provider catalog and compaction hooks.",
       "language": "shell",
       "framework": "Codex",
       "tags": [
@@ -344,7 +344,7 @@
     {
       "name": "opencode",
       "displayName": "OpenCode + Subconscious",
-      "description": "Run OpenCode on your hosted Subconscious model using the ol-runbook provider and context settings.",
+      "description": "Run OpenCode on your hosted Subconscious model with the Subconscious provider and context settings.",
       "language": "shell",
       "framework": "OpenCode",
       "tags": [
