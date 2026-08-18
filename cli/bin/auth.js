@@ -345,9 +345,8 @@ export async function loginCommand(_argv = [], options = {}) {
       console.log(`  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`);
     }
     console.log(`  ${c.dim}Runbook profile: ${profile.path}${c.reset}`);
-    const setup =
-      profileName === DEFAULT_PROFILE ? 'subc setup' : `subc --profile ${profileName} setup`;
-    console.log(`  ${c.dim}Run ${setup} once to configure all coding agents.${c.reset}`);
+    console.log(`  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or install editor hooks with ${c.reset}${c.cyan}subc cursor install${c.reset}${c.dim}.${c.reset}`);
+    console.log(`  ${c.dim}Pi needs ${c.reset}${c.cyan}subc pi install${c.reset}${c.dim} first. List profiles with ${c.reset}${c.cyan}subc config${c.reset}${c.dim}.${c.reset}`);
     console.log();
   } catch (error) {
     clearInterval(spinner);

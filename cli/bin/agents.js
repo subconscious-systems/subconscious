@@ -1,9 +1,9 @@
 /**
  * Coding-agent launcher.
  *
- * `subc <agent>` resolves your saved API key and dispatches the vendored
- * ol-runbook integration. Terminal agents launch ephemerally; IDE/config-based
- * agents run their setup scripts.
+ * `subc <agent>` resolves your saved API key and runs the packaged integration.
+ * Terminal agents launch ephemerally; IDE/config-based
+ * agents and Pi persist a surgical integration via `subc <agent> install`.
  *
  * There is NO hardcoded agent data here: everything is read from
  * `registry.generated.json` (shipped under `bin/`), which is generated from the
@@ -105,62 +105,61 @@ export function agentList() {
   }));
 }
 
-export function setupAgentList() {
-  return AGENTS.filter((agent) => agent.runbook?.setupScript);
+const SETUP_ACTIONS = new Set(['install', 'status', 'uninstall']);
+const DROPPED_SETUP_HELPERS = new Set(['use', 'env', 'unset']);
+
+export function agentSetupActions(agent) {
+  return Array.isArray(agent.runbook?.setupActions) ? agent.runbook.setupActions : [];
 }
 
-const SETUP_ACTIONS = new Set(['install', 'status', 'uninstall']);
-const SETUP_HELPER_ACTIONS = new Set(['use', 'env', 'unset']);
-const SETUP_HELPER_AGENT_IDS = new Set(['claude-code', 'codex']);
+export function agentCommandName(agent) {
+  return agent.command || agent.id;
+}
 
-export function parseSetupRequest(argv = []) {
-  const [first, ...rest] = argv;
-  if (!first || SETUP_ACTIONS.has(first)) {
-    if (rest.length) {
-      throw new Error('Agent-specific setup options require a target agent');
+export function parseAgentAction(agent, argv = []) {
+  const command = agentCommandName(agent);
+  const first = argv[0];
+  const actions = agentSetupActions(agent);
+
+  if (DROPPED_SETUP_HELPERS.has(first)) {
+    throw new Error(
+      `${agent.name} no longer supports '${first}'. Launch with subc ${command}.`,
+    );
+  }
+
+  if (SETUP_ACTIONS.has(first)) {
+    if (!agent.runbook?.setupScript || !actions.includes(first)) {
+      if (first === 'install') {
+        const uninstallHint = actions.includes('uninstall')
+          ? ` To remove leftover files: subc ${command} uninstall.`
+          : '';
+        throw new Error(
+          `${agent.name} is launch-only. Run subc ${command}.${uninstallHint}`,
+        );
+      }
+      throw new Error(
+        `${agent.name} does not support '${first}'. Try subc ${command} help.`,
+      );
     }
-    return {
-      agents: setupAgentList(),
-      args: first ? [first] : [],
-      action: first || 'install',
-      targeted: false,
-    };
+    return { action: first, args: argv };
   }
 
-  const agent = resolveAgent(first);
-  if (!agent) throw new Error(`Unknown coding agent or setup action: ${first}`);
-  if (!agent.runbook?.setupScript) {
-    throw new Error(`No persistent setup integration is available for ${agent.name}`);
+  if (agent.runbook?.mode === 'setup') {
+    return { action: 'install', args: argv };
   }
 
-  const requestedAction = rest[0];
-  const helperAction = SETUP_HELPER_ACTIONS.has(requestedAction);
-  if (helperAction && !SETUP_HELPER_AGENT_IDS.has(agent.id)) {
-    throw new Error(`${agent.name} does not support the '${requestedAction}' setup action`);
-  }
-  if (
-    requestedAction &&
-    !requestedAction.startsWith('-') &&
-    !SETUP_ACTIONS.has(requestedAction) &&
-    !helperAction
-  ) {
-    throw new Error(`Unknown setup action for ${agent.name}: ${requestedAction}`);
-  }
-
-  return {
-    agents: [agent],
-    args: rest,
-    action:
-      SETUP_ACTIONS.has(requestedAction) || helperAction ? requestedAction : 'install',
-    targeted: true,
-  };
+  return { action: 'launch', args: argv };
 }
 
 const AGENT_HELP = {
   'claude-code': {
-    usage: 'subc [--profile NAME] claude [integration options] [Claude arguments...]',
-    behavior: 'Launches Claude Code with the active Subconscious profile and model picker.',
+    usage: 'subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]',
+    behavior:
+      'Launches Claude Code with the active Subconscious profile and model picker. Persistent files are leftover-only: subc claude uninstall.',
     options: [
+      ['help', 'Show this help'],
+      ['status', 'Inspect leftover ~/.claude/subconscious-gateway.env'],
+      ['uninstall', 'Remove leftover ~/.claude/subconscious-gateway.env'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['--compact-window N', 'Override the Claude auto-compact window'],
       ['--max-context-tokens N', 'Override the maximum context tokens'],
@@ -168,9 +167,14 @@ const AGENT_HELP = {
     ],
   },
   codex: {
-    usage: 'subc [--profile NAME] codex [integration options] [Codex arguments...]',
-    behavior: 'Launches Codex with a temporary Subconscious provider catalog and compaction hooks.',
+    usage: 'subc [-p NAME] codex [help|install|status|uninstall] [Codex arguments...]',
+    behavior:
+      'Launches Codex with a temporary Subconscious provider catalog. Compaction hooks are merged into ~/.codex/hooks.json and removed with subc codex uninstall.',
     options: [
+      ['help', 'Show this help'],
+      ['install', 'Install only the Subconscious compaction hooks'],
+      ['status', 'Inspect the installed compaction hooks'],
+      ['uninstall', 'Remove only the Subconscious Codex hooks'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['--context-window N', 'Override catalog context_window'],
       ['--max-context-window N', 'Override catalog max_context_window'],
@@ -182,35 +186,47 @@ const AGENT_HELP = {
     ],
   },
   opencode: {
-    usage: 'subc [--profile NAME] opencode [OpenCode arguments...]',
-    behavior: 'Launches OpenCode with an ephemeral provider containing every Subconscious model.',
+    usage: 'subc [-p NAME] opencode [help|status|uninstall] [OpenCode arguments...]',
+    behavior:
+      'Launches OpenCode with an ephemeral provider containing every Subconscious model. Persistent files are leftover-only: subc opencode uninstall.',
     options: [
+      ['help', 'Show this help'],
+      ['status', 'Inspect leftover OpenCode Subconscious config'],
+      ['uninstall', 'Remove only the Subconscious OpenCode provider and plugin'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['ARGS...', 'Pass arguments directly to OpenCode'],
     ],
   },
   cursor: {
-    usage: 'subc [--profile NAME] cursor [install|status|uninstall]',
-    behavior: 'Manages Cursor correlation hooks; model endpoint setup is completed in Cursor Settings.',
+    usage: 'subc [-p NAME] cursor [help|install|status|uninstall]',
+    behavior:
+      'Manages Cursor correlation hooks; model endpoint setup is completed in Cursor Settings.',
     options: [
+      ['help', 'Show this help'],
       ['install', 'Install or update the Cursor hooks (default action)'],
       ['status', 'Inspect the installed hook configuration'],
       ['uninstall', 'Remove only the Subconscious Cursor hooks'],
     ],
   },
   copilot: {
-    usage: 'subc [--profile NAME] copilot [install|status|uninstall]',
+    usage: 'subc [-p NAME] copilot [help|install|status|uninstall]',
     behavior: 'Manages the VS Code model provider and Copilot correlation hooks.',
     options: [
+      ['help', 'Show this help'],
       ['install', 'Install or update the provider and hooks (default action)'],
       ['status', 'Inspect the installed provider and hooks'],
       ['uninstall', 'Remove the Subconscious provider and hooks'],
     ],
   },
   pi: {
-    usage: 'subc [--profile NAME] pi [Pi arguments...]',
-    behavior: 'Launches Pi read-only against the provider previously configured by subc setup.',
+    usage: 'subc [-p NAME] pi [help|install|status|uninstall] [Pi arguments...]',
+    behavior:
+      'Launches Pi read-only against the provider previously configured by subc pi install.',
     options: [
+      ['help', 'Show this help'],
+      ['install', 'Merge the Subconscious provider into ~/.pi/agent/models.json'],
+      ['status', 'Inspect the persistent Pi provider'],
+      ['uninstall', 'Remove only the Subconscious Pi provider and extension'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['ARGS...', 'Pass arguments directly to Pi'],
     ],
@@ -256,9 +272,21 @@ export function printAgentHelp(agent, profile) {
     console.log(`    ${c.cyan}${setting.key.padEnd(settingWidth)}${c.reset}  ${value}`);
     console.log(`    ${' '.repeat(settingWidth)}  ${c.dim}${setting.description}${c.reset}`);
   }
-  console.log(`\n  Edit these interactively with ${c.cyan}subc --profile ${profile?.name || 'default'} settings${c.reset}.`);
-  if (agent.runbook?.setupScript) {
-    console.log(`  Apply persistent integration setup with ${c.cyan}subc setup ${agent.command || agent.id}${c.reset}.`);
+  const command = agentCommandName(agent);
+  const profileFlag = profile?.name || 'default';
+  console.log(
+    `\n  Edit the env file with ${c.cyan}subc -p ${profileFlag} config edit${c.reset}.`,
+  );
+  const actions = agentSetupActions(agent);
+  if (actions.includes('install')) {
+    console.log(
+      `  Install the persistent integration with ${c.cyan}subc ${command} install${c.reset}.`,
+    );
+  }
+  if (actions.includes('uninstall')) {
+    console.log(
+      `  Remove it with ${c.cyan}subc ${command} uninstall${c.reset}.`,
+    );
   }
   console.log();
 }
@@ -488,7 +516,7 @@ async function ensureInstalled(agent) {
   process.exit(0);
 }
 
-/** Resolve and validate a script inside the packaged ol-runbook snapshot. */
+/** Resolve and validate a script inside the packaged runbook directory. */
 function runbookScriptPath(agent, relativeScript = agent.runbook.script) {
   const script = path.resolve(RUNBOOK_DIR, relativeScript);
   const relative = path.relative(RUNBOOK_DIR, script);
@@ -507,7 +535,7 @@ function spawnRunbook(agent, args, env, relativeScript) {
     child.on('error', (error) => {
       if (error.code === 'ENOENT') {
         reject(
-          new Error('The ol-runbook integrations require `bash`, but it was not found on PATH.'),
+          new Error('These coding-agent integrations require `bash`, but it was not found on PATH.'),
         );
         return;
       }
@@ -526,7 +554,7 @@ function spawnRunbook(agent, args, env, relativeScript) {
 }
 
 function isSetupWithoutAuth(argv) {
-  return ['status', 'uninstall', 'use', 'env', 'unset', '-h', '--help'].includes(argv[0]);
+  return ['status', 'uninstall', '-h', '--help', 'help'].includes(argv[0]);
 }
 
 function optionValue(argv, name) {
@@ -593,20 +621,20 @@ function claudeModelPickerEnv(agent, ctx) {
   );
 }
 
-function runbookEnv(apiKey, model, binDir, profile, agent) {
+export function runbookEnv(apiKey, model, binDir, profile, agent) {
   const ctx = buildContext(apiKey, model, profile);
   const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
   const specificApiKey = agentApiKeySetting(agent)?.key;
   return {
+    ...claudeModelPickerEnv(agent, ctx),
     ...(profile?.values || {}),
     ...process.env,
-    ...claudeModelPickerEnv(agent, ctx),
     GATEWAY_URL: ctx.baseUrl,
     API_KEY: apiKey,
     ...(specificApiKey ? { [specificApiKey]: apiKey } : {}),
     MODEL: model,
     SUBCONSCIOUS_MODELS: SUPPORTED_MODELS.join('\n'),
-    MBTA_ENV_FILE: os.devNull,
+    SUBC_ENV_FILE: os.devNull,
     PATH: augmentPath(extraDirs),
   };
 }
@@ -616,7 +644,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
     return spawnRunbook(agent, argv, {
       ...(profile?.values || {}),
       ...process.env,
-      MBTA_ENV_FILE: os.devNull,
+      SUBC_ENV_FILE: os.devNull,
     }, relativeScript);
   }
 
@@ -638,19 +666,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
   const installed = !['status', 'uninstall'].includes(rest[0]);
   if (code !== 0 || !installed) return code;
 
-  if (agent.id === 'cursor') {
-    const modelList = SUPPORTED_MODELS.map(
-      (supportedModel) => `    ${c.cyan}${supportedModel}${c.reset}`,
-    ).join('\n');
-    console.log(
-      `\n  ${c.bold}Finish in Cursor Settings${c.reset}\n` +
-        `  Enable OpenAI API Key Override, then use:\n` +
-        `    Base URL: ${c.cyan}${ctx.baseUrl}${c.reset}\n` +
-        `  Add the available custom models:\n${modelList}\n` +
-        `  Select ${c.cyan}${model}${c.reset} for this profile.\n` +
-        `  Paste your Subconscious API key there, then fully restart Cursor.\n`,
-    );
-  } else if (agent.id === 'pi') {
+  if (agent.id === 'pi') {
     console.log(`\n  ${c.dim}Start a fresh session with ${c.reset}${c.cyan}subc pi${c.reset}${c.dim}.${c.reset}\n`);
   }
   return code;
@@ -662,18 +678,34 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
  */
 export async function runAgent(agent, argv, options = {}) {
   const profile = options.profile;
-  if (options.setup) {
-    if (!agent.runbook?.setupScript) {
-      throw new Error(`No setup integration is available for ${agent.name}`);
-    }
-    return runRunbookSetup(agent, argv, profile, agent.runbook.setupScript);
-  }
   if (isAgentHelpRequest(argv)) {
     printAgentHelp(agent, profile);
     return 0;
   }
-  if (agent.runbook?.mode === 'setup') {
-    return runRunbookSetup(agent, argv, profile);
+
+  const parsed = parseAgentAction(agent, argv);
+  if (parsed.action !== 'launch') {
+    if (!agent.runbook?.setupScript) {
+      throw new Error(`No persistent integration is available for ${agent.name}`);
+    }
+    const setupArgs =
+      parsed.args[0] === parsed.action ? parsed.args : [parsed.action, ...parsed.args];
+    const code = await runRunbookSetup(
+      agent,
+      setupArgs,
+      profile,
+      agent.runbook.setupScript,
+    );
+    if (code === 0) {
+      const message =
+        parsed.action === 'status'
+          ? `${agent.name} status check complete.`
+          : parsed.action === 'uninstall'
+            ? `${agent.name} integration removed.`
+            : `${agent.name} setup complete.`;
+      console.log(`\n  ${c.green}${c.bold}✓ ${message}${c.reset}\n`);
+    }
+    return code;
   }
 
   const { model, rest } = extractModel(argv, profile);
@@ -699,9 +731,9 @@ export async function runAgent(agent, argv, options = {}) {
   // if it was installed into a dir not yet on the parent shell's PATH.
   const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
   const env = {
+    ...envMap,
     ...(profile?.values || {}),
     ...process.env,
-    ...envMap,
     PATH: augmentPath(extraDirs),
   };
   const args = [...launchArgs, ...rest];

@@ -10,7 +10,7 @@
 #   ./run.sh -- auth                 # pass args through to opencode
 #
 # Config: copy ../env.example to ../.env and edit. .env is gitignored.
-# All agents share one coding-agents/.env file.
+# Profile env is injected by subc. A sibling .env is only used when SUBC_ENV_FILE is unset.
 #
 # Or source it to just export the env:
 #   source run.sh
@@ -19,8 +19,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load shared env from coding-agents/.env (gitignored) or env.example.
-SHARED_ENV="${MBTA_ENV_FILE:-${SCRIPT_DIR}/../.env}"
+# Load shared env from SUBC_ENV_FILE, or a sibling .env / env.example.
+SHARED_ENV="${SUBC_ENV_FILE:-${SCRIPT_DIR}/../.env}"
 [[ -f "$SHARED_ENV" ]] || SHARED_ENV="${SCRIPT_DIR}/../env.example"
 if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
@@ -91,8 +91,7 @@ fi
 BASE_URL="${GATEWAY_URL%/}/v1"
 
 export SUBCONSCIOUS_API_KEY="$API_KEY"
-# Read by the compaction plugin when it is installed. run.sh writes nothing to disk, so
-# use install.sh if you want compaction reporting.
+# Compaction reporting needs the plugin on disk; this launch path writes nothing.
 export SUBCONSCIOUS_GATEWAY_URL="${GATEWAY_URL%/}"
 export OPENCODE_CONFIG_CONTENT=$(cat <<EOF
 {"\$schema":"https://opencode.ai/config.json","provider":{"subconscious":{"npm":"@ai-sdk/openai-compatible","name":"Subconscious Gateway","options":{"baseURL":"${BASE_URL}","apiKey":"{env:SUBCONSCIOUS_API_KEY}","headers":{"x-subconscious-client":"opencode"}},"models":{${MODELS_JSON}}}},"model":"subconscious/${MODEL}"}

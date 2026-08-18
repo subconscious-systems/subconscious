@@ -23,7 +23,7 @@
         "claudecode"
       ],
       "displayName": "Claude Code + Subconscious",
-      "description": "Run Claude Code on your hosted Subconscious model using the ol-runbook environment and telemetry setup.",
+      "description": "Run Claude Code on your hosted Subconscious model with gateway env, context limits, and telemetry.",
       "framework": "Claude Code",
       "language": "shell",
       "category": "coding-agent",
@@ -44,7 +44,11 @@
       "runbook": {
         "mode": "launch",
         "script": "claude-code/run.sh",
-        "setupScript": "claude-code/install.sh"
+        "setupScript": "claude-code/install.sh",
+        "setupActions": [
+          "status",
+          "uninstall"
+        ]
       },
       "launch": "claude",
       "env": {
@@ -83,7 +87,7 @@
       "name": "Codex CLI",
       "aliases": [],
       "displayName": "Codex + Subconscious",
-      "description": "Run Codex on your hosted Subconscious model using the ol-runbook provider, model catalog, and compaction hooks.",
+      "description": "Run Codex on your hosted Subconscious model with a temporary provider catalog and compaction hooks.",
       "framework": "Codex",
       "language": "shell",
       "category": "coding-agent",
@@ -103,7 +107,12 @@
       "runbook": {
         "mode": "launch",
         "script": "codex/run.sh",
-        "setupScript": "codex/install.sh"
+        "setupScript": "codex/install.sh",
+        "setupActions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
       },
       "launch": "codex -c model={model} -c model_provider=subconscious -c web_search=disabled -c model_providers.subconscious.name=Subconscious -c model_providers.subconscious.base_url={baseUrlV1} -c model_providers.subconscious.wire_api=responses -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY -c model_providers.subconscious.stream_idle_timeout_ms=300000",
       "env": {
@@ -120,7 +129,7 @@
         "open-code"
       ],
       "displayName": "OpenCode + Subconscious",
-      "description": "Run OpenCode on your hosted Subconscious model using the ol-runbook provider and context settings.",
+      "description": "Run OpenCode on your hosted Subconscious model with the Subconscious provider and context settings.",
       "framework": "OpenCode",
       "language": "shell",
       "category": "coding-agent",
@@ -140,7 +149,11 @@
       "runbook": {
         "mode": "launch",
         "script": "opencode/run.sh",
-        "setupScript": "opencode/install.sh"
+        "setupScript": "opencode/install.sh",
+        "setupActions": [
+          "status",
+          "uninstall"
+        ]
       },
       "launch": "opencode",
       "configEnv": "OPENCODE_CONFIG_CONTENT",
@@ -199,7 +212,7 @@
       "command": "cursor",
       "name": "Cursor",
       "aliases": [],
-      "description": "Install the ol-runbook Cursor conversation and compaction hooks, then finish model setup in Cursor Settings.",
+      "description": "Install Cursor conversation and compaction hooks, then finish model setup in Cursor Settings.",
       "framework": "Cursor",
       "language": "shell",
       "category": "coding-agent",
@@ -213,7 +226,12 @@
       "runbook": {
         "mode": "setup",
         "script": "cursor/install.sh",
-        "setupScript": "cursor/install.sh"
+        "setupScript": "cursor/install.sh",
+        "setupActions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
       }
     },
     {
@@ -224,7 +242,7 @@
         "vscode",
         "vs-code"
       ],
-      "description": "Install the ol-runbook VS Code custom endpoint and Copilot conversation/compaction hooks.",
+      "description": "Install the VS Code custom endpoint and Copilot conversation/compaction hooks.",
       "framework": "GitHub Copilot",
       "language": "shell",
       "category": "coding-agent",
@@ -238,7 +256,12 @@
       "runbook": {
         "mode": "setup",
         "script": "copilot/install.sh",
-        "setupScript": "copilot/install.sh"
+        "setupScript": "copilot/install.sh",
+        "setupActions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
       }
     },
     {
@@ -246,7 +269,7 @@
       "command": "pi",
       "name": "Pi",
       "aliases": [],
-      "description": "Launch Pi with the Subconscious provider and active profile model configured by subc setup.",
+      "description": "Launch Pi with the Subconscious provider and active profile model configured by subc pi install.",
       "framework": "Pi",
       "language": "shell",
       "category": "coding-agent",
@@ -261,7 +284,12 @@
       "runbook": {
         "mode": "launch",
         "script": "pi/run.sh",
-        "setupScript": "pi/install.sh"
+        "setupScript": "pi/install.sh",
+        "setupActions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
       }
     }
   ]

@@ -33,34 +33,60 @@ test('profile sections stay in sync with every registered CLI agent', () => {
   }
 });
 
-test('setup requests support aggregate and targeted agent actions', () => {
-  const aggregate = agents.parseSetupRequest(['status']);
-  assert.equal(aggregate.targeted, false);
-  assert.equal(aggregate.action, 'status');
-  assert.deepEqual(aggregate.args, ['status']);
-  assert.equal(aggregate.agents.length, 6);
+test('agent actions support per-agent install, status, and leftover uninstall', () => {
+  const cursor = agents.resolveAgent('cursor');
+  const pi = agents.resolveAgent('pi');
+  const claude = agents.resolveAgent('claude');
+  const codex = agents.resolveAgent('codex');
 
-  const targeted = agents.parseSetupRequest(['codex', 'install', '--subagents']);
-  assert.equal(targeted.targeted, true);
-  assert.equal(targeted.action, 'install');
-  assert.deepEqual(targeted.args, ['install', '--subagents']);
-  assert.deepEqual(targeted.agents.map((agent) => agent.id), ['codex']);
+  const cursorInstall = agents.parseAgentAction(cursor, ['install']);
+  assert.equal(cursorInstall.action, 'install');
 
-  const implicitInstall = agents.parseSetupRequest(['claude', '--compact-window', '900000']);
-  assert.equal(implicitInstall.action, 'install');
-  assert.deepEqual(implicitInstall.args, ['--compact-window', '900000']);
-  assert.deepEqual(implicitInstall.agents.map((agent) => agent.id), ['claude-code']);
+  const piUninstall = agents.parseAgentAction(pi, ['uninstall']);
+  assert.equal(piUninstall.action, 'uninstall');
 
-  const persistentEnv = agents.parseSetupRequest(['codex', 'env']);
-  assert.equal(persistentEnv.action, 'env');
-  assert.deepEqual(persistentEnv.args, ['env']);
+  const codexStatus = agents.parseAgentAction(codex, ['status']);
+  assert.equal(codexStatus.action, 'status');
+
+  const claudeLaunch = agents.parseAgentAction(claude, ['--continue']);
+  assert.equal(claudeLaunch.action, 'launch');
+
+  const claudeUninstall = agents.parseAgentAction(claude, ['uninstall']);
+  assert.equal(claudeUninstall.action, 'uninstall');
 
   assert.throws(
-    () => agents.parseSetupRequest(['status', 'codex']),
-    /require a target agent/,
+    () => agents.parseAgentAction(claude, ['install']),
+    /launch-only/,
   );
-  assert.throws(() => agents.parseSetupRequest(['unknown']), /Unknown coding agent/);
-  assert.throws(() => agents.parseSetupRequest(['pi', 'env']), /does not support/);
+  assert.throws(
+    () => agents.parseAgentAction(codex, ['env']),
+    /no longer supports/,
+  );
+});
+
+test('config lists profiles by default and shows a named profile', async () => {
+  await profiles.ensureProfile('work', 'shared-secret');
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../bin/cli.js', import.meta.url);
+  const listed = spawnSync(process.execPath, [cli.pathname, 'config'], {
+    encoding: 'utf-8',
+    env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
+  });
+  assert.equal(listed.status, 0);
+  assert.match(listed.stdout, /work/);
+  assert.match(listed.stdout, /Profiles/);
+  assert.match(listed.stdout, /\.env/);
+  assert.match(listed.stdout, new RegExp(profiles.profilePath('work').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const shown = spawnSync(process.execPath, [cli.pathname, '-p', 'work', 'config'], {
+    encoding: 'utf-8',
+    env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
+  });
+  assert.equal(shown.status, 0);
+  assert.match(shown.stdout, /Profile: work/);
+  assert.match(shown.stdout, new RegExp(profiles.profilePath('work').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(shown.stdout, /GATEWAY_URL=/);
+  assert.doesNotMatch(shown.stdout, /shared-secret/);
 });
 
 test('profiles are created securely and preserve agent-specific settings', async () => {
@@ -79,7 +105,7 @@ test('profiles are created securely and preserve agent-specific settings', async
   assert.equal(updated.values.CODEX_API_KEY, 'codex secret with spaces');
   assert.equal(updated.values.CODEX_REASONING_EFFORT, 'high');
   assert.equal(updated.values.VSCODE_APP, 'Code - Insiders');
-  assert.deepEqual(await profiles.listProfiles(), ['work']);
+  assert.ok((await profiles.listProfiles()).includes('work'));
 
   const profileText = await fs.readFile(updated.path, 'utf-8');
   for (const model of profiles.SUPPORTED_MODELS) {
@@ -132,6 +158,73 @@ test('profile parsing and validation reject unsafe names and invalid values', ()
   );
   assert.equal(profiles.validateSettingValue(compactWindow, '100000'), null);
   assert.match(profiles.validateSettingValue(compactWindow, '99999'), /at least 100000/);
+});
+
+test('extra profile keys survive known-field updates and appear in config show', async () => {
+  const created = await profiles.ensureProfile('extras', 'secret-key-value');
+  const text = `${await fs.readFile(created.path, 'utf-8')}ANTHROPIC_DEFAULT_OPUS_MODEL=subconscious/custom-opus\n`;
+  await fs.writeFile(created.path, text, { encoding: 'utf-8', mode: 0o600 });
+
+  const updated = await profiles.updateProfile('extras', { MODEL: registry.defaults.model });
+  assert.equal(updated.values.ANTHROPIC_DEFAULT_OPUS_MODEL, 'subconscious/custom-opus');
+  assert.equal(updated.values.MODEL, registry.defaults.model);
+
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../bin/cli.js', import.meta.url);
+  const shown = spawnSync(process.execPath, [cli.pathname, '-p', 'extras', 'config'], {
+    encoding: 'utf-8',
+    env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
+  });
+  assert.equal(shown.status, 0);
+  assert.match(shown.stdout, /ANTHROPIC_DEFAULT_OPUS_MODEL=subconscious\/custom-opus/);
+  assert.doesNotMatch(shown.stdout, /secret-key-value/);
+});
+
+test('config edit requires a terminal and rejects unknown editors', async () => {
+  await profiles.ensureProfile('editme', 'edit-secret');
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../bin/cli.js', import.meta.url);
+  const env = { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' };
+
+  const nonTty = spawnSync(process.execPath, [cli.pathname, '-p', 'editme', 'config', 'edit'], {
+    encoding: 'utf-8',
+    env,
+  });
+  assert.notEqual(nonTty.status, 0);
+  assert.match(nonTty.stderr, /requires a terminal/);
+  assert.match(nonTty.stderr, new RegExp(profiles.profilePath('editme').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+
+  const unknown = spawnSync(process.execPath, [cli.pathname, 'config', 'edit', 'emacs'], {
+    encoding: 'utf-8',
+    env,
+  });
+  assert.notEqual(unknown.status, 0);
+  assert.match(unknown.stderr, /vim or nano/);
+});
+
+test('profile extras override injected Claude model-picker defaults', () => {
+  const previous = process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+  delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+  try {
+    const claude = agents.resolveAgent('claude');
+    const env = agents.runbookEnv(
+      'sk-test',
+      registry.defaults.model,
+      undefined,
+      {
+        name: 'picker',
+        path: '/profiles/picker.env',
+        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/custom-opus' },
+      },
+      claude,
+    );
+    assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'subconscious/custom-opus');
+    assert.equal(env.API_KEY, 'sk-test');
+    assert.equal(env.MODEL, registry.defaults.model);
+  } finally {
+    if (previous === undefined) delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
+    else process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = previous;
+  }
 });
 
 test('agent-specific credentials work without a shared profile key', async () => {

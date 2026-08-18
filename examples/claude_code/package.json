@@ -2,7 +2,7 @@
   "name": "claude-code-subconscious",
   "version": "0.1.0",
   "displayName": "Claude Code + Subconscious",
-  "description": "Run Claude Code on your hosted Subconscious model using the ol-runbook environment and telemetry setup.",
+  "description": "Run Claude Code on your hosted Subconscious model with gateway env, context limits, and telemetry.",
   "subconscious": {
     "language": "shell",
     "framework": "Claude Code",

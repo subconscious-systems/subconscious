@@ -10,9 +10,8 @@ Everything else is **generated** from it:
   `examples/<dir>/package.json`
 - `examples/manifest.json`
 
-The executable CLI integrations themselves are a vendored snapshot of
-`ol-runbook/coding-agents` under `cli/bin/runbook`. Each CLI-enabled registry
-entry points to its script with a `runbook` block.
+The executable integrations live under `cli/bin/runbook`. Each CLI-enabled
+registry entry points to its script with a `runbook` block.
 
 ## Editing
 
@@ -28,7 +27,8 @@ overwritten on the next generate.
 
 Agents without an example omit `exampleDir`. Example-only agents use
 `"cli": false`. `command` selects the primary `subc <command>` spelling while
-`aliases` keeps alternate spellings.
+`aliases` keeps alternate spellings. `runbook.setupActions` lists which of
+`install`, `status`, and `uninstall` the CLI exposes on that agent.
 
 ## Tokens
 

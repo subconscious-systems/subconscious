@@ -22,7 +22,7 @@ if [[ -f "$CONFIG" ]]; then
   # shellcheck disable=SC1090
   source "$CONFIG"
 fi
-# install.sh also writes subconscious.env with the API key for the CLI.
+# Older overwrite-style setup also wrote subconscious.env; keep reading it.
 if [[ -f "${HOME}/.codex/subconscious.env" ]]; then
   # shellcheck disable=SC1090
   source "${HOME}/.codex/subconscious.env"
