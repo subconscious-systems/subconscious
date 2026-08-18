@@ -1,6 +1,6 @@
 {
   "name": "subconscious-cli",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "CLI for Subconscious — run Claude Code, Codex, OpenCode, Cursor, Copilot, and Pi",
   "bin": {
     "subc": "./bin/cli.js"
