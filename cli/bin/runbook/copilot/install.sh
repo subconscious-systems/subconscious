@@ -38,8 +38,9 @@
 #           "url": "https://your-gateway.example/v1/chat/completions",
 #           "toolCalling": true,
 #           "vision": false,
-#           "maxInputTokens": 5000000,
-#           "maxOutputTokens": 65536,
+#           "maxInputTokens": 12288,
+#           "maxOutputTokens": 4096,
+#           "thinking": true,
 #           "streaming": true,
 #           "requestHeaders": { "x-subconscious-client": "copilot" }
 #         }
@@ -77,8 +78,8 @@ COMMAND="install"
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${COPILOT_API_KEY:-${API_KEY:-}}"
 MODEL="${MODEL:-subconscious/glm-5.2}"
-MAX_INPUT_TOKENS="${COPILOT_MAX_INPUT_TOKENS:-5000000}"
-MAX_OUTPUT_TOKENS="${COPILOT_MAX_OUTPUT_TOKENS:-65536}"
+MAX_INPUT_TOKENS="${COPILOT_MAX_INPUT_TOKENS:-12288}"
+MAX_OUTPUT_TOKENS="${COPILOT_MAX_OUTPUT_TOKENS:-4096}"
 VSCODE_APP="${VSCODE_APP:-}"  # auto-detected: Code | Code - Insiders | VSCodium
 
 # VS Code's customendpoint provider requires the apiKey to be a
@@ -122,8 +123,8 @@ Options:
   --gateway-url URL         Gateway origin (default: $GATEWAY_URL from .env)
   --api-key KEY             Gateway API key for hooks (default: $API_KEY from .env)
   --model MODEL             Model id (default: subconscious/glm-5.2)
-  --max-input-tokens N      Model context window input tokens (default: 5000000)
-  --max-output-tokens N     Model max output tokens (default: 65536)
+  --max-input-tokens N      Model context window input tokens (default: 12288)
+  --max-output-tokens N     Model max output tokens (default: 4096)
   --vscode-app APP          Code, Code - Insiders, or VSCodium (auto-detected)
 
 Requires: jq, curl. Restart VS Code after install, then enter your model API
@@ -302,6 +303,7 @@ write_config() {
         vision: false,
         maxInputTokens: $maxIn,
         maxOutputTokens: $maxOut,
+        thinking: true,
         streaming: true,
         requestHeaders: { "x-subconscious-client": "copilot" }
       }]')

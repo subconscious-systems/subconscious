@@ -138,6 +138,27 @@ test('the former default gateway migrates while custom gateways are preserved', 
   assert.equal((await fs.stat(migrated.path)).mode & 0o777, 0o600);
 });
 
+test('former Copilot token defaults migrate while custom budgets are preserved', async () => {
+  await fs.mkdir(profiles.PROFILES_DIR, { recursive: true });
+  await fs.writeFile(
+    profiles.profilePath('legacy-copilot'),
+    'COPILOT_MAX_INPUT_TOKENS=5000000\nCOPILOT_MAX_OUTPUT_TOKENS=65536\n',
+    { mode: 0o600 },
+  );
+  await fs.writeFile(
+    profiles.profilePath('custom-copilot'),
+    'COPILOT_MAX_INPUT_TOKENS=10000\nCOPILOT_MAX_OUTPUT_TOKENS=2000\n',
+    { mode: 0o600 },
+  );
+
+  const migrated = await profiles.loadProfile('legacy-copilot');
+  const custom = await profiles.loadProfile('custom-copilot');
+  assert.equal(migrated.values.COPILOT_MAX_INPUT_TOKENS, '12288');
+  assert.equal(migrated.values.COPILOT_MAX_OUTPUT_TOKENS, '4096');
+  assert.equal(custom.values.COPILOT_MAX_INPUT_TOKENS, '10000');
+  assert.equal(custom.values.COPILOT_MAX_OUTPUT_TOKENS, '2000');
+});
+
 test('profile parsing and validation reject unsafe names and invalid values', () => {
   assert.deepEqual(
     profiles.parseProfile('export API_KEY="a key"\nMODEL=subconscious/glm-5.2\n# ignored\n'),

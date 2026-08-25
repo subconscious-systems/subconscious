@@ -57,8 +57,8 @@ export const RUNBOOK_DEFAULTS = {
   OPENCODE_OUTPUT_LIMIT: '65536',
   PI_CONTEXT_WINDOW: '5000000',
   PI_MAX_TOKENS: '65536',
-  COPILOT_MAX_INPUT_TOKENS: '5000000',
-  COPILOT_MAX_OUTPUT_TOKENS: '65536',
+  COPILOT_MAX_INPUT_TOKENS: '12288',
+  COPILOT_MAX_OUTPUT_TOKENS: '4096',
   VSCODE_APP: '',
 };
 
@@ -415,6 +415,22 @@ function migrateDefaultGateway(text) {
     : text;
 }
 
+function migrateCopilotTokenDefaults(text) {
+  const values = parseProfile(text);
+  const updates = {};
+  if (values.COPILOT_MAX_INPUT_TOKENS === '5000000') {
+    updates.COPILOT_MAX_INPUT_TOKENS = RUNBOOK_DEFAULTS.COPILOT_MAX_INPUT_TOKENS;
+  }
+  if (values.COPILOT_MAX_OUTPUT_TOKENS === '65536') {
+    updates.COPILOT_MAX_OUTPUT_TOKENS = RUNBOOK_DEFAULTS.COPILOT_MAX_OUTPUT_TOKENS;
+  }
+  return Object.keys(updates).length ? upsertValues(text, updates) : text;
+}
+
+function migrateDefaults(text) {
+  return migrateCopilotTokenDefaults(migrateDefaultGateway(text));
+}
+
 async function writeProfile(file, text) {
   await fs.mkdir(PROFILES_DIR, { recursive: true });
   await fs.writeFile(file, text, { encoding: 'utf-8', mode: 0o600 });
@@ -425,7 +441,7 @@ export async function loadProfile(name = DEFAULT_PROFILE) {
   const file = profilePath(name);
   try {
     const text = await fs.readFile(file, 'utf-8');
-    const migratedText = migrateDefaultGateway(text);
+    const migratedText = migrateDefaults(text);
     if (migratedText !== text) await writeProfile(file, migratedText);
     return { name, path: file, exists: true, values: parseProfile(migratedText) };
   } catch (error) {
@@ -435,7 +451,7 @@ export async function loadProfile(name = DEFAULT_PROFILE) {
   // Migrate an existing profile on first use, leaving the legacy copy intact.
   if (LEGACY_PROFILES_DIR) {
     try {
-      const text = migrateDefaultGateway(
+      const text = migrateDefaults(
         await fs.readFile(path.join(LEGACY_PROFILES_DIR, `${name}.env`), 'utf-8'),
       );
       await writeProfile(file, text);
