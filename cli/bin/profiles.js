@@ -57,8 +57,8 @@ export const RUNBOOK_DEFAULTS = {
   OPENCODE_OUTPUT_LIMIT: '65536',
   PI_CONTEXT_WINDOW: '5000000',
   PI_MAX_TOKENS: '65536',
-  COPILOT_MAX_INPUT_TOKENS: '12288',
-  COPILOT_MAX_OUTPUT_TOKENS: '4096',
+  COPILOT_MAX_INPUT_TOKENS: '5000000',
+  COPILOT_MAX_OUTPUT_TOKENS: '65536',
   VSCODE_APP: '',
 };
 
@@ -418,10 +418,10 @@ function migrateDefaultGateway(text) {
 function migrateCopilotTokenDefaults(text) {
   const values = parseProfile(text);
   const updates = {};
-  if (values.COPILOT_MAX_INPUT_TOKENS === '5000000') {
+  if (values.COPILOT_MAX_INPUT_TOKENS === '12288') {
     updates.COPILOT_MAX_INPUT_TOKENS = RUNBOOK_DEFAULTS.COPILOT_MAX_INPUT_TOKENS;
   }
-  if (values.COPILOT_MAX_OUTPUT_TOKENS === '65536') {
+  if (values.COPILOT_MAX_OUTPUT_TOKENS === '4096') {
     updates.COPILOT_MAX_OUTPUT_TOKENS = RUNBOOK_DEFAULTS.COPILOT_MAX_OUTPUT_TOKENS;
   }
   return Object.keys(updates).length ? upsertValues(text, updates) : text;

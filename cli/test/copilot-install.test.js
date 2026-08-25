@@ -7,13 +7,13 @@ import { test } from 'node:test';
 
 const installPath = new URL('../bin/runbook/copilot/install.sh', import.meta.url);
 
-function runInstall(home) {
+function runInstall(home, gatewayUrl = 'https://gateway.example') {
   return new Promise((resolve, reject) => {
     const child = spawn('bash', [installPath.pathname, 'install'], {
       env: {
         ...process.env,
         HOME: home,
-        GATEWAY_URL: 'https://gateway.example',
+        GATEWAY_URL: gatewayUrl,
         API_KEY: 'test-copilot-key',
         MODEL: 'subconscious/glm-5.2',
         SUBCONSCIOUS_MODELS: 'subconscious/glm-5.2',
@@ -65,9 +65,34 @@ test('Copilot installer advertises thinking within the deployed context window',
         maxInputTokens: provider.models[0].maxInputTokens,
         maxOutputTokens: provider.models[0].maxOutputTokens,
       },
-      { thinking: true, maxInputTokens: 12288, maxOutputTokens: 4096 },
+      { thinking: true, maxInputTokens: 5000000, maxOutputTokens: 65536 },
     );
   } finally {
     await fs.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('Copilot installer normalizes gateway origins and API paths', async () => {
+  for (const gatewayUrl of [
+    'https://api-dev.subconscious.dev',
+    'https://api-dev.subconscious.dev/v1',
+    'https://api-dev.subconscious.dev/v1/chat/completions',
+  ]) {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-url-'));
+    try {
+      const userDirectory = await createVsCodeUserDirectory(home);
+      const result = await runInstall(home, gatewayUrl);
+      assert.equal(result.code, 0, result.stderr);
+      const configuration = JSON.parse(
+        await fs.readFile(path.join(userDirectory, 'chatLanguageModels.json'), 'utf8'),
+      );
+      const provider = configuration.find(({ name }) => name === 'Subconscious Gateway');
+      assert.equal(
+        provider.models[0].url,
+        'https://api-dev.subconscious.dev/v1/chat/completions',
+      );
+    } finally {
+      await fs.rm(home, { recursive: true, force: true });
+    }
   }
 });
