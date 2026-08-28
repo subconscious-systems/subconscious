@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
 import { getApiKey } from './auth.js';
 import { profileSettingsForAgent, resolvedProfileValues } from './profiles.js';
+import { resolveGatewayModels } from './models.js';
 
 // --- Registry (single source of truth, generated copy shipped in the package).
 const registry = JSON.parse(
@@ -601,42 +602,52 @@ async function requireApiKey(profile, agent) {
   return null;
 }
 
-const CLAUDE_MODEL_PICKER_KEYS = [
-  'ANTHROPIC_DEFAULT_OPUS_MODEL',
-  'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME',
-  'ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION',
-  'ANTHROPIC_DEFAULT_SONNET_MODEL',
-  'ANTHROPIC_DEFAULT_SONNET_MODEL_NAME',
-  'ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME',
-  'ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION',
-];
-
-function claudeModelPickerEnv(agent, ctx) {
+function claudeModelPickerEnv(agent, ctx, models) {
   if (agent.id !== 'claude-code') return {};
-  const configured = substitute(agent.env || {}, ctx);
-  return Object.fromEntries(
-    CLAUDE_MODEL_PICKER_KEYS.map((key) => [key, configured[key]]).filter(([, value]) => value),
-  );
+  const choices = [...new Set([ctx.model, ...models])];
+  const opus = choices[0];
+  const sonnet = choices[1] || opus;
+  const haiku = choices[2] || sonnet;
+  return {
+    ANTHROPIC_DEFAULT_OPUS_MODEL: opus,
+    ANTHROPIC_DEFAULT_OPUS_MODEL_NAME: opus,
+    ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION: 'Subconscious model',
+    ANTHROPIC_DEFAULT_SONNET_MODEL: sonnet,
+    ANTHROPIC_DEFAULT_SONNET_MODEL_NAME: sonnet,
+    ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION: 'Subconscious model',
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: haiku,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME: haiku,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION: 'Subconscious model',
+  };
 }
 
-export function runbookEnv(apiKey, model, binDir, profile, agent) {
+export function runbookEnv(apiKey, model, binDir, profile, agent, models = SUPPORTED_MODELS) {
   const ctx = buildContext(apiKey, model, profile);
   const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
   const specificApiKey = agentApiKeySetting(agent)?.key;
   return {
-    ...claudeModelPickerEnv(agent, ctx),
+    ...claudeModelPickerEnv(agent, ctx, models),
     ...(profile?.values || {}),
     ...process.env,
     GATEWAY_URL: ctx.baseUrl,
     API_KEY: apiKey,
     ...(specificApiKey ? { [specificApiKey]: apiKey } : {}),
     MODEL: model,
-    SUBCONSCIOUS_MODELS: SUPPORTED_MODELS.join('\n'),
+    SUBCONSCIOUS_MODELS: [...new Set([model, ...models])].join('\n'),
     SUBC_ENV_FILE: os.devNull,
     PATH: augmentPath(extraDirs),
   };
+}
+
+async function runtimeModels(profile, model) {
+  const ctx = buildContext('', model, profile);
+  const catalog = await resolveGatewayModels(ctx.baseUrl);
+  if (catalog.source === 'fallback') {
+    console.error(
+      `  ${c.yellow}Could not refresh the gateway model catalog; using the bundled fallback.${c.reset}`,
+    );
+  }
+  return catalog.models;
 }
 
 async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runbook.script) {
@@ -653,6 +664,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
   if (!apiKey) return 1;
   const ctx = buildContext(apiKey, model, profile);
   const authArgs = substitute(agent.runbook.authArgs || [], ctx);
+  const models = await runtimeModels(profile, model);
 
   console.log(
     `  ${c.dim}Configuring ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}for Subconscious (${model})${c.reset}\n`,
@@ -660,7 +672,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
   const code = await spawnRunbook(
     agent,
     [...authArgs, ...rest],
-    runbookEnv(apiKey, model, undefined, profile, agent),
+    runbookEnv(apiKey, model, undefined, profile, agent, models),
     relativeScript,
   );
   const installed = !['status', 'uninstall'].includes(rest[0]);
@@ -713,12 +725,17 @@ export async function runAgent(agent, argv, options = {}) {
   if (!apiKey) return 1;
 
   const binDir = await ensureInstalled(agent);
+  const models = await runtimeModels(profile, model);
 
   if (agent.runbook?.mode === 'launch') {
     console.log(
       `  ${c.dim}Launching ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}on Subconscious ${c.reset}${c.dim}(${model})${c.reset}\n`,
     );
-    return spawnRunbook(agent, rest, runbookEnv(apiKey, model, binDir, profile, agent));
+    return spawnRunbook(
+      agent,
+      rest,
+      runbookEnv(apiKey, model, binDir, profile, agent, models),
+    );
   }
 
   const ctx = buildContext(apiKey, model, profile);

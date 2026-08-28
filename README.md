@@ -80,14 +80,9 @@ print(completion.choices[0].message.content)
 
 ## Model
 
-Available models include:
-
-- **`subconscious/glm-5.2`** (default)
-- **`subconscious/tim-qwen3.6-27b`**
-- **`subconscious/deepseek-v4-flash-marathon`**
-
-They are served behind the OpenAI-compatible endpoint. `/v1/models` reports
-the supported features for each model.
+Models are served behind the OpenAI-compatible endpoint. Query the public
+`https://api.subconscious.dev/v1/models` endpoint (or run `subc models`) for the
+gateway's current active model IDs.
 
 ## Tools
 
