@@ -270,7 +270,8 @@ async function main() {
       console.log(COMMAND_HELP.models);
       return;
     }
-    modelsCommand();
+    const profile = await loadProfile(profileName);
+    await modelsCommand(profile);
     return;
   }
 

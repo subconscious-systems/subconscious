@@ -108,9 +108,7 @@ test('profiles are created securely and preserve agent-specific settings', async
   assert.ok((await profiles.listProfiles()).includes('work'));
 
   const profileText = await fs.readFile(updated.path, 'utf-8');
-  for (const model of profiles.SUPPORTED_MODELS) {
-    assert.match(profileText, new RegExp(`#   ${model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
-  }
+  assert.match(profileText, /subc models/);
 
   assert.equal(await profiles.clearProfileApiKey('work'), true);
   const cleared = await profiles.loadProfile('work');
@@ -225,6 +223,28 @@ test('profile extras override injected Claude model-picker defaults', () => {
     if (previous === undefined) delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
     else process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = previous;
   }
+});
+
+test('runtime gateway models flow into agent catalogs and Claude picker slots', () => {
+  const liveModels = [
+    'subconscious/new-default',
+    'subconscious/new-fast',
+    'subconscious/new-small',
+  ];
+  const claude = agents.resolveAgent('claude');
+  const env = agents.runbookEnv(
+    'sk-test',
+    liveModels[0],
+    undefined,
+    { name: 'dynamic', path: '/profiles/dynamic.env', values: {} },
+    claude,
+    liveModels,
+  );
+
+  assert.equal(env.SUBCONSCIOUS_MODELS, liveModels.join('\n'));
+  assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, liveModels[0]);
+  assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, liveModels[1]);
+  assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, liveModels[2]);
 });
 
 test('agent-specific credentials work without a shared profile key', async () => {

@@ -159,9 +159,8 @@ values. A command-line `--model` override has the highest model precedence.
 List the available models with `subc models`:
 
 ```text
-subconscious/glm-5.2 (default)
-subconscious/tim-qwen3.6-27b
-subconscious/deepseek-v4-flash-marathon
+subconscious/glm-5.2 (profile default)
+subconscious/new-model
 ```
 
 Select a model per run, save it in the current profile, or override it through
@@ -173,14 +172,17 @@ subc config --model subconscious/deepseek-v4-flash-marathon
 export SUBCONSCIOUS_MODEL=subconscious/glm-5.2
 ```
 
-The Claude Code, Codex, OpenCode, Pi, and Copilot integrations register all
-three models with their native model pickers. The profile's `MODEL` remains the
-active model where the agent supports setting one and is listed first in the
-other catalogs. Cursor requires adding the three model IDs in its OpenAI API
-Key Override settings; `subc cursor install` prints the complete list and the model
-selected by the active profile. Use the printed `/v1` Base URL in Cursor
-Settings; the profile itself stores the gateway origin so correlation hooks can
-post to `/v1/agent-hooks`.
+`subc models` reads the selected gateway's public `/v1/models` endpoint. Agent
+launches and installers use that same runtime catalog, so newly routed models
+appear without a CLI release. If discovery is temporarily unavailable, the CLI
+prints a warning and uses its bundled fallback catalog.
+
+The profile's `MODEL` remains the active model where the agent supports setting
+one and is listed first in generated catalogs. Cursor requires adding the model
+IDs in its OpenAI API Key Override settings; `subc cursor install` prints the
+current list and the model selected by the active profile. Use the printed `/v1`
+Base URL in Cursor Settings; the profile itself stores the gateway origin so
+correlation hooks can post to `/v1/agent-hooks`.
 
 The default gateway is `https://api.subconscious.dev`. Profiles containing
 the former exact default (`https://api.subconscious.dev`) migrate automatically;
