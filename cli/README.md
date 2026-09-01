@@ -188,6 +188,8 @@ export SUBCONSCIOUS_MODEL=subconscious/glm-5.2
 Every launch and install fetches the same live catalog without caching. Codex,
 OpenCode, Pi, Copilot, and Cursor receive the complete model list. The selected
 profile model is listed first only while the gateway still advertises it.
+OpenCode rebuilds its isolated runtime provider on every `subc opencode` launch,
+so models left in older OpenCode configuration files do not leak into the list.
 If a saved profile default has been removed, launches use the first live model;
 an explicit `--model` or `SUBCONSCIOUS_MODEL` override is always preserved.
 Claude Code exposes four native Opus/Sonnet/Haiku/Fable picker slots plus one
