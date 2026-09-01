@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import {
   PACKAGE_NAME,
@@ -14,6 +15,9 @@ import {
 process.env.NO_COLOR = '1';
 
 const cliPath = new URL('../bin/cli.js', import.meta.url);
+const packageVersion = JSON.parse(
+  await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'),
+).version;
 
 function runCli(args) {
   return new Promise((resolve, reject) => {
@@ -157,7 +161,7 @@ test('installLatest skips npm when this version is already newest', async () => 
   }
 });
 
-test('cli help lists upgrade and reports 4.0.0', async () => {
+test('cli help lists upgrade and reports the package version', async () => {
   const help = await runCli(['help']);
   assert.equal(help.code, 0, help.stderr);
   assert.match(help.stdout, /upgrade/);
@@ -169,5 +173,5 @@ test('cli help lists upgrade and reports 4.0.0', async () => {
 
   const version = await runCli(['-v']);
   assert.equal(version.code, 0, version.stderr);
-  assert.equal(version.stdout.trim(), '4.0.0');
+  assert.equal(version.stdout.trim(), packageVersion);
 });
