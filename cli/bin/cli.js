@@ -3,7 +3,7 @@
 /**
  * Subconscious CLI — log in, then launch coding agents on your hosted models.
  *
- *   subc login | update-key | logout | whoami — manage your API key
+ *   subc login | update-key | logout | whoami | upgrade — manage your API key
  *   subc <agent> [...args]            — launch or configure a coding agent
  *
  * Auth lives in ./auth.js, the agent launcher + registry in ./agents.js.
@@ -19,6 +19,7 @@ import {
   updateApiKeyCommand,
   whoamiCommand,
 } from './auth.js';
+import { upgradeCommand } from './upgrade.js';
 import {
   resolveAgent,
   runAgent,
@@ -62,6 +63,7 @@ function printHelp() {
     ${c.cyan}update-url${c.reset}   Update the active profile's gateway URL automatically
     ${c.cyan}logout${c.reset}       Remove saved credentials
     ${c.cyan}whoami${c.reset}       Show current authentication status
+    ${c.cyan}upgrade${c.reset}      Upgrade this CLI to the latest version
 
   ${c.bold}Profiles${c.reset}
     ${c.cyan}config${c.reset}       List profiles, or show/edit one with ${c.dim}-p${c.reset}
@@ -78,6 +80,8 @@ ${agents}
 
   ${c.bold}Examples${c.reset}
     ${c.dim}$${c.reset} subc login
+    ${c.dim}$${c.reset} subc upgrade
+    ${c.dim}$${c.reset} subc upgrade --latest
     ${c.dim}$${c.reset} subc config
     ${c.dim}$${c.reset} subc config help
     ${c.dim}$${c.reset} subc -p staging config
@@ -117,6 +121,17 @@ Usage:
   subc whoami help
 
 Show the current authentication status for the selected profile.
+`,
+  upgrade: `
+Usage:
+  subc upgrade
+  subc upgrade --latest
+  subc upgrade help
+
+Upgrade subconscious-cli to the latest published version.
+
+  subc upgrade           Prompt "Do you want to upgrade?" then install @latest
+  subc upgrade --latest  Skip the prompt and install @latest
 `,
   'update-key': `
 Usage:
@@ -295,6 +310,15 @@ async function main() {
       fallbackModels: PACKAGED_MODELS,
     });
     modelsCommand(catalog.models, { selectedModel, error: catalog.error });
+    return;
+  }
+
+  if (command === 'upgrade') {
+    if (isHelpArg(args[1])) {
+      console.log(COMMAND_HELP.upgrade);
+      return;
+    }
+    await upgradeCommand(args.slice(1));
     return;
   }
 

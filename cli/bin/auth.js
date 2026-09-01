@@ -4,14 +4,15 @@
  * Login flow (localhost callback pattern, similar to Vercel/Supabase CLIs):
  *  1. CLI generates a random `state` token (CSRF protection) and starts
  *     an ephemeral HTTP server on a random port bound to 127.0.0.1.
- *  2. Opens the browser to {PLATFORM_URL}/cli/auth?port=...&state=...
+ *  2. Opens the browser to {platformUrl}/cli/auth?port=...&state=...
  *  3. The web app authenticates the user, generates an API key, and
  *     delivers it back to the CLI via a cross-origin fetch to
  *     localhost:{port}/callback?token=...&state=...
  *  4. CLI verifies the `state`, saves the key to ~/.subconscious/config.json,
  *     and creates a coding-agent profile under ~/.subconscious/profiles/.
  *
- * Override SUBCONSCIOUS_URL env var for local development.
+ * Override SUBCONSCIOUS_URL env var for local development
+ * (e.g. http://localhost:3000). Production defaults to platform.subconscious.dev.
  */
 
 import http from 'node:http';
@@ -22,6 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { c } from './colors.js';
 import { clearProfileApiKey, DEFAULT_PROFILE, ensureProfile } from './profiles.js';
+import { printLoginUpgradeWarning } from './upgrade.js';
 
 const CONFIG_OVERRIDE = process.env.SUBC_CONFIG_DIR?.trim();
 const CONFIG_DIR = CONFIG_OVERRIDE || path.join(os.homedir(), '.subconscious');
@@ -29,12 +31,17 @@ const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
 const LEGACY_CONFIG_FILE = CONFIG_OVERRIDE
   ? null
   : path.join(os.homedir(), '.subcon', 'config.json');
-// Defaults to production. Developers set SUBCONSCIOUS_URL=http://localhost:3000 for local dev.
-const PLATFORM_URL = process.env.SUBCONSCIOUS_URL || 'https://www.subconscious.dev';
+// Defaults to the platform host. Developers set SUBCONSCIOUS_URL for local dev.
+export const DEFAULT_PLATFORM_URL = 'https://platform.subconscious.dev';
 
-// Login callback CORS. After the marketing/platform split, www 307s /cli/auth
-// to the platform host, so the browser Origin is platform even when the CLI
-// still opened www. Keep www so a non-redirected tab still works.
+export function getPlatformUrl() {
+  const raw = process.env.SUBCONSCIOUS_URL?.trim() || DEFAULT_PLATFORM_URL;
+  return raw.replace(/\/$/, '');
+}
+
+// Login callback CORS. After the marketing/platform split, /cli/auth lives on
+// platform. www may still 307 there for older CLIs; keep www so a redirected
+// or leftover tab can complete the callback.
 const CALLBACK_ORIGINS = new Set([
   'https://www.subconscious.dev',
   'https://platform.subconscious.dev',
@@ -42,7 +49,7 @@ const CALLBACK_ORIGINS = new Set([
   'https://platform-dev.subconscious.dev',
 ]);
 
-export function isAllowedCallbackOrigin(origin, platformUrl = PLATFORM_URL) {
+export function isAllowedCallbackOrigin(origin, platformUrl = getPlatformUrl()) {
   if (!origin) return false;
   if (origin === platformUrl || CALLBACK_ORIGINS.has(origin)) return true;
   try {
@@ -104,6 +111,24 @@ export async function getApiKey(profile) {
   return null;
 }
 
+export async function probeLoginPage(platformUrl = getPlatformUrl(), fetchImpl = fetch) {
+  const url = `${platformUrl.replace(/\/$/, '')}/cli/auth`;
+  try {
+    const res = await fetchImpl(url, {
+      method: 'GET',
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8000),
+    });
+    return res.status;
+  } catch {
+    return null;
+  }
+}
+
+export function isLoginMissing(status) {
+  return status === 404;
+}
+
 // ── Browser opener ──────────────────────────────────────────────────────
 
 function openBrowser(url) {
@@ -141,7 +166,7 @@ function startCallbackServer(expectedState) {
       const allowed = isAllowedCallbackOrigin(origin);
       res.setHeader(
         'Access-Control-Allow-Origin',
-        allowed ? origin : PLATFORM_URL,
+        allowed ? origin : getPlatformUrl(),
       );
       res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -298,10 +323,18 @@ export async function loginCommand(_argv = [], options = {}) {
   );
   console.log();
 
+  const platformUrl = getPlatformUrl();
+  const loginStatus = await probeLoginPage(platformUrl);
+  if (isLoginMissing(loginStatus)) {
+    printLoginUpgradeWarning();
+    process.exitCode = 1;
+    return;
+  }
+
   const state = crypto.randomBytes(16).toString('hex');
   const { port, promise } = await startCallbackServer(state);
 
-  const authUrl = `${PLATFORM_URL}/cli/auth?port=${port}&state=${state}`;
+  const authUrl = `${platformUrl}/cli/auth?port=${port}&state=${state}`;
 
   console.log(`  ${c.dim}Opening browser to sign in...${c.reset}`);
   console.log();
@@ -426,10 +459,15 @@ export async function whoamiCommand(_argv = [], options = {}) {
 
   // Validate the key against the server; falls back to offline display if unreachable
   try {
-    const res = await fetch(`${PLATFORM_URL}/api/cli/whoami`, {
+    const res = await fetch(`${getPlatformUrl()}/api/cli/whoami`, {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(5000),
     });
+
+    if (res.status === 404) {
+      printLoginUpgradeWarning();
+      return;
+    }
 
     if (res.ok) {
       const data = await res.json();
