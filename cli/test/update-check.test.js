@@ -39,12 +39,14 @@ test('fetchLatestVersion checks the npm latest endpoint without caching', async 
 
 test('renderUpdateNotice keeps the selectable options outside the box', () => {
   const notice = renderUpdateNotice('4.0.0', '4.1.0');
-  assert.match(notice, /Subconscious CLI update available/);
-  assert.match(notice, /4\.0\.0 -> 4\.1\.0/);
+  assert.match(notice, /Subconscious CLI/);
+  assert.match(notice, /Update available/);
+  assert.match(notice, /●─── ╳ ───●/);
+  assert.match(notice, /4\.0\.0  →  4\.1\.0/);
   assert.doesNotMatch(notice, /Update\s+\|\n.*Skip/);
 
   const options = renderUpdateOptions(0, { installedVersion: '4.0.0' });
-  assert.match(options, />\s+Update now/);
+  assert.match(options, /›\s+Update now/);
   assert.match(options, /Runs `npm install -g subconscious-cli@latest`/);
   assert.match(options, /\s+Skip for now/);
   assert.match(options, /Continue this command with version 4\.0\.0/);
@@ -71,8 +73,8 @@ test('showUpdateNotice prints on every newer-version check', async () => {
   await showUpdateNotice(options);
 
   assert.equal(output.length, 2);
-  assert.match(output[0], /4\.0\.0 -> 4\.1\.0/);
-  assert.match(output[1], /4\.0\.0 -> 4\.1\.0/);
+  assert.match(output[0], /4\.0\.0  →  4\.1\.0/);
+  assert.match(output[1], /4\.0\.0  →  4\.1\.0/);
 });
 
 test('showUpdateNotice installs after Update is selected', async () => {

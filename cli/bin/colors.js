@@ -10,6 +10,11 @@ export const colorEnabled =
   (forceColor || process.stdout.isTTY === true);
 
 const ansi = (code) => (colorEnabled ? `\x1b[${code}m` : '');
+const rgb = (red, green, blue) =>
+  colorEnabled ? `\x1b[38;2;${red};${green};${blue}m` : '';
+const bgRgb = (red, green, blue) =>
+  colorEnabled ? `\x1b[48;2;${red};${green};${blue}m` : '';
+export const BRAND_ORANGE = '\x1b[38;2;255;92;40m';
 
 export const c = {
   reset: ansi(0),
@@ -20,6 +25,10 @@ export const c = {
   red: ansi(31),
   yellow: ansi(33),
   magenta: ansi(35),
+  black: ansi(30),
+  orange: colorEnabled ? BRAND_ORANGE : '',
+  orangeSoft: rgb(255, 145, 105),
+  bgOrange: bgRgb(255, 92, 40),
   underline: ansi(4),
   inverse: ansi(7),
 };

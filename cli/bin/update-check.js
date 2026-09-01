@@ -1,11 +1,18 @@
 import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
-import { c } from './colors.js';
+import { c, colorEnabled } from './colors.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
 export const UPDATE_CHECK_TIMEOUT_MS = 1500;
 const UPDATE_ACTIONS = ['Update now', 'Skip for now'];
+const UPDATE_LOGO = [
+  '  ●     ●',
+  '   ╲   ╱ ',
+  '●─── ╳ ───●',
+  '   ╱   ╲ ',
+  '  ●     ●',
+];
 
 function parseVersion(version) {
   const match = String(version)
@@ -85,18 +92,32 @@ export async function fetchLatestVersion(options = {}) {
 }
 
 export function renderUpdateNotice(installedVersion, latestVersion) {
-  const title = 'Subconscious CLI update available';
-  const versions = `${installedVersion} -> ${latestVersion}`;
-  const width = Math.max(title.length, versions.length);
-  const border = `+${'-'.repeat(width + 2)}+`;
-  const row = (text, style = '') =>
-    `${c.yellow}|${c.reset} ${style}${text.padEnd(width)}${c.reset} ${c.yellow}|${c.reset}`;
+  const logoWidth = Math.max(...UPDATE_LOGO.map((line) => line.length));
+  const textWidth = 24;
+  const gap = '   ';
+  const innerWidth = logoWidth + gap.length + textWidth + 2;
+  const border = `${c.orange}╭${'─'.repeat(innerWidth)}╮${c.reset}`;
+  const bottom = `${c.orange}╰${'─'.repeat(innerWidth)}╯${c.reset}`;
+  const text = [
+    { raw: 'Subconscious CLI', value: `${c.orange}${c.bold}Subconscious CLI${c.reset}` },
+    { raw: 'Update available', value: `${c.bold}Update available${c.reset}` },
+    { raw: '', value: '' },
+    {
+      raw: `${installedVersion}  →  ${latestVersion}`,
+      value: `${c.dim}${installedVersion}${c.reset}  ${c.orange}→${c.reset}  ${c.orange}${c.bold}${latestVersion}${c.reset}`,
+    },
+    { raw: '', value: '' },
+  ];
+  const row = (logo, copy) => {
+    const logoPadding = ' '.repeat(logoWidth - logo.length);
+    const textPadding = ' '.repeat(textWidth - copy.raw.length);
+    return `${c.orange}│${c.reset} ${c.orange}${logo}${logoPadding}${c.reset}${gap}${copy.value}${textPadding} ${c.orange}│${c.reset}`;
+  };
 
   return [
-    `  ${c.yellow}${border}${c.reset}`,
-    `  ${row(title, c.bold)}`,
-    `  ${row(versions, c.cyan)}`,
-    `  ${c.yellow}${border}${c.reset}`,
+    `  ${border}`,
+    ...UPDATE_LOGO.map((logo, index) => `  ${row(logo, text[index])}`),
+    `  ${bottom}`,
   ].join('\n');
 }
 
@@ -110,11 +131,14 @@ export function renderUpdateOptions(selectedIndex = 0, versions = {}) {
 
   return UPDATE_ACTIONS.map((label, index) => {
     const active = index === selectedIndex;
-    const pointer = active ? `${c.cyan}>${c.reset}` : ' ';
+    const pointer = active ? `${c.orange}›${c.reset}` : ' ';
+    const activeStyle = colorEnabled
+      ? `${c.bgOrange}${c.black}`
+      : c.inverse;
     const option = active
-      ? `${c.inverse}${c.bold} ${label} ${c.reset}`
+      ? `${activeStyle}${c.bold} ${label} ${c.reset}`
       : ` ${label} `;
-    const descriptionStyle = active ? c.cyan : c.dim;
+    const descriptionStyle = active ? c.orangeSoft : c.dim;
     return `  ${pointer} ${option}\n      ${descriptionStyle}${descriptions[index]}${c.reset}`;
   }).join('\n');
 }
@@ -132,7 +156,7 @@ export async function selectUpdateAction(options = {}) {
   const output = options.output || process.stderr;
   const initiallyRaw = input.isRaw === true;
   let selectedIndex = options.selectedIndex ?? 0;
-  const instructions = `  ${c.dim}Use ↑/↓ to select • Enter to confirm${c.reset}`;
+  const instructions = `  ${c.dim}Use ${c.orange}↑/↓${c.reset}${c.dim} to select  •  ${c.orange}Enter${c.reset}${c.dim} to confirm${c.reset}`;
   const render = () =>
     `${renderUpdateOptions(selectedIndex, {
       installedVersion: options.installedVersion,
