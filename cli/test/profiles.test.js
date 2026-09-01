@@ -7,6 +7,7 @@ import path from 'node:path';
 const testConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-profiles-test-'));
 process.env.SUBC_CONFIG_DIR = testConfigDir;
 process.env.NO_COLOR = '1';
+process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
 
 const profiles = await import('../bin/profiles.js');
 const agents = await import('../bin/agents.js');
@@ -246,6 +247,58 @@ test('profile extras override injected Claude model-picker defaults', () => {
     if (previous === undefined) delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
     else process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = previous;
   }
+});
+
+test('live models flow into runbooks and all five Claude picker slots', () => {
+  const claude = agents.resolveAgent('claude');
+  const liveModels = [
+    'subconscious/new-default',
+    'subconscious/new-fast',
+    'subconscious/new-small',
+    'subconscious/new-extra',
+    'subconscious/new-fifth',
+  ];
+  const env = agents.runbookEnv(
+    'sk-test',
+    liveModels[0],
+    undefined,
+    { name: 'live', path: '/profiles/live.env', values: {} },
+    claude,
+    liveModels,
+  );
+
+  assert.equal(env.SUBCONSCIOUS_MODELS, liveModels.join('\n'));
+  assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, liveModels[0]);
+  assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, liveModels[1]);
+  assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, liveModels[2]);
+  assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL, liveModels[3]);
+  assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL_NAME, liveModels[3]);
+  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, liveModels[4]);
+  assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, liveModels[4]);
+  assert.equal(
+    env.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION,
+    `Subconscious model ${liveModels[4]}`,
+  );
+});
+
+test('a removed saved default yields to the first live model but explicit overrides do not', () => {
+  const catalog = {
+    source: 'gateway',
+    models: ['subconscious/live', 'subconscious/other'],
+  };
+
+  assert.equal(
+    agents.selectLaunchModel('subconscious/removed', 'profile', catalog),
+    'subconscious/live',
+  );
+  assert.equal(
+    agents.selectLaunchModel('subconscious/removed', 'command', catalog),
+    'subconscious/removed',
+  );
+  assert.equal(
+    agents.selectLaunchModel('subconscious/other', 'profile', catalog),
+    'subconscious/other',
+  );
 });
 
 test('agent-specific credentials work without a shared profile key', async () => {

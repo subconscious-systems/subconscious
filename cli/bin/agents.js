@@ -21,13 +21,14 @@ import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
 import { getApiKey } from './auth.js';
 import { profileSettingsForAgent, resolvedProfileValues } from './profiles.js';
+import { resolveModelCatalog } from './models.js';
 
 // --- Registry (single source of truth, generated copy shipped in the package).
 const registry = JSON.parse(
   readFileSync(new URL('./registry.generated.json', import.meta.url), 'utf-8'),
 );
 const DEFAULTS = registry.defaults;
-const SUPPORTED_MODELS =
+const PACKAGED_MODELS =
   Array.isArray(DEFAULTS.models) && DEFAULTS.models.length
     ? DEFAULTS.models
     : [DEFAULTS.model];
@@ -312,8 +313,10 @@ function buildContext(apiKey, model, profile) {
  * Falls back to SUBCONSCIOUS_MODEL, then the registry default.
  */
 function extractModel(argv, profile) {
-  let model =
-    process.env.SUBCONSCIOUS_MODEL?.trim() || profile?.values?.MODEL?.trim() || DEFAULTS.model;
+  const environmentModel = process.env.SUBCONSCIOUS_MODEL?.trim();
+  const profileModel = profile?.values?.MODEL?.trim();
+  let model = environmentModel || profileModel || DEFAULTS.model;
+  let modelSource = environmentModel ? 'environment' : profileModel ? 'profile' : 'default';
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -321,17 +324,19 @@ function extractModel(argv, profile) {
       const v = argv[i + 1];
       if (v && !v.startsWith('-')) {
         model = v;
+        modelSource = 'command';
         i++;
       }
       continue;
     }
     if (a.startsWith('--model=')) {
       model = a.slice('--model='.length);
+      modelSource = 'command';
       continue;
     }
     rest.push(a);
   }
-  return { model, rest };
+  return { model, modelSource, rest };
 }
 
 /**
@@ -611,32 +616,100 @@ const CLAUDE_MODEL_PICKER_KEYS = [
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION',
+  'ANTHROPIC_DEFAULT_FABLE_MODEL',
+  'ANTHROPIC_DEFAULT_FABLE_MODEL_NAME',
+  'ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION',
+  'ANTHROPIC_CUSTOM_MODEL_OPTION',
+  'ANTHROPIC_CUSTOM_MODEL_OPTION_NAME',
+  'ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION',
 ];
 
-function claudeModelPickerEnv(agent, ctx) {
+function claudeModelPickerEnv(agent, ctx, models) {
   if (agent.id !== 'claude-code') return {};
   const configured = substitute(agent.env || {}, ctx);
+  const configuredModels = [
+    configured.ANTHROPIC_DEFAULT_OPUS_MODEL,
+    configured.ANTHROPIC_DEFAULT_SONNET_MODEL,
+    configured.ANTHROPIC_DEFAULT_HAIKU_MODEL,
+    configured.ANTHROPIC_DEFAULT_FABLE_MODEL,
+    configured.ANTHROPIC_CUSTOM_MODEL_OPTION,
+  ];
+  const pickerModels = [];
+  for (const model of [...models, ...configuredModels]) {
+    if (model && !pickerModels.includes(model)) pickerModels.push(model);
+  }
+  while (pickerModels.length < 3) pickerModels.push(pickerModels.at(-1) || ctx.model);
+
+  const roles = ['OPUS', 'SONNET', 'HAIKU', 'FABLE'];
+  const env = {};
+  for (let index = 0; index < roles.length; index++) {
+    const role = roles[index];
+    const model = pickerModels[index];
+    if (!model) continue;
+    env[`ANTHROPIC_DEFAULT_${role}_MODEL`] = model;
+    env[`ANTHROPIC_DEFAULT_${role}_MODEL_NAME`] = model;
+    env[`ANTHROPIC_DEFAULT_${role}_MODEL_DESCRIPTION`] = `Subconscious model ${model}`;
+  }
+  const customModel = pickerModels[4];
+  if (customModel) {
+    env.ANTHROPIC_CUSTOM_MODEL_OPTION = customModel;
+    env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME = customModel;
+    env.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION = `Subconscious model ${customModel}`;
+  }
   return Object.fromEntries(
-    CLAUDE_MODEL_PICKER_KEYS.map((key) => [key, configured[key]]).filter(([, value]) => value),
+    CLAUDE_MODEL_PICKER_KEYS.map((key) => [key, env[key]]).filter(([, value]) => value),
   );
 }
 
-export function runbookEnv(apiKey, model, binDir, profile, agent) {
+export function runbookEnv(
+  apiKey,
+  model,
+  binDir,
+  profile,
+  agent,
+  models = PACKAGED_MODELS,
+) {
   const ctx = buildContext(apiKey, model, profile);
   const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
   const specificApiKey = agentApiKeySetting(agent)?.key;
   return {
-    ...claudeModelPickerEnv(agent, ctx),
+    ...claudeModelPickerEnv(agent, ctx, models),
     ...(profile?.values || {}),
     ...process.env,
     GATEWAY_URL: ctx.baseUrl,
     API_KEY: apiKey,
     ...(specificApiKey ? { [specificApiKey]: apiKey } : {}),
     MODEL: model,
-    SUBCONSCIOUS_MODELS: SUPPORTED_MODELS.join('\n'),
+    SUBCONSCIOUS_MODELS: models.join('\n'),
     SUBC_ENV_FILE: os.devNull,
     PATH: augmentPath(extraDirs),
   };
+}
+
+async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
+  const ctx = buildContext(apiKey, selectedModel, profile);
+  const catalog = await resolveModelCatalog({
+    baseUrl: ctx.baseUrl,
+    apiKey,
+    selectedModel,
+    fallbackModels: PACKAGED_MODELS,
+  });
+  if (catalog.error) {
+    console.error(
+      `  ${c.yellow}Could not fetch the live model catalog; using packaged defaults.${c.reset}`,
+    );
+    console.error(`  ${c.dim}${catalog.error.message}${c.reset}\n`);
+  }
+  return catalog;
+}
+
+export function selectLaunchModel(requestedModel, modelSource, catalog) {
+  const useLiveDefault =
+    catalog.source === 'gateway' &&
+    catalog.models.length > 0 &&
+    !catalog.models.includes(requestedModel) &&
+    (modelSource === 'profile' || modelSource === 'default');
+  return useLiveDefault ? catalog.models[0] : requestedModel;
 }
 
 async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runbook.script) {
@@ -648,9 +721,16 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
     }, relativeScript);
   }
 
-  const { model, rest } = extractModel(argv, profile);
+  const { model: requestedModel, modelSource, rest } = extractModel(argv, profile);
   const apiKey = optionValue(rest, '--api-key') || (await requireApiKey(profile, agent));
   if (!apiKey) return 1;
+  const catalog = await resolvedModelsForLaunch(profile, apiKey, requestedModel);
+  const model = selectLaunchModel(requestedModel, modelSource, catalog);
+  if (model !== requestedModel) {
+    console.error(
+      `  ${c.yellow}Configured model ${requestedModel} is not in the live catalog; using ${model}.${c.reset}\n`,
+    );
+  }
   const ctx = buildContext(apiKey, model, profile);
   const authArgs = substitute(agent.runbook.authArgs || [], ctx);
 
@@ -660,7 +740,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
   const code = await spawnRunbook(
     agent,
     [...authArgs, ...rest],
-    runbookEnv(apiKey, model, undefined, profile, agent),
+    runbookEnv(apiKey, model, undefined, profile, agent, catalog.models),
     relativeScript,
   );
   const installed = !['status', 'uninstall'].includes(rest[0]);
@@ -708,17 +788,28 @@ export async function runAgent(agent, argv, options = {}) {
     return code;
   }
 
-  const { model, rest } = extractModel(argv, profile);
+  const { model: requestedModel, modelSource, rest } = extractModel(argv, profile);
   const apiKey = await requireApiKey(profile, agent);
   if (!apiKey) return 1;
 
   const binDir = await ensureInstalled(agent);
+  const catalog = await resolvedModelsForLaunch(profile, apiKey, requestedModel);
+  const model = selectLaunchModel(requestedModel, modelSource, catalog);
+  if (model !== requestedModel) {
+    console.error(
+      `  ${c.yellow}Configured model ${requestedModel} is not in the live catalog; using ${model}.${c.reset}\n`,
+    );
+  }
 
   if (agent.runbook?.mode === 'launch') {
     console.log(
       `  ${c.dim}Launching ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}on Subconscious ${c.reset}${c.dim}(${model})${c.reset}\n`,
     );
-    return spawnRunbook(agent, rest, runbookEnv(apiKey, model, binDir, profile, agent));
+    return spawnRunbook(
+      agent,
+      rest,
+      runbookEnv(apiKey, model, binDir, profile, agent, catalog.models),
+    );
   }
 
   const ctx = buildContext(apiKey, model, profile);

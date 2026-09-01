@@ -10,6 +10,16 @@ subc login
 subc claude
 ```
 
+Every interactive `subc` command checks npm for a newer CLI release. When an
+update is available, a notice shows the installed and latest versions and lets
+you select **Update now** or **Skip for now** with the arrow keys and Enter.
+Each option describes what it will do, and the active option is highlighted.
+Update runs `npm install -g subconscious-cli@latest`; Skip continues the
+requested command.
+Non-interactive commands automatically skip, and registry errors and timeouts
+never block the requested command. Set `SUBC_DISABLE_UPDATE_CHECK=1` to suppress
+the check in offline automation.
+
 Login creates both the saved credential and a ready-to-use `default` profile,
 so Claude Code, Codex, and OpenCode can launch immediately. Persistent editor
 and Pi integrations are installed per agent:
@@ -156,7 +166,9 @@ values. A command-line `--model` override has the highest model precedence.
 
 ## Models and endpoint overrides
 
-List the available models with `subc models`:
+List the available models with `subc models`. The command fetches the active
+gateway's authenticated `/v1/models` catalog and falls back to the models
+packaged with the CLI when discovery is unavailable:
 
 ```text
 subconscious/glm-5.2 (default)
@@ -173,14 +185,17 @@ subc config --model subconscious/deepseek-v4-flash-marathon
 export SUBCONSCIOUS_MODEL=subconscious/glm-5.2
 ```
 
-The Claude Code, Codex, OpenCode, Pi, and Copilot integrations register all
-three models with their native model pickers. The profile's `MODEL` remains the
-active model where the agent supports setting one and is listed first in the
-other catalogs. Cursor requires adding the three model IDs in its OpenAI API
-Key Override settings; `subc cursor install` prints the complete list and the model
-selected by the active profile. Use the printed `/v1` Base URL in Cursor
-Settings; the profile itself stores the gateway origin so correlation hooks can
-post to `/v1/agent-hooks`.
+Every launch and install fetches the same live catalog without caching. Codex,
+OpenCode, Pi, Copilot, and Cursor receive the complete model list. The selected
+profile model is listed first only while the gateway still advertises it.
+If a saved profile default has been removed, launches use the first live model;
+an explicit `--model` or `SUBCONSCIOUS_MODEL` override is always preserved.
+Claude Code exposes four native Opus/Sonnet/Haiku/Fable picker slots plus one
+custom model option, so the CLI maps the first five models into those slots; any other
+model can still be selected with `subc claude --model MODEL`. Cursor requires adding
+the printed model IDs in its OpenAI API Key Override settings. Use the printed
+`/v1` Base URL in Cursor Settings; the profile itself stores the gateway origin
+so correlation hooks can post to `/v1/agent-hooks`.
 
 The default gateway is `https://api.subconscious.dev`. Profiles containing
 the former exact default (`https://api.subconscious.dev`) migrate automatically;

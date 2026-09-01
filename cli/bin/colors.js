@@ -21,4 +21,5 @@ export const c = {
   yellow: ansi(33),
   magenta: ansi(35),
   underline: ansi(4),
+  inverse: ansi(7),
 };

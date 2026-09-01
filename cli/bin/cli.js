@@ -15,6 +15,7 @@ import { renderBanner } from './branding.js';
 import {
   loginCommand,
   logoutCommand,
+  getApiKey,
   updateApiKeyCommand,
   whoamiCommand,
 } from './auth.js';
@@ -32,9 +33,13 @@ import {
   loadProfile,
   modelsCommand,
   printConfigHelp,
+  RUNBOOK_DEFAULTS,
+  SUPPORTED_MODELS as PACKAGED_MODELS,
   updateUrlCommand,
   validateProfileName,
 } from './profiles.js';
+import { resolveModelCatalog } from './models.js';
+import { showUpdateNotice } from './update-check.js';
 
 function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
@@ -205,6 +210,9 @@ function requireNamedProfile(profile) {
 }
 
 async function main() {
+  const update = await showUpdateNotice();
+  if (update?.action === 'updated' || update?.action === 'cancel') return;
+
   const parsed = extractProfile(process.argv.slice(2));
   const { args, profileName, profileExplicit } = parsed;
   const command = args[0];
@@ -270,7 +278,23 @@ async function main() {
       console.log(COMMAND_HELP.models);
       return;
     }
-    modelsCommand();
+    const profile = await loadProfile(profileName);
+    const auth = await getApiKey(profile);
+    const selectedModel =
+      process.env.SUBCONSCIOUS_MODEL?.trim() ||
+      profile.values.MODEL?.trim() ||
+      RUNBOOK_DEFAULTS.MODEL;
+    const baseUrl =
+      process.env.SUBCONSCIOUS_BASE_URL?.trim() ||
+      profile.values.GATEWAY_URL?.trim() ||
+      RUNBOOK_DEFAULTS.GATEWAY_URL;
+    const catalog = await resolveModelCatalog({
+      baseUrl,
+      apiKey: auth?.key,
+      selectedModel,
+      fallbackModels: PACKAGED_MODELS,
+    });
+    modelsCommand(catalog.models, { selectedModel, error: catalog.error });
     return;
   }
 

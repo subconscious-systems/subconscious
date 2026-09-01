@@ -745,11 +745,18 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
   await printProfile(await loadProfile(profileName));
 }
 
-export function modelsCommand() {
+export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
+  const selectedModel = options.selectedModel || registry.defaults.model;
   console.log(`\n  ${c.bold}Available models${c.reset}\n`);
-  for (const model of SUPPORTED_MODELS) {
-    const suffix = model === registry.defaults.model ? ` ${c.dim}(default)${c.reset}` : '';
+  for (const model of models) {
+    const suffix = model === selectedModel ? ` ${c.dim}(default)${c.reset}` : '';
     console.log(`  ${c.cyan}${model}${c.reset}${suffix}`);
+  }
+  if (options.error) {
+    console.error(
+      `\n  ${c.yellow}Could not fetch the live model catalog; showing packaged defaults.${c.reset}`,
+    );
+    console.error(`  ${c.dim}${options.error.message}${c.reset}`);
   }
   console.log();
 }

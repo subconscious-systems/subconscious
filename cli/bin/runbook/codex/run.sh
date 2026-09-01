@@ -123,8 +123,8 @@ add_supported_model() {
 }
 
 # Keep the requested model first while exposing the complete Subconscious
-# catalog in Codex's /model picker. The CLI supplies this list from the registry;
-# the fallback keeps the vendored runbook useful on its own.
+# catalog in Codex's /model picker. The CLI supplies the live gateway catalog;
+# the packaged fallback keeps the vendored runbook useful on its own.
 add_supported_model "$MODEL"
 while IFS= read -r model_id; do
   add_supported_model "$model_id"
