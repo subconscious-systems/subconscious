@@ -3,7 +3,7 @@
   "version": "4.0.1",
   "description": "CLI for Subconscious — run Claude Code, Codex, OpenCode, Cursor, Copilot, and Pi",
   "bin": {
-    "subc": "./bin/cli.js"
+    "subc": "bin/cli.js"
   },
   "scripts": {
     "test": "node --test"
@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/subconscious-systems/subconscious.git",
+    "url": "git+https://github.com/subconscious-systems/subconscious.git",
     "directory": "cli"
   },
   "keywords": [
