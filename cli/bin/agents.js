@@ -222,10 +222,10 @@ const AGENT_HELP = {
   pi: {
     usage: 'subc [-p NAME] pi [help|install|status|uninstall] [Pi arguments...]',
     behavior:
-      'Launches Pi read-only against the provider previously configured by subc pi install.',
+      'Refreshes the persistent Subconscious provider from the live catalog, then launches Pi.',
     options: [
       ['help', 'Show this help'],
-      ['install', 'Merge the Subconscious provider into ~/.pi/agent/models.json'],
+      ['install', 'Refresh the Subconscious provider without launching Pi'],
       ['status', 'Inspect the persistent Pi provider'],
       ['uninstall', 'Remove only the Subconscious Pi provider and extension'],
       ['--model MODEL', 'Override the profile model for this launch'],

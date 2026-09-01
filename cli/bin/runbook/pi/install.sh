@@ -149,7 +149,7 @@ for model_id in "${SUPPORTED_MODELS[@]}"; do
   fi
 done
 
-PI_DIR="${HOME}/.pi/agent"
+PI_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
 MODELS_JSON="${PI_DIR}/models.json"
 EXTENSIONS_DIR="${PI_DIR}/extensions"
 EXTENSION_DST="${EXTENSIONS_DIR}/subconscious-compaction.ts"

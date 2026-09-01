@@ -27,7 +27,7 @@ and Pi integrations are installed per agent:
 ```bash
 subc cursor install
 subc copilot install
-subc pi install
+subc pi
 subc <agent> uninstall
 ```
 
@@ -70,12 +70,12 @@ The packaged integrations live in `cli/bin/runbook`.
 | `subc opencode` | Launch OpenCode with the runbook provider, client header, and context/output limits |
 | `subc cursor install` | Install/update Cursor conversation and compaction hooks |
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
-| `subc pi install` then `subc pi` | Merge the Pi provider, then launch |
+| `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 
 If Claude Code, Codex, or OpenCode is missing, an interactive terminal offers
-to install it before launching. Pi requires `subc pi install` first; if its
-executable or Subconscious provider is missing, the CLI exits with instructions
-instead of installing the binary.
+to install it before launching. Pi refreshes its Subconscious provider on every
+`subc pi` launch while preserving all other providers in `models.json`; its
+executable must already be installed.
 
 `subc codex` disables Codex apps and plugin tools for that launch by default so
 requests remain below the gateway's 128-tool limit. Core coding tools remain

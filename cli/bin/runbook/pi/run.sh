@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Launch Pi with the Subconscious provider configured by `subc pi install`.
-# This script is deliberately read-only: it never installs Pi, writes config,
-# or updates the persistent integration.
+# Refresh the Subconscious provider from the live catalog, then launch Pi.
+# Other providers in models.json are preserved.
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GATEWAY_URL="${GATEWAY_URL:-}"
+API_KEY="${PI_API_KEY:-${API_KEY:-}}"
 MODEL="${MODEL:-subconscious/glm-5.2}"
 PI_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
 MODELS_JSON="${PI_DIR}/models.json"
 
-if [[ ! -f "$MODELS_JSON" ]] || ! grep -q 'x-subconscious-client' "$MODELS_JSON" 2>/dev/null; then
-  echo "Pi is not configured for Subconscious. Run 'subc pi install' first." >&2
+if [[ -z "$GATEWAY_URL" || -z "$API_KEY" ]]; then
+  echo "error: GATEWAY_URL and API_KEY are required to configure Pi" >&2
   exit 1
 fi
 
-if command -v jq >/dev/null 2>&1 && ! jq -e \
-  --arg model "$MODEL" \
-  '.providers.subconscious.models[]? | select(.id == $model)' \
-  "$MODELS_JSON" >/dev/null 2>&1; then
-  echo "Model '$MODEL' is not present in the Pi catalog. Run 'subc pi install' to refresh it." >&2
-  exit 1
-fi
+"${SCRIPT_DIR}/install.sh" install \
+  --gateway-url "$GATEWAY_URL" \
+  --api-key "$API_KEY" \
+  --model "$MODEL" \
+  >/dev/null
 
 exec pi --provider subconscious --model "$MODEL" "$@"

@@ -269,7 +269,7 @@
       "command": "pi",
       "name": "Pi",
       "aliases": [],
-      "description": "Launch Pi with the Subconscious provider and active profile model configured by subc pi install.",
+      "description": "Refresh Pi with the live Subconscious model catalog and launch the active profile model.",
       "framework": "Pi",
       "language": "shell",
       "category": "coding-agent",
