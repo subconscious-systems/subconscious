@@ -14,7 +14,8 @@ const rgb = (red, green, blue) =>
   colorEnabled ? `\x1b[38;2;${red};${green};${blue}m` : '';
 const bgRgb = (red, green, blue) =>
   colorEnabled ? `\x1b[48;2;${red};${green};${blue}m` : '';
-export const BRAND_ORANGE = '\x1b[38;2;255;92;40m';
+// Match the Subconscious Code brand palette exactly (#FF5C27).
+export const BRAND_ORANGE = '\x1b[38;2;255;92;39m';
 
 export const c = {
   reset: ansi(0),
@@ -27,8 +28,8 @@ export const c = {
   magenta: ansi(35),
   black: ansi(30),
   orange: colorEnabled ? BRAND_ORANGE : '',
-  orangeSoft: rgb(255, 145, 105),
-  bgOrange: bgRgb(255, 92, 40),
+  orangeSoft: rgb(184, 74, 30),
+  bgOrange: bgRgb(255, 92, 39),
   underline: ansi(4),
   inverse: ansi(7),
 };

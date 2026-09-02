@@ -64,7 +64,7 @@ if [ "$BRANCH" != "main" ]; then
 fi
 ok "On branch main"
 
-if ! git diff --quiet || ! git diff --cached --quiet; then
+if [ -n "$(git status --porcelain)" ]; then
   fail "You have uncommitted local changes. Commit or stash them first."
   exit 1
 fi
@@ -85,9 +85,8 @@ header "Step 1: Current published version on npm"
 
 PUBLISHED=$(npm view "$PKG_NAME" version 2>/dev/null || echo "")
 if [ -z "$PUBLISHED" ]; then
-  warn "Could not query npm for $PKG_NAME. Is npm available?"
-  warn "Continuing with published version unknown."
-  PUBLISHED="0.0.0"
+  fail "Could not query npm for $PKG_NAME. Refusing to publish with an unknown registry version."
+  exit 1
 fi
 
 PUBLISHED_TAG="${TAG_PREFIX}${PUBLISHED}"
@@ -159,17 +158,17 @@ header "Step 5: Ready to release"
 
 NPM_USER=$(npm whoami 2>/dev/null || echo "")
 if [ -z "$NPM_USER" ]; then
-  warn "Not logged in to npm. You'll need to run ${BOLD}npm login${RESET} before publishing."
-else
-  ok "Logged in to npm as ${BOLD}$NPM_USER${RESET}"
+  fail "Not logged in to npm. Run ${BOLD}npm login${RESET}, then restart this script."
+  exit 1
 fi
+ok "Logged in to npm as ${BOLD}$NPM_USER${RESET}"
 
 echo ""
-echo -e "  ${GREEN}All checks passed.${RESET} Here's what will happen when you run the command below:"
+echo -e "  ${GREEN}All checks passed.${RESET} This script will now:"
 echo ""
 echo -e "    1. A git tag ${BOLD}$NEW_TAG${RESET} will be created at HEAD (${DIM}${LOCAL_SHA:0:10}${RESET})"
-echo -e "    2. The tag will be pushed to origin"
-echo -e "    3. ${BOLD}$PKG_NAME@$LOCAL_VERSION${RESET} will be published to npm"
+echo -e "    2. ${BOLD}$PKG_NAME@$LOCAL_VERSION${RESET} will be published to npm"
+echo -e "    3. The tag will be pushed to origin"
 echo ""
 
 echo -e "  ${YELLOW}${BOLD}Pre-release checklist:${RESET}"
@@ -178,7 +177,35 @@ echo -e "    ${YELLOW}□${RESET}  Backwards compatibility — have you consider
 echo -e "    ${YELLOW}□${RESET}  Docs — are subconscious-docs updated for any new/changed features?"
 echo ""
 
-echo -e "  ${BOLD}Run this command when ready:${RESET}"
-echo ""
-echo -e "    ${GREEN}git tag $NEW_TAG && git push origin $NEW_TAG && npm publish ./$PKG_DIR${RESET}"
-echo ""
+read -rp "  Publish $PKG_NAME@$LOCAL_VERSION now? [y/N]: " confirm
+case "$confirm" in
+  y|Y|yes|YES)
+    ;;
+  *)
+    info "Release cancelled. Nothing was published or tagged."
+    exit 0
+    ;;
+esac
+
+# ── Step 6: Publish and tag ──────────────────────────────────────────────
+header "Step 6: Publishing $PKG_NAME@$LOCAL_VERSION"
+
+git tag "$NEW_TAG"
+ok "Created local tag $NEW_TAG"
+
+if ! SUBCONSCIOUS_PUBLISH_PACKAGE_SH=1 npm publish "./$PKG_DIR" --access public; then
+  git tag -d "$NEW_TAG" >/dev/null
+  fail "npm publish failed. Removed the local tag; nothing was pushed to origin."
+  exit 1
+fi
+ok "Published $PKG_NAME@$LOCAL_VERSION to npm"
+
+if ! git push origin "$NEW_TAG"; then
+  fail "$PKG_NAME@$LOCAL_VERSION is published, but tag $NEW_TAG could not be pushed."
+  info "The local tag is preserved. Resolve repository access, then run: git push origin $NEW_TAG"
+  exit 1
+fi
+ok "Pushed tag $NEW_TAG to origin"
+
+header "Release complete"
+ok "$PKG_NAME@$LOCAL_VERSION is published with tag $NEW_TAG"

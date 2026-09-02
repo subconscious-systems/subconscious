@@ -41,7 +41,7 @@ test('renderUpdateNotice keeps the selectable options outside the box', () => {
   const notice = renderUpdateNotice('4.0.0', '4.1.0');
   assert.match(notice, /Subconscious CLI/);
   assert.match(notice, /Update available/);
-  assert.match(notice, /●─── ╳ ───●/);
+  assert.match(notice, /▄██▄▄ ▄██▄ ▄▄██▄/);
   assert.match(notice, /4\.0\.0  →  4\.1\.0/);
   assert.doesNotMatch(notice, /Update\s+\|\n.*Skip/);
 

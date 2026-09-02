@@ -95,6 +95,7 @@ test('profiles are created securely and preserve agent-specific settings', async
   assert.equal(created.exists, true);
   assert.equal(created.values.API_KEY, 'shared-secret');
   assert.equal(created.values.MODEL, registry.defaults.model);
+  assert.equal(created.values.CLAUDE_CODE_SUBAGENT_MODEL, '');
   assert.equal(created.values.GATEWAY_URL, 'https://api.subconscious.dev');
   assert.equal((await fs.stat(created.path)).mode & 0o777, 0o600);
 
@@ -117,6 +118,44 @@ test('profiles are created securely and preserve agent-specific settings', async
   const cleared = await profiles.loadProfile('work');
   assert.equal(cleared.values.API_KEY, '');
   assert.equal(cleared.values.CODEX_API_KEY, 'codex secret with spaces');
+});
+
+test('subagent model can be saved independently or reset to follow the default', async () => {
+  await profiles.configCommand(
+    ['--subagent-model', 'subconscious/deepseek-v4-flash-marathon'],
+    'subagents',
+    { profileExplicit: true },
+  );
+  let profile = await profiles.loadProfile('subagents');
+  assert.equal(
+    profile.values.CLAUDE_CODE_SUBAGENT_MODEL,
+    'subconscious/deepseek-v4-flash-marathon',
+  );
+
+  await profiles.configCommand(['--subagent-model', 'follow-default'], 'subagents', {
+    profileExplicit: true,
+  });
+  profile = await profiles.loadProfile('subagents');
+  assert.equal(profile.values.CLAUDE_CODE_SUBAGENT_MODEL, '');
+
+  const claudeSettings = profiles.PROFILE_SETTING_GROUPS.find(
+    (group) => group.id === 'claude-code',
+  ).settings;
+  assert.ok(
+    claudeSettings.some((setting) => setting.key === 'CLAUDE_CODE_SUBAGENT_MODEL'),
+  );
+});
+
+test('config create makes a new profile and rejects duplicates', async () => {
+  await profiles.configCommand(['create'], 'created-in-tui', { profileExplicit: true });
+  const created = await profiles.loadProfile('created-in-tui');
+  assert.equal(created.exists, true);
+  assert.equal(created.values.MODEL, registry.defaults.model);
+  assert.equal((await fs.stat(created.path)).mode & 0o777, 0o600);
+  await assert.rejects(
+    profiles.configCommand(['create'], 'created-in-tui', { profileExplicit: true }),
+    /already exists/,
+  );
 });
 
 test('the former default gateway migrates while custom gateways are preserved', async () => {

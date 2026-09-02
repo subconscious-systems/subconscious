@@ -41,6 +41,7 @@ import {
 } from './profiles.js';
 import { resolveModelCatalog } from './models.js';
 import { showUpdateNotice } from './update-check.js';
+import { runTui } from './tui.js';
 
 function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
@@ -225,12 +226,32 @@ function requireNamedProfile(profile) {
 }
 
 async function main() {
+  let parsed = extractProfile(process.argv.slice(2));
+  let { args, profileName, profileExplicit } = parsed;
+  let command = args[0];
+
+  // Version output must be fast and reliable even when npm or the gateway is
+  // unavailable, so handle it before the automatic update check.
+  if (command === '--version' || command === '-v') {
+    const pkgPath = new URL('../package.json', import.meta.url);
+    const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
+    console.log(pkg.version);
+    return;
+  }
+
   const update = await showUpdateNotice();
   if (update?.action === 'updated' || update?.action === 'cancel') return;
 
-  const parsed = extractProfile(process.argv.slice(2));
-  const { args, profileName, profileExplicit } = parsed;
-  const command = args[0];
+  if (!command && process.stdin.isTTY === true && process.stdout.isTTY === true && process.env.TERM !== 'dumb') {
+    const selection = await runTui({ profileName });
+    if (!selection?.args?.length) return;
+    if (selection.baseUrl?.trim()) {
+      process.env.SUBCONSCIOUS_BASE_URL = selection.baseUrl.trim();
+    }
+    parsed = extractProfile(selection.args);
+    ({ args, profileName, profileExplicit } = parsed);
+    command = args[0];
+  }
 
   if (!command || command === '--help' || command === '-h' || (command === 'help' && !args[1])) {
     printHelp();
@@ -246,13 +267,6 @@ async function main() {
     if (!agent) throw new Error(`Unknown coding agent: ${args[1]}`);
     const profile = await loadProfile(profileName);
     await runAgent(agent, ['help'], { profile });
-    return;
-  }
-
-  if (command === '--version' || command === '-v') {
-    const pkgPath = new URL('../package.json', import.meta.url);
-    const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
-    console.log(pkg.version);
     return;
   }
 

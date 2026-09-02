@@ -174,4 +174,8 @@ test('cli help lists upgrade and reports the package version', async () => {
   const version = await runCli(['-v']);
   assert.equal(version.code, 0, version.stderr);
   assert.equal(version.stdout.trim(), packageVersion);
+
+  const longVersion = await runCli(['--version']);
+  assert.equal(longVersion.code, 0, longVersion.stderr);
+  assert.equal(longVersion.stdout.trim(), packageVersion);
 });

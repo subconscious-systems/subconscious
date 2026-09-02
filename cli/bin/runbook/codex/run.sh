@@ -152,6 +152,13 @@ write_model_catalog() {
       "visibility": "list",
       "supported_in_api": true,
       "priority": 0,
+      "service_tiers": [
+        {
+          "id": "priority",
+          "name": "Priority",
+          "description": "Route requests through the configured priority service tier"
+        }
+      ],
       "availability_nux": null,
       "upgrade": null,
       "base_instructions": "You are Codex, a coding agent.",

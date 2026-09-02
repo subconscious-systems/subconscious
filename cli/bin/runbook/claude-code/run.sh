@@ -147,6 +147,9 @@ export CLAUDE_CODE_MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS}"
 # Requires Claude Code >= 2.1.152.
 export CLAUDE_CODE_ENABLE_TELEMETRY="${CLAUDE_CODE_ENABLE_TELEMETRY:-1}"
 export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="${CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC:-1}"
+# claude.ai connectors require subscription OAuth and cannot be used while the
+# Subconscious bearer token and gateway URL are active.
+export ENABLE_CLAUDEAI_MCP_SERVERS=false
 export OTEL_LOGS_EXPORTER="${OTEL_LOGS_EXPORTER:-otlp}"
 export OTEL_EXPORTER_OTLP_PROTOCOL="${OTEL_EXPORTER_OTLP_PROTOCOL:-http/json}"
 export OTEL_EXPORTER_OTLP_LOGS_ENDPOINT="${EFFECTIVE_GATEWAY_URL%/}/v1/logs"

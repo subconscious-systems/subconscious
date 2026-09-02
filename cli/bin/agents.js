@@ -100,9 +100,12 @@ export function resolveAgent(name) {
 
 export function agentList() {
   return AGENTS.map((a) => ({
+    id: a.id,
     name: a.name,
     alias: a.command || a.id,
     action: a.runbook?.mode === 'setup' ? 'Configure' : 'Launch',
+    description: a.description || '',
+    launch: a.runbook?.mode !== 'setup',
   }));
 }
 
@@ -230,6 +233,18 @@ const AGENT_HELP = {
       ['uninstall', 'Remove only the Subconscious Pi provider and extension'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['ARGS...', 'Pass arguments directly to Pi'],
+    ],
+  },
+  'deepseek-harness': {
+    usage: 'subc [-p NAME] dsh [web|headless] [--model MODEL] [Harness arguments...]',
+    behavior:
+      'Launches DeepSeek Harness with a temporary Subconscious provider containing every live gateway model. Web mode is the default.',
+    options: [
+      ['help', 'Show this help'],
+      ['web', 'Launch the DeepSeek Harness Web UI (default)'],
+      ['headless PROMPT', 'Run one headless task and exit'],
+      ['--model MODEL', 'Set the initial model for new Harness sessions'],
+      ['ARGS...', 'Pass remaining arguments to the selected Harness mode'],
     ],
   },
 };

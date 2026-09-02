@@ -21,8 +21,8 @@ never block the requested command. Set `SUBC_DISABLE_UPDATE_CHECK=1` to suppress
 the check in offline automation.
 
 Login creates both the saved credential and a ready-to-use `default` profile,
-so Claude Code, Codex, and OpenCode can launch immediately. Persistent editor
-and Pi integrations are installed per agent:
+so Claude Code, Codex, OpenCode, and DeepSeek Harness can launch immediately.
+Persistent editor and Pi integrations are installed per agent:
 
 ```bash
 subc cursor install
@@ -31,9 +31,21 @@ subc pi
 subc <agent> uninstall
 ```
 
-Top-level help (`subc`, `subc help`, or `subc --help`) displays the
-Subconscious logo as portable ASCII art. Set `NO_COLOR=1` for a
-monochrome version; redirected output automatically uses a plain wordmark.
+Running `subc` with no arguments in a terminal opens the native Go TUI. Use
+the arrow keys and Enter to launch agents or manage the active profile, `p` to
+switch profiles, and `q` to quit. The menu includes dedicated **Create profile**,
+**Set default model**, **Set subagent model**, and **Update base URL** actions.
+Model and URL changes are validated and saved to the active profile without
+leaving the TUI.
+`subc help` and `subc --help` continue to print script-friendly command help.
+Non-interactive `subc` also prints regular help.
+
+Print the installed CLI version without performing an update or gateway check:
+
+```bash
+subc --version
+subc -v
+```
 
 Every command accepts `help` as a subcommand. These only read the selected
 profile; they do not authenticate, install, configure, or launch anything:
@@ -57,6 +69,7 @@ subc claude --continue
 subc codex exec "write a test"
 subc opencode
 subc pi
+subc dsh
 ```
 
 ## Supported agents
@@ -71,8 +84,9 @@ The packaged integrations live in `cli/bin/runbook`.
 | `subc cursor install` | Install/update Cursor conversation and compaction hooks |
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
+| `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
-If Claude Code, Codex, or OpenCode is missing, an interactive terminal offers
+If Claude Code, Codex, OpenCode, or DeepSeek Harness is missing, an interactive terminal offers
 to install it before launching. Pi refreshes its Subconscious provider on every
 `subc pi` launch while preserving all other providers in `models.json`; its
 executable must already be installed.
@@ -112,6 +126,13 @@ Manage Language Models UI. The install scripts print the relevant next steps.
 The runbook scripts require Bash. Cursor, Copilot, Pi, and Codex hook merge
 also require `jq`; Cursor and Copilot also require `curl`.
 
+`subc dsh` defaults to the DeepSeek Harness Web UI. It injects an ephemeral
+Cordis overlay containing the active gateway URL, selected model, token limits,
+client header, and every model returned by `/v1/models`; the API key remains in
+the process environment and is never written into the overlay. The temporary
+file is removed when Harness exits, and existing `$DSH_HOME` settings are not
+rewritten. Run a one-shot task with `subc dsh headless "PROMPT"`.
+
 ## Runbook profiles
 
 `subc login` automatically creates:
@@ -121,13 +142,16 @@ also require `jq`; Cursor and Copilot also require `curl`.
 ```
 
 The file is mode `600` and contains the shared gateway URL, API key, model,
-optional per-agent key overrides, and all Claude/Codex/OpenCode/Pi/Copilot
-context and output settings used by the packaged runbook scripts.
+optional per-agent key overrides, and all Claude/Codex/OpenCode/Pi/Copilot/
+DeepSeek Harness context and output settings used by the packaged runbook scripts.
 
 ```bash
 subc config                         # list every profile and its file path
+subc -p staging config create      # create a profile with default settings
 subc -p staging config              # print that path and env file
 subc -p staging config --model subconscious/glm-5.2
+subc -p staging config --subagent-model subconscious/deepseek-v4-flash-marathon
+subc -p staging config --subagent-model follow-default
 subc config --gateway-url https://gateway.example
 subc config path
 subc config edit                    # open the selected profile in $VISUAL, $EDITOR, vim, or nano
@@ -140,8 +164,12 @@ prints that path, then the file (API keys and other secrets redacted). Extra
 `KEY=value` lines in the file are passed through to launches and override
 Subconscious-injected defaults; resolved login identity (`GATEWAY_URL`,
 `API_KEY`, `MODEL`) still comes from login, `--model`, and the matching flags.
-In scripts and CI, keep using `subc config --gateway-url`, `--api-key`, and
-`--model`.
+In scripts and CI, keep using `subc config --gateway-url`, `--api-key`,
+`--model`, and `--subagent-model`.
+
+The subagent setting controls `CLAUDE_CODE_SUBAGENT_MODEL` for Claude Code.
+Use `follow-default` to clear the override so subagents automatically follow
+the profile's default model.
 
 Each agent section can hold its own API key. An agent-specific key takes
 precedence over the shared profile key and can be used on its own, so profiles
@@ -182,12 +210,14 @@ the environment:
 ```bash
 subc codex --model subconscious/glm-5.2
 subc config --model subconscious/deepseek-v4-flash-marathon
+subc config --subagent-model subconscious/tim-qwen3.6-27b
 export SUBCONSCIOUS_MODEL=subconscious/glm-5.2
 ```
 
 Every launch and install fetches the same live catalog without caching. Codex,
-OpenCode, Pi, Copilot, and Cursor receive the complete model list. The selected
-profile model is listed first only while the gateway still advertises it.
+OpenCode, Pi, Copilot, Cursor, and DeepSeek Harness receive the complete model
+list. The selected profile model is listed first only while the gateway still
+advertises it.
 OpenCode rebuilds its isolated runtime provider on every `subc opencode` launch,
 so models left in older OpenCode configuration files do not leak into the list.
 If a saved profile default has been removed, launches use the first live model;

@@ -291,6 +291,36 @@
           "uninstall"
         ]
       }
+    },
+    {
+      "id": "deepseek-harness",
+      "command": "dsh",
+      "name": "DeepSeek Harness",
+      "aliases": [
+        "deepseek-harness",
+        "deepseek"
+      ],
+      "description": "Launch DeepSeek Harness with an ephemeral Subconscious provider populated from the live model catalog.",
+      "framework": "DeepSeek Harness",
+      "language": "shell",
+      "category": "coding-agent",
+      "tags": [
+        "local",
+        "web",
+        "agents"
+      ],
+      "protocol": "openai",
+      "homepage": "https://www.deepseek.com/harness/en/",
+      "bin": "dsh",
+      "install": {
+        "darwin": "npm i -g @deepseek-ai/dsh",
+        "linux": "npm i -g @deepseek-ai/dsh",
+        "win32": "npm i -g @deepseek-ai/dsh"
+      },
+      "runbook": {
+        "mode": "launch",
+        "script": "deepseek-harness/run.sh"
+      }
     }
   ]
 }

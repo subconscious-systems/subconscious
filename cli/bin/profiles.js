@@ -37,6 +37,7 @@ export const RUNBOOK_DEFAULTS = {
   GATEWAY_URL: registry.defaults.baseUrl,
   API_KEY: '',
   MODEL: registry.defaults.model,
+  CLAUDE_CODE_SUBAGENT_MODEL: '',
   CLAUDE_GATEWAY_URL: '',
   CLAUDE_CODE_API_KEY: '',
   CODEX_API_KEY: '',
@@ -44,6 +45,7 @@ export const RUNBOOK_DEFAULTS = {
   CURSOR_API_KEY: '',
   COPILOT_API_KEY: '',
   PI_API_KEY: '',
+  DEEPSEEK_HARNESS_API_KEY: '',
   CLAUDE_CODE_AUTO_COMPACT_WINDOW: '1000000',
   CLAUDE_CODE_MAX_CONTEXT_TOKENS: '3000000',
   MAX_CONCURRENT_SUBAGENTS: '4',
@@ -57,6 +59,8 @@ export const RUNBOOK_DEFAULTS = {
   OPENCODE_OUTPUT_LIMIT: '65536',
   PI_CONTEXT_WINDOW: '5000000',
   PI_MAX_TOKENS: '65536',
+  DEEPSEEK_HARNESS_CONTEXT_WINDOW: '5000000',
+  DEEPSEEK_HARNESS_MAX_TOKENS: '65536',
   COPILOT_MAX_INPUT_TOKENS: '5000000',
   COPILOT_MAX_OUTPUT_TOKENS: '65536',
   VSCODE_APP: '',
@@ -80,6 +84,13 @@ const SETTINGS = {
     key: 'MODEL',
     label: 'Default model',
     description: 'Initial model used by coding-agent launches and setup.',
+    type: 'choice',
+    choices: SUPPORTED_MODELS,
+  },
+  CLAUDE_CODE_SUBAGENT_MODEL: {
+    key: 'CLAUDE_CODE_SUBAGENT_MODEL',
+    label: 'Subagent model',
+    description: 'Model used by Claude Code subagents; blank follows the default model.',
     type: 'choice',
     choices: SUPPORTED_MODELS,
   },
@@ -238,12 +249,33 @@ const SETTINGS = {
     type: 'integer',
     min: 1,
   },
+  DEEPSEEK_HARNESS_API_KEY: {
+    key: 'DEEPSEEK_HARNESS_API_KEY',
+    label: 'DeepSeek Harness API key',
+    description: 'DeepSeek Harness credential override; blank uses API_KEY.',
+    type: 'secret',
+  },
+  DEEPSEEK_HARNESS_CONTEXT_WINDOW: {
+    key: 'DEEPSEEK_HARNESS_CONTEXT_WINDOW',
+    label: 'Context window',
+    description: 'Context capacity advertised to DeepSeek Harness.',
+    type: 'integer',
+    min: 1,
+  },
+  DEEPSEEK_HARNESS_MAX_TOKENS: {
+    key: 'DEEPSEEK_HARNESS_MAX_TOKENS',
+    label: 'Maximum output tokens',
+    description: 'Output capacity advertised to DeepSeek Harness.',
+    type: 'integer',
+    min: 1,
+  },
 };
 
 const AGENT_SETTING_KEYS = {
   'claude-code': [
     'CLAUDE_GATEWAY_URL',
     'CLAUDE_CODE_API_KEY',
+    'CLAUDE_CODE_SUBAGENT_MODEL',
     'CLAUDE_CODE_AUTO_COMPACT_WINDOW',
     'CLAUDE_CODE_MAX_CONTEXT_TOKENS',
     'MAX_CONCURRENT_SUBAGENTS',
@@ -267,6 +299,11 @@ const AGENT_SETTING_KEYS = {
     'VSCODE_APP',
   ],
   pi: ['PI_API_KEY', 'PI_CONTEXT_WINDOW', 'PI_MAX_TOKENS'],
+  'deepseek-harness': [
+    'DEEPSEEK_HARNESS_API_KEY',
+    'DEEPSEEK_HARNESS_CONTEXT_WINDOW',
+    'DEEPSEEK_HARNESS_MAX_TOKENS',
+  ],
 };
 
 const GROUP_KEYS = [
@@ -313,10 +350,13 @@ OPENCODE_API_KEY={OPENCODE_API_KEY}
 CURSOR_API_KEY={CURSOR_API_KEY}
 COPILOT_API_KEY={COPILOT_API_KEY}
 PI_API_KEY={PI_API_KEY}
+DEEPSEEK_HARNESS_API_KEY={DEEPSEEK_HARNESS_API_KEY}
 
 # Claude Code
 # Leave CLAUDE_GATEWAY_URL blank to use GATEWAY_URL above.
 CLAUDE_GATEWAY_URL={CLAUDE_GATEWAY_URL}
+# Leave blank to use MODEL above for Claude Code subagents.
+CLAUDE_CODE_SUBAGENT_MODEL={CLAUDE_CODE_SUBAGENT_MODEL}
 CLAUDE_CODE_AUTO_COMPACT_WINDOW={CLAUDE_CODE_AUTO_COMPACT_WINDOW}
 CLAUDE_CODE_MAX_CONTEXT_TOKENS={CLAUDE_CODE_MAX_CONTEXT_TOKENS}
 MAX_CONCURRENT_SUBAGENTS={MAX_CONCURRENT_SUBAGENTS}
@@ -336,6 +376,10 @@ OPENCODE_OUTPUT_LIMIT={OPENCODE_OUTPUT_LIMIT}
 # Pi
 PI_CONTEXT_WINDOW={PI_CONTEXT_WINDOW}
 PI_MAX_TOKENS={PI_MAX_TOKENS}
+
+# DeepSeek Harness
+DEEPSEEK_HARNESS_CONTEXT_WINDOW={DEEPSEEK_HARNESS_CONTEXT_WINDOW}
+DEEPSEEK_HARNESS_MAX_TOKENS={DEEPSEEK_HARNESS_MAX_TOKENS}
 
 # GitHub Copilot
 COPILOT_MAX_INPUT_TOKENS={COPILOT_MAX_INPUT_TOKENS}
@@ -645,8 +689,9 @@ Usage:
   subc -p NAME config
   subc config edit [vim|nano]
   subc -p NAME config edit [vim|nano]
-  subc config [show|path|list|delete]
+  subc config [show|path|list|create|delete]
               [--gateway-url URL] [--api-key KEY] [--model MODEL]
+              [--subagent-model MODEL|follow-default]
 
   subc config                      List every profile and its file path
   subc -p NAME config              Print that profile's path and env file
@@ -654,6 +699,7 @@ Usage:
   subc config edit vim             Open the selected profile in vim
   subc config edit nano            Open the selected profile in nano
   subc config path                 Print the selected profile path
+  subc -p NAME config create       Create a new profile with default settings
   subc -p NAME config delete       Delete a non-default profile
 `);
 }
@@ -682,17 +728,23 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
     if (arg === 'help' || arg === '-h' || arg === '--help') {
       printConfigHelp();
       return;
-    } else if (['show', 'path', 'list', 'delete', 'edit', 'interactive'].includes(arg)) {
+    } else if (['show', 'path', 'list', 'create', 'delete', 'edit', 'interactive'].includes(arg)) {
       action = arg === 'interactive' ? 'edit' : arg;
-    } else if (arg === '--gateway-url' || arg === '--api-key' || arg === '--model') {
+    } else if (
+      arg === '--gateway-url' ||
+      arg === '--api-key' ||
+      arg === '--model' ||
+      arg === '--subagent-model'
+    ) {
       const value = argv[++i];
       if (!value) throw new Error(`${arg} requires a value`);
       const key = {
         '--gateway-url': 'GATEWAY_URL',
         '--api-key': 'API_KEY',
         '--model': 'MODEL',
+        '--subagent-model': 'CLAUDE_CODE_SUBAGENT_MODEL',
       }[arg];
-      updates[key] = value;
+      updates[key] = arg === '--subagent-model' && value === 'follow-default' ? '' : value;
     } else if (action === 'edit' && ALLOWED_EDITORS.has(arg)) {
       if (editor) throw new Error('Specify only one editor (vim or nano)');
       editor = arg;
@@ -705,7 +757,9 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
 
   if (action === 'edit') {
     if (Object.keys(updates).length) {
-      throw new Error('config edit cannot be combined with --gateway-url, --api-key, or --model');
+      throw new Error(
+        'config edit cannot be combined with --gateway-url, --api-key, --model, or --subagent-model',
+      );
     }
     await editProfile(profileName, editor);
     return;
@@ -718,6 +772,18 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
 
   if (action === 'path') {
     console.log(profilePath(profileName));
+    return;
+  }
+
+  if (action === 'create') {
+    if (Object.keys(updates).length) {
+      throw new Error('config create cannot be combined with profile updates');
+    }
+    const existing = await loadProfile(profileName);
+    if (existing.exists) throw new Error(`Profile '${profileName}' already exists`);
+    const profile = await ensureProfile(profileName);
+    console.log(`Created profile '${profileName}'.`);
+    await printProfile(profile);
     return;
   }
 

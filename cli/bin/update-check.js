@@ -1,18 +1,13 @@
 import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
+import { LOGO_ART_SMALL_LINES } from './branding.js';
 import { c, colorEnabled } from './colors.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
 export const UPDATE_CHECK_TIMEOUT_MS = 1500;
 const UPDATE_ACTIONS = ['Update now', 'Skip for now'];
-const UPDATE_LOGO = [
-  '  ●     ●',
-  '   ╲   ╱ ',
-  '●─── ╳ ───●',
-  '   ╱   ╲ ',
-  '  ●     ●',
-];
+const UPDATE_LOGO = LOGO_ART_SMALL_LINES;
 
 function parseVersion(version) {
   const match = String(version)
@@ -94,11 +89,16 @@ export async function fetchLatestVersion(options = {}) {
 export function renderUpdateNotice(installedVersion, latestVersion) {
   const logoWidth = Math.max(...UPDATE_LOGO.map((line) => line.length));
   const textWidth = 24;
-  const gap = '   ';
+  const gap = '  ';
   const innerWidth = logoWidth + gap.length + textWidth + 2;
   const border = `${c.orange}╭${'─'.repeat(innerWidth)}╮${c.reset}`;
   const bottom = `${c.orange}╰${'─'.repeat(innerWidth)}╯${c.reset}`;
+  // Match SC's splash composition by bottom-aligning the copy beside the
+  // eight-row logo, with a two-cell gutter between the two columns.
   const text = [
+    { raw: '', value: '' },
+    { raw: '', value: '' },
+    { raw: '', value: '' },
     { raw: 'Subconscious CLI', value: `${c.orange}${c.bold}Subconscious CLI${c.reset}` },
     { raw: 'Update available', value: `${c.bold}Update available${c.reset}` },
     { raw: '', value: '' },

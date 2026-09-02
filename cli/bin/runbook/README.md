@@ -1,7 +1,8 @@
 # Coding-agent integrations
 
 These scripts are part of `subc`. They launch or surgically install Claude Code,
-Codex, OpenCode, Cursor, Copilot, and Pi against the Subconscious gateway.
+Codex, OpenCode, DeepSeek Harness, Cursor, Copilot, and Pi against the
+Subconscious gateway.
 
 `subc` reads `~/.subconscious/profiles/<name>.env` and injects those values into
 the scripts, so users do not need a sibling `.env` file. When a script is run
@@ -15,6 +16,7 @@ Included integrations:
 - `cursor/install.sh`, `hook.sh`, and `hooks.json`
 - `copilot/install.sh`, `hook.sh`, and `hooks.json`
 - `pi/install.sh`, `run.sh`, and `subconscious-compaction.ts`
+- `deepseek-harness/run.sh`
 
 Each CLI-enabled entry in `agents/registry.json` points here with a `runbook`
 block. Persistent writes are merge/unmerge only: they never replace a user's
