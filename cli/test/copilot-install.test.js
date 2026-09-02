@@ -57,7 +57,7 @@ test('Copilot installer advertises thinking within the deployed context window',
     );
     const provider = configuration.find(({ name }) => name === 'Subconscious Gateway');
     assert.ok(provider);
-    assert.equal(provider.apiType, 'chat-completions');
+    assert.equal(provider.apiType, 'messages');
     assert.equal(provider.models.length, 1);
     assert.deepEqual(
       {
@@ -77,6 +77,8 @@ test('Copilot installer normalizes gateway origins and API paths', async () => {
     'https://api-dev.subconscious.dev',
     'https://api-dev.subconscious.dev/v1',
     'https://api-dev.subconscious.dev/v1/chat/completions',
+    'https://api-dev.subconscious.dev/v1/responses',
+    'https://api-dev.subconscious.dev/v1/messages',
   ]) {
     const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-url-'));
     try {
@@ -89,7 +91,7 @@ test('Copilot installer normalizes gateway origins and API paths', async () => {
       const provider = configuration.find(({ name }) => name === 'Subconscious Gateway');
       assert.equal(
         provider.models[0].url,
-        'https://api-dev.subconscious.dev/v1/chat/completions',
+        'https://api-dev.subconscious.dev/v1/messages',
       );
     } finally {
       await fs.rm(home, { recursive: true, force: true });

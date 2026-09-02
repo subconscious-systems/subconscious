@@ -30,12 +30,12 @@
 #       "name": "Subconscious Gateway",
 #       "vendor": "customendpoint",
 #       "apiKey": "${input:chat.lm.secret.subconscious-gateway}",
-#       "apiType": "chat-completions",
+#       "apiType": "messages",
 #       "models": [
 #         {
 #           "id": "subconscious/glm-5.2",
 #           "name": "Subconscious GLM 5.2",
-#           "url": "https://your-gateway.example/v1/chat/completions",
+#           "url": "https://your-gateway.example/v1/messages",
 #           "toolCalling": true,
 #           "vision": false,
 #           "maxInputTokens": 5000000,
@@ -280,11 +280,13 @@ write_config() {
   local user_dir="$1"
   local models_json="${user_dir}/chatLanguageModels.json"
   local base_url="${GATEWAY_URL%/}"
-  local chat_url
+  local messages_url
   case "$base_url" in
-    */v1/chat/completions) chat_url="$base_url" ;;
-    */v1) chat_url="${base_url}/chat/completions" ;;
-    *) chat_url="${base_url}/v1/chat/completions" ;;
+    */v1/messages) messages_url="$base_url" ;;
+    */v1/chat/completions) messages_url="${base_url%/chat/completions}/messages" ;;
+    */v1/responses) messages_url="${base_url%/responses}/messages" ;;
+    */v1) messages_url="${base_url}/messages" ;;
+    *) messages_url="${base_url}/v1/messages" ;;
   esac
 
   mkdir -p "$user_dir"
@@ -297,7 +299,7 @@ write_config() {
       --argjson models "$provider_models" \
       --arg modelId "$model_id" \
       --arg modelName "Subconscious ${model_id}" \
-      --arg url "$chat_url" \
+      --arg url "$messages_url" \
       --argjson maxIn "$MAX_INPUT_TOKENS" \
       --argjson maxOut "$MAX_OUTPUT_TOKENS" \
       '$models + [{
@@ -323,7 +325,7 @@ write_config() {
       name: $name,
       vendor: "customendpoint",
       apiKey: $apiKeyRef,
-      apiType: "chat-completions",
+      apiType: "messages",
       models: $models
     }')
 

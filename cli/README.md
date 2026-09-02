@@ -122,6 +122,8 @@ saved to the selected profile.
 Cursor still requires enabling its OpenAI API Key Override in Cursor Settings.
 Copilot requires entering the custom endpoint key once through VS Code's
 Manage Language Models UI. The install scripts print the relevant next steps.
+Its Custom Endpoint provider uses the Messages API at `/v1/messages` by
+default; rerun `subc copilot install` to migrate an older Chat Completions entry.
 
 The runbook scripts require Bash. Cursor, Copilot, Pi, and Codex hook merge
 also require `jq`; Cursor and Copilot also require `curl`.
