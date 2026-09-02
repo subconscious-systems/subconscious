@@ -105,10 +105,35 @@ func TestAccountStatusLivesOnlyInHeader(t *testing.T) {
 	}
 }
 
+func TestCatalogStatusLabelReflectsDiscoverySource(t *testing.T) {
+	if got := catalogStatusLabel("available", ""); got != "Provisioned models" {
+		t.Fatalf("available label = %q", got)
+	}
+	if got := catalogStatusLabel("public", ""); got != "Public catalog" {
+		t.Fatalf("public label = %q", got)
+	}
+	if got := catalogStatusLabel("packaged", "timeout"); got != "Packaged defaults" {
+		t.Fatalf("packaged label = %q", got)
+	}
+}
+
+func TestDefaultModelPickerDescriptionReflectsDiscoverySource(t *testing.T) {
+	if got := defaultModelPickerDescription(inputState{ModelSource: "available"}); !strings.Contains(got, "saved as the default") {
+		t.Fatalf("available description = %q", got)
+	}
+	if got := defaultModelPickerDescription(inputState{ModelSource: "public"}); !strings.Contains(got, "public models") {
+		t.Fatalf("public description = %q", got)
+	}
+	if got := defaultModelPickerDescription(inputState{ModelSource: "packaged"}); !strings.Contains(got, "packaged models") {
+		t.Fatalf("packaged description = %q", got)
+	}
+}
+
 func TestAvailableModelsDetailShowsCatalogInsteadOfCommand(t *testing.T) {
 	m := newModel(inputState{
 		ActiveProfile: "default",
 		SelectedModel: "subconscious/glm-5.2",
+		ModelSource:   "available",
 		Models: []string{
 			"subconscious/glm-5.2",
 			"subconscious/deepseek-v4-flash-marathon",
@@ -124,6 +149,9 @@ func TestAvailableModelsDetailShowsCatalogInsteadOfCommand(t *testing.T) {
 	detail := m.renderDetail(56)
 	if !strings.Contains(detail, "subconscious/deepseek-v4-flash-marathon") {
 		t.Fatalf("model catalog missing from detail: %q", detail)
+	}
+	if !strings.Contains(detail, "Provisioned models") {
+		t.Fatalf("provisioned catalog status missing from detail: %q", detail)
 	}
 	if strings.Contains(detail, "$ subc") {
 		t.Fatalf("command preview should not appear in model catalog: %q", detail)

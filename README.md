@@ -87,9 +87,10 @@ Available models include:
 - **`subconscious/deepseek-v4-flash-marathon`**
 
 They are served behind the OpenAI-compatible endpoint. `/v1/models` reports
-the live catalog and supported features for each model. The `subc` CLI fetches
-that endpoint before listing models or configuring a coding-agent picker, with
-packaged defaults as an offline fallback.
+the public fleet catalog. `/v1/models/available` reports the models the
+authenticated API key may call. The `subc` CLI fetches the provisioned list
+when a profile key is present, falls back to the public catalog, and uses
+packaged defaults only when discovery is offline.
 
 ## Tools
 

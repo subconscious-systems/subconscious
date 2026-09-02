@@ -42,9 +42,10 @@ Values may contain placeholder tokens that consumers substitute:
 | `{baseUrlV1}`  | `${baseUrl}/v1`                             | real URL               |
 
 `defaults.models` is the offline fallback catalog for `subc models` and the
-packaged coding-agent model pickers. At runtime the CLI prefers the active
-gateway's authenticated `/v1/models` response. `defaults.model` selects which
-entry new profiles use initially.
+packaged coding-agent model pickers. At runtime the CLI prefers the selected
+profile's authenticated `/v1/models/available` response, then the public
+`/v1/models` fleet catalog. `defaults.model` selects which entry new profiles
+use initially.
 
 `{env:...}` is **OpenCode's own** templating and is preserved verbatim — it is
 never substituted by us.

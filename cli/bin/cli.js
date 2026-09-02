@@ -323,7 +323,12 @@ async function main() {
       selectedModel,
       fallbackModels: PACKAGED_MODELS,
     });
-    modelsCommand(catalog.models, { selectedModel, error: catalog.error });
+    modelsCommand(catalog.models, {
+      selectedModel,
+      error: catalog.error,
+      source: catalog.source,
+      hasApiKey: Boolean(auth?.key),
+    });
     return;
   }
 

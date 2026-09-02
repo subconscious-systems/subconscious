@@ -140,6 +140,7 @@ export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}
       RUNBOOK_DEFAULTS.GATEWAY_URL,
     gatewayOverridden: Boolean(process.env.SUBCONSCIOUS_BASE_URL?.trim()),
     modelError: catalog.error?.message || '',
+    modelSource: catalog.source,
     agents: agentList().map((agent) => ({
       command: agent.alias,
       name: agent.name,

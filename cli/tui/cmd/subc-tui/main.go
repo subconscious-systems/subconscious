@@ -63,6 +63,7 @@ type inputState struct {
 	SavedGatewayURL   string         `json:"savedGatewayUrl"`
 	GatewayOverridden bool           `json:"gatewayOverridden"`
 	ModelError        string         `json:"modelError"`
+	ModelSource       string         `json:"modelSource"`
 	Agents            []agentState   `json:"agents"`
 }
 
@@ -483,11 +484,7 @@ func (m model) View() tea.View {
 	if m.screen == screenProfiles {
 		content = m.renderPicker("Select profile", profileNames(m.state.Profiles), m.profileCursor, "Profiles keep gateway, model, and agent settings separate.")
 	} else if m.screen == screenSetDefaultModel {
-		description := "This model will be saved as the default for the selected profile."
-		if m.state.ModelError != "" {
-			description = "Live catalog unavailable; packaged models are shown."
-		}
-		content = m.renderPicker("Set default model", m.state.Models, m.modelCursor, description)
+		content = m.renderPicker("Set default model", m.state.Models, m.modelCursor, defaultModelPickerDescription(m.state))
 	} else if m.screen == screenSetSubagentModel {
 		content = m.renderPicker("Set subagent model", subagentModelOptions(m.state), m.subagentCursor, "Choose the model Claude Code uses for subagents. Follow default keeps it in sync with the profile model.")
 	} else if m.screen == screenCreateProfile {
@@ -655,10 +652,12 @@ func (m model) renderGatewayDetail(width int) string {
 
 func (m model) renderModelCatalog(width int) string {
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Bold(true).Render("Available models")
-	status := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render("Live catalog")
-	if m.state.ModelError != "" {
-		status = lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("Packaged defaults")
+	statusLabel := catalogStatusLabel(m.state.ModelSource, m.state.ModelError)
+	statusColor := brandOrange
+	if m.state.ModelSource == "packaged" || (m.state.ModelSource == "" && m.state.ModelError != "") {
+		statusColor = mutedColor
 	}
+	status := lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Render(statusLabel)
 
 	lines := []string{title + "  " + status, ""}
 	for _, modelID := range m.state.Models {
@@ -880,6 +879,36 @@ func wrapText(value string, width int) string {
 		line = word
 	}
 	return strings.Join(append(lines, line), "\n")
+}
+
+func catalogStatusLabel(source, modelError string) string {
+	switch source {
+	case "available":
+		return "Provisioned models"
+	case "public":
+		return "Public catalog"
+	case "packaged":
+		return "Packaged defaults"
+	default:
+		if modelError != "" {
+			return "Packaged defaults"
+		}
+		return "Live catalog"
+	}
+}
+
+func defaultModelPickerDescription(state inputState) string {
+	switch state.ModelSource {
+	case "packaged":
+		return "Live catalog unavailable; packaged models are shown."
+	case "public":
+		return "Provisioned catalog unavailable; public models are shown."
+	default:
+		if state.ModelSource == "" && state.ModelError != "" {
+			return "Live catalog unavailable; packaged models are shown."
+		}
+		return "This model will be saved as the default for the selected profile."
+	}
 }
 
 func readState(path string) (inputState, error) {
