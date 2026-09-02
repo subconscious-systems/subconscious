@@ -321,22 +321,33 @@ test('live models flow into runbooks and all five Claude picker slots', () => {
 });
 
 test('a removed saved default yields to the first live model but explicit overrides do not', () => {
-  const catalog = {
-    source: 'gateway',
-    models: ['subconscious/live', 'subconscious/other'],
-  };
+  for (const source of ['available', 'public']) {
+    const catalog = {
+      source,
+      models: ['subconscious/live', 'subconscious/other'],
+    };
+
+    assert.equal(
+      agents.selectLaunchModel('subconscious/removed', 'profile', catalog),
+      'subconscious/live',
+    );
+    assert.equal(
+      agents.selectLaunchModel('subconscious/removed', 'command', catalog),
+      'subconscious/removed',
+    );
+    assert.equal(
+      agents.selectLaunchModel('subconscious/other', 'profile', catalog),
+      'subconscious/other',
+    );
+  }
 
   assert.equal(
-    agents.selectLaunchModel('subconscious/removed', 'profile', catalog),
-    'subconscious/live',
-  );
-  assert.equal(
-    agents.selectLaunchModel('subconscious/removed', 'command', catalog),
+    agents.selectLaunchModel(
+      'subconscious/removed',
+      'profile',
+      { source: 'packaged', models: ['subconscious/live'] },
+    ),
     'subconscious/removed',
-  );
-  assert.equal(
-    agents.selectLaunchModel('subconscious/other', 'profile', catalog),
-    'subconscious/other',
   );
 });
 

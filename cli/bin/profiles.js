@@ -12,6 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { c } from './colors.js';
+import { PUBLIC_CATALOG_FALLBACK_MESSAGE } from './models.js';
 
 const registry = JSON.parse(
   readFileSync(new URL('./registry.generated.json', import.meta.url), 'utf-8'),
@@ -818,7 +819,9 @@ export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
     const suffix = model === selectedModel ? ` ${c.dim}(default)${c.reset}` : '';
     console.log(`  ${c.cyan}${model}${c.reset}${suffix}`);
   }
-  if (options.error) {
+  if (options.source === 'public' && options.hasApiKey) {
+    console.error(`\n  ${c.dim}${PUBLIC_CATALOG_FALLBACK_MESSAGE}${c.reset}`);
+  } else if (options.error) {
     console.error(
       `\n  ${c.yellow}Could not fetch the live model catalog; showing packaged defaults.${c.reset}`,
     );

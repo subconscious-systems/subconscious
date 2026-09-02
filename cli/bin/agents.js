@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
 import { getApiKey } from './auth.js';
 import { profileSettingsForAgent, resolvedProfileValues } from './profiles.js';
-import { resolveModelCatalog } from './models.js';
+import { isLiveModelSource, PUBLIC_CATALOG_FALLBACK_MESSAGE, resolveModelCatalog } from './models.js';
 
 // --- Registry (single source of truth, generated copy shipped in the package).
 const registry = JSON.parse(
@@ -709,7 +709,9 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
     selectedModel,
     fallbackModels: PACKAGED_MODELS,
   });
-  if (catalog.error) {
+  if (catalog.source === 'public' && apiKey) {
+    console.error(`  ${c.dim}${PUBLIC_CATALOG_FALLBACK_MESSAGE}${c.reset}\n`);
+  } else if (catalog.error) {
     console.error(
       `  ${c.yellow}Could not fetch the live model catalog; using packaged defaults.${c.reset}`,
     );
@@ -720,7 +722,7 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
 
 export function selectLaunchModel(requestedModel, modelSource, catalog) {
   const useLiveDefault =
-    catalog.source === 'gateway' &&
+    isLiveModelSource(catalog.source) &&
     catalog.models.length > 0 &&
     !catalog.models.includes(requestedModel) &&
     (modelSource === 'profile' || modelSource === 'default');

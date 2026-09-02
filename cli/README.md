@@ -128,7 +128,8 @@ also require `jq`; Cursor and Copilot also require `curl`.
 
 `subc dsh` defaults to the DeepSeek Harness Web UI. It injects an ephemeral
 Cordis overlay containing the active gateway URL, selected model, token limits,
-client header, and every model returned by `/v1/models`; the API key remains in
+client header, and every model from the live catalog (`/v1/models/available`
+when a profile key is present, otherwise public `/v1/models`); the API key remains in
 the process environment and is never written into the overlay. The temporary
 file is removed when Harness exits, and existing `$DSH_HOME` settings are not
 rewritten. Run a one-shot task with `subc dsh headless "PROMPT"`.
@@ -194,9 +195,10 @@ values. A command-line `--model` override has the highest model precedence.
 
 ## Models and endpoint overrides
 
-List the available models with `subc models`. The command fetches the active
-gateway's authenticated `/v1/models` catalog and falls back to the models
-packaged with the CLI when discovery is unavailable:
+List the available models with `subc models`. When the selected profile has an
+API key, the command fetches the key-scoped `/v1/models/available` catalog. If
+that request fails, it falls back to the public `/v1/models` fleet list, then
+to the models packaged with the CLI:
 
 ```text
 subconscious/glm-5.2 (default)
