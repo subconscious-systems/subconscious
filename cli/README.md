@@ -35,7 +35,8 @@ subc <agent> uninstall
 Running `subc` with no arguments in a terminal opens the native Go TUI. Use
 the arrow keys and Enter to launch agents or manage the active profile, `p` to
 switch profiles, and `q` to quit. The menu includes dedicated **Create profile**,
-**Set default model**, **Set subagent model**, and **Update base URL** actions.
+**Coding sessions**, **Set default model**, **Set subagent model**, and
+**Update base URL** actions.
 Model and URL changes are validated and saved to the active profile without
 leaving the TUI.
 `subc help` and `subc --help` continue to print script-friendly command help.
@@ -89,6 +90,35 @@ The packaged integrations live in `cli/bin/runbook`.
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
+
+## Sessions and cross-harness handoff
+
+Run `subc` and choose **Coding sessions**, or list the same local catalog from
+the shell:
+
+```bash
+subc sessions
+subc sessions resume claude:SESSION_ID
+subc sessions resume claude:SESSION_ID --harness codex
+subc sessions resume codex:SESSION_ID --harness opencode
+```
+
+The catalog discovers recent sessions written locally by Claude Code, Codex,
+OpenCode, Pi, and Subconscious Code. It shows each session's originating
+harness, title, last activity, project directory, and model when the harness
+records one. Selecting the original harness uses its native resume mechanism.
+
+Selecting Claude Code, Codex, OpenCode, or Pi as a different destination starts
+a new session in the original project directory with a portable handoff. The
+handoff is limited to the newest 24 user/assistant text messages and 24,000
+characters. Tool payloads, tool results, system prompts, and hidden reasoning
+are not copied. Source transcripts remain owned by their original harness and
+are never rewritten.
+
+Cursor and GitHub Copilot sessions are not listed because their IDE-owned
+conversation stores do not expose a stable local resume interface. A session
+whose local transcript is missing remains available for native resume but does
+not offer cross-harness destinations.
 
 If Subconscious Code, Claude Code, Codex, OpenCode, or DeepSeek Harness is missing, an interactive terminal offers
 to install it before launching. Pi refreshes its Subconscious provider on every

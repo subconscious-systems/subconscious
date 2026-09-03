@@ -53,20 +53,39 @@ type agentState struct {
 	Launch      bool   `json:"launch"`
 }
 
+type sessionState struct {
+	Key         string `json:"key"`
+	Harness     string `json:"harness"`
+	HarnessName string `json:"harnessName"`
+	Title       string `json:"title"`
+	Cwd         string `json:"cwd"`
+	UpdatedAt   string `json:"updatedAt"`
+	Model       string `json:"model"`
+	Portable    bool   `json:"portable"`
+}
+
+type sessionHarnessState struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Portable bool   `json:"portable"`
+}
+
 type inputState struct {
-	Version           string         `json:"version"`
-	ActiveProfile     string         `json:"activeProfile"`
-	ProfilePath       string         `json:"profilePath"`
-	Profiles          []profileState `json:"profiles"`
-	Models            []string       `json:"models"`
-	SelectedModel     string         `json:"selectedModel"`
-	SubagentModel     string         `json:"subagentModel"`
-	GatewayURL        string         `json:"gatewayUrl"`
-	SavedGatewayURL   string         `json:"savedGatewayUrl"`
-	GatewayOverridden bool           `json:"gatewayOverridden"`
-	ModelError        string         `json:"modelError"`
-	ModelSource       string         `json:"modelSource"`
-	Agents            []agentState   `json:"agents"`
+	Version           string                `json:"version"`
+	ActiveProfile     string                `json:"activeProfile"`
+	ProfilePath       string                `json:"profilePath"`
+	Profiles          []profileState        `json:"profiles"`
+	Models            []string              `json:"models"`
+	SelectedModel     string                `json:"selectedModel"`
+	SubagentModel     string                `json:"subagentModel"`
+	GatewayURL        string                `json:"gatewayUrl"`
+	SavedGatewayURL   string                `json:"savedGatewayUrl"`
+	GatewayOverridden bool                  `json:"gatewayOverridden"`
+	ModelError        string                `json:"modelError"`
+	ModelSource       string                `json:"modelSource"`
+	Sessions          []sessionState        `json:"sessions"`
+	SessionHarnesses  []sessionHarnessState `json:"sessionHarnesses"`
+	Agents            []agentState          `json:"agents"`
 }
 
 type outputResult struct {
@@ -83,6 +102,7 @@ const (
 	itemSetDefaultModel
 	itemSetSubagentModel
 	itemUpdateBaseURL
+	itemSessions
 )
 
 type menuItem struct {
@@ -104,29 +124,38 @@ const (
 	screenSetSubagentModel
 	screenCreateProfile
 	screenUpdateBaseURL
+	screenSessions
+	screenSessionHarnesses
 )
 
 type model struct {
-	state          inputState
-	items          []menuItem
-	cursor         int
-	profileCursor  int
-	modelCursor    int
-	subagentCursor int
-	screen         screen
-	profileInput   string
-	urlInput       string
-	inputError     string
-	notice         string
-	sessionBaseURL string
-	width          int
-	height         int
-	result         outputResult
+	state           inputState
+	items           []menuItem
+	cursor          int
+	profileCursor   int
+	modelCursor     int
+	subagentCursor  int
+	sessionCursor   int
+	harnessCursor   int
+	selectedSession int
+	screen          screen
+	profileInput    string
+	urlInput        string
+	inputError      string
+	notice          string
+	sessionBaseURL  string
+	width           int
+	height          int
+	result          outputResult
 }
 
 func newModel(state inputState) model {
 	state = normalizeState(state)
-	items := make([]menuItem, 0, len(state.Agents)+7)
+	items := make([]menuItem, 0, len(state.Agents)+8)
+	items = append(items, menuItem{
+		Section: "Sessions", Name: "Coding sessions", Command: "sessions", Action: "Browse",
+		Description: "Resume a local coding session in its original harness or continue it in another harness.", Kind: itemSessions,
+	})
 	for _, agent := range state.Agents {
 		items = append(items, menuItem{
 			Section:     "Coding agents",
@@ -204,6 +233,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateCreateProfile(msg)
 		case screenUpdateBaseURL:
 			return m.updateBaseURL(msg)
+		case screenSessions:
+			return m.updateSessions(key)
+		case screenSessionHarnesses:
+			return m.updateSessionHarnesses(key)
 		default:
 			return m.updateMain(key)
 		}
@@ -228,6 +261,11 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 		m.screen = screenProfiles
 	case "enter":
 		item := m.items[m.cursor]
+		if item.Kind == itemSessions {
+			m.sessionCursor = 0
+			m.screen = screenSessions
+			return m, nil
+		}
 		if item.Kind == itemSetDefaultModel {
 			if len(m.state.Models) > 0 {
 				m.modelCursor = defaultModelIndex(m.state)
@@ -256,6 +294,47 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.result.Args = actionArgs(item, m.state.ActiveProfile, m.state.SelectedModel, m.state.SubagentModel)
+		m.result.BaseURL = m.sessionBaseURL
+		return m, tea.Quit
+	}
+	return m, nil
+}
+
+func (m model) updateSessions(key string) (tea.Model, tea.Cmd) {
+	switch key {
+	case "q", "esc":
+		m.screen = screenMain
+	case "up", "k":
+		m.sessionCursor = wrapIndex(m.sessionCursor-1, len(m.state.Sessions))
+	case "down", "j":
+		m.sessionCursor = wrapIndex(m.sessionCursor+1, len(m.state.Sessions))
+	case "enter":
+		if len(m.state.Sessions) == 0 {
+			return m, nil
+		}
+		m.selectedSession = m.sessionCursor
+		m.harnessCursor = 0
+		m.screen = screenSessionHarnesses
+	}
+	return m, nil
+}
+
+func (m model) updateSessionHarnesses(key string) (tea.Model, tea.Cmd) {
+	options := m.sessionHarnessOptions()
+	switch key {
+	case "q", "esc":
+		m.screen = screenSessions
+	case "up", "k":
+		m.harnessCursor = wrapIndex(m.harnessCursor-1, len(options))
+	case "down", "j":
+		m.harnessCursor = wrapIndex(m.harnessCursor+1, len(options))
+	case "enter":
+		if len(options) == 0 || len(m.state.Sessions) == 0 {
+			return m, nil
+		}
+		session := m.state.Sessions[m.selectedSession]
+		selected := options[m.harnessCursor]
+		m.result.Args = []string{"-p", m.state.ActiveProfile, "sessions", "resume", session.Key, "--harness", selected.ID}
 		m.result.BaseURL = m.sessionBaseURL
 		return m, tea.Quit
 	}
@@ -496,6 +575,10 @@ func (m model) View() tea.View {
 		content = m.renderProfileInput()
 	} else if m.screen == screenUpdateBaseURL {
 		content = m.renderURLInput()
+	} else if m.screen == screenSessions {
+		content = m.renderSessions()
+	} else if m.screen == screenSessionHarnesses {
+		content = m.renderSessionHarnesses()
 	} else {
 		content = m.renderMain(width)
 	}
@@ -608,6 +691,9 @@ func menuRowText(label, action string, labelWidth, actionWidth int, selected boo
 
 func (m model) renderDetail(width int) string {
 	item := m.items[m.cursor]
+	if item.Kind == itemSessions {
+		return m.renderSessionsDetail(width)
+	}
 	if item.Command == "models" {
 		return m.renderModelCatalog(width)
 	}
@@ -634,6 +720,119 @@ func (m model) renderDetail(width int) string {
 		PaddingLeft(2).
 		Width(width).
 		Render(strings.Join(lines, "\n"))
+}
+
+func (m model) renderSessionsDetail(width int) string {
+	title := lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Bold(true).Render("Coding sessions")
+	action := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render("Cross-harness resume")
+	lines := []string{title + "  " + action, "", lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(wrapText("Select a recent session, then reopen it natively or hand its conversation to another coding harness.", max(24, width-4))), ""}
+	limit := min(5, len(m.state.Sessions))
+	for index := 0; index < limit; index++ {
+		session := m.state.Sessions[index]
+		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Render(ellipsize(session.Title, max(20, width-4))))
+		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("  "+session.HarnessName+" · "+sessionWhen(session.UpdatedAt)))
+	}
+	if len(m.state.Sessions) == 0 {
+		lines = append(lines, lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("No supported local sessions found."))
+	}
+	return lipgloss.NewStyle().Border(lipgloss.NormalBorder(), false, false, false, true).BorderForeground(lipgloss.Color(faintColor)).PaddingLeft(2).Width(width).Render(strings.Join(lines, "\n"))
+}
+
+func (m model) renderSessions() string {
+	width := min(max(58, m.width-8), 100)
+	rows := []string{}
+	visible := max(5, m.height-13)
+	visible = min(visible, len(m.state.Sessions))
+	start := max(0, m.sessionCursor-visible/2)
+	if start+visible > len(m.state.Sessions) {
+		start = max(0, len(m.state.Sessions)-visible)
+	}
+	end := min(len(m.state.Sessions), start+visible)
+	innerWidth := width - 6
+	metaWidth := min(24, max(16, innerWidth/3))
+	labelWidth := max(16, innerWidth-metaWidth-4)
+	for index := start; index < end; index++ {
+		session := m.state.Sessions[index]
+		label := ellipsize(session.Title, labelWidth)
+		meta := ellipsize(session.HarnessName+" · "+sessionWhen(session.UpdatedAt), metaWidth)
+		row := fmt.Sprintf("  %-*s  %-*s", labelWidth, label, metaWidth, meta)
+		if index == m.sessionCursor {
+			row = lipgloss.NewStyle().Foreground(lipgloss.Color("#111111")).Background(lipgloss.Color(brandOrange)).Bold(true).Width(innerWidth).Render("› " + strings.TrimPrefix(row, "  "))
+		} else {
+			row = lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Width(innerWidth).Render(row)
+		}
+		rows = append(rows, row)
+	}
+	if len(rows) == 0 {
+		rows = append(rows, lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("No Claude Code, Codex, OpenCode, Pi, or Subconscious Code sessions found."))
+	}
+	heading := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Bold(true).Render("✻  Coding sessions")
+	copy := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(wrapText("Choose a local session to resume. Conversation text stays hidden until you choose a destination harness.", width-4))
+	if len(m.state.Sessions) > 0 {
+		selected := m.state.Sessions[m.sessionCursor]
+		details := selected.HarnessName
+		if selected.Model != "" {
+			details += " · " + selected.Model
+		}
+		if selected.Cwd != "" {
+			details += "\n" + ellipsize(selected.Cwd, width-4)
+		}
+		if !selected.Portable {
+			details += "\nNative resume only; no local transcript was found for handoff."
+		}
+		copy += "\n\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Render(details)
+	}
+	if len(m.state.Sessions) > visible {
+		copy += "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(fmt.Sprintf("Showing %d–%d of %d", start+1, end, len(m.state.Sessions)))
+	}
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("↑/↓ navigate   enter select   esc back")
+	panel := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color(brandOrange)).Padding(1, 2).Width(width).Render(heading + "\n" + copy + "\n\n" + strings.Join(rows, "\n") + "\n\n" + footer)
+	return lipgloss.Place(max(width+4, m.width), max(12, m.height), lipgloss.Center, lipgloss.Center, panel)
+}
+
+func (m model) sessionHarnessOptions() []sessionHarnessState {
+	if len(m.state.Sessions) == 0 {
+		return nil
+	}
+	source := m.state.Sessions[m.selectedSession].Harness
+	portableSource := m.state.Sessions[m.selectedSession].Portable
+	options := []sessionHarnessState{}
+	for _, harness := range m.state.SessionHarnesses {
+		if harness.ID == source {
+			options = append([]sessionHarnessState{harness}, options...)
+		} else if portableSource && harness.Portable {
+			options = append(options, harness)
+		}
+	}
+	return options
+}
+
+func (m model) renderSessionHarnesses() string {
+	if len(m.state.Sessions) == 0 {
+		return m.renderSessions()
+	}
+	session := m.state.Sessions[m.selectedSession]
+	options := m.sessionHarnessOptions()
+	labels := make([]string, 0, len(options))
+	for _, harness := range options {
+		verb := "Continue in"
+		if harness.ID == session.Harness {
+			verb = "Resume natively in"
+		}
+		labels = append(labels, verb+" "+harness.Name)
+	}
+	description := "From " + session.HarnessName + " · " + sessionWhen(session.UpdatedAt)
+	if session.Cwd != "" {
+		description += "\n" + session.Cwd
+	}
+	return m.renderPicker("Resume: "+ellipsize(session.Title, 48), labels, m.harnessCursor, description)
+}
+
+func sessionWhen(value string) string {
+	if len(value) >= 16 {
+		return strings.Replace(value[:16], "T", " ", 1)
+	}
+	return value
 }
 
 func (m model) renderGatewayDetail(width int) string {

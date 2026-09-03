@@ -307,3 +307,45 @@ func TestVersionIsVisibleInTUIHeader(t *testing.T) {
 		t.Fatalf("compact header does not show version: %q", header)
 	}
 }
+
+func TestSessionsMenuSupportsNativeAndCrossHarnessResume(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "default",
+		Sessions: []sessionState{{
+			Key: "claude:session-1", Harness: "claude", HarnessName: "Claude Code",
+			Title: "Repair auth", Cwd: "/work/auth", UpdatedAt: "2026-09-03T10:00:00Z", Portable: true,
+		}},
+		SessionHarnesses: []sessionHarnessState{
+			{ID: "claude", Name: "Claude Code", Portable: true},
+			{ID: "codex", Name: "Codex CLI", Portable: true},
+			{ID: "sc", Name: "Subconscious Code", Portable: false},
+		},
+	})
+	if m.items[0].Kind != itemSessions {
+		t.Fatalf("first menu item = %#v, want sessions", m.items[0])
+	}
+
+	next, _ := m.updateMain("enter")
+	m = next.(model)
+	if m.screen != screenSessions {
+		t.Fatalf("screen = %v, want sessions", m.screen)
+	}
+	next, _ = m.updateSessions("enter")
+	m = next.(model)
+	if m.screen != screenSessionHarnesses {
+		t.Fatalf("screen = %v, want harnesses", m.screen)
+	}
+	options := m.sessionHarnessOptions()
+	if len(options) != 2 || options[0].ID != "claude" || options[1].ID != "codex" {
+		t.Fatalf("harness options = %#v", options)
+	}
+
+	next, _ = m.updateSessionHarnesses("down")
+	m = next.(model)
+	next, _ = m.updateSessionHarnesses("enter")
+	m = next.(model)
+	want := []string{"-p", "default", "sessions", "resume", "claude:session-1", "--harness", "codex"}
+	if !reflect.DeepEqual(m.result.Args, want) {
+		t.Fatalf("session result = %#v, want %#v", m.result.Args, want)
+	}
+}

@@ -43,6 +43,7 @@ import {
 import { resolveModelCatalog } from './models.js';
 import { showUpdateNotice } from './update-check.js';
 import { runTui } from './tui.js';
+import { sessionsCommand } from './sessions.js';
 
 function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
@@ -71,6 +72,9 @@ function printHelp() {
     ${c.cyan}config${c.reset}       List profiles, or show/edit one with ${c.dim}-p${c.reset}
     ${c.cyan}models${c.reset}       List available Subconscious models
 
+  ${c.bold}Sessions${c.reset}
+    ${c.cyan}sessions${c.reset}     Browse and resume local coding sessions across harnesses
+
   ${c.bold}Coding agents${c.reset}
 ${agents}
 
@@ -88,6 +92,8 @@ ${agents}
     ${c.dim}$${c.reset} subc config help
     ${c.dim}$${c.reset} subc -p staging config
     ${c.dim}$${c.reset} subc config edit vim
+    ${c.dim}$${c.reset} subc sessions
+    ${c.dim}$${c.reset} subc sessions resume claude:SESSION_ID --harness codex
     ${c.dim}$${c.reset} subc claude
     ${c.dim}$${c.reset} subc claude help
     ${c.dim}$${c.reset} subc cursor install
@@ -157,6 +163,17 @@ Usage:
 
 List available Subconscious models. The default is the profile MODEL,
 or the first live catalog model if MODEL is UNSET.
+`,
+  sessions: `
+Usage:
+  subc sessions
+  subc sessions resume <session-key>
+  subc sessions resume <session-key> --harness <claude|codex|opencode|pi>
+  subc sessions help
+
+List locally stored sessions from supported coding harnesses. Resuming with the
+original harness uses its native session. Choosing another harness starts a new
+session with a bounded, text-only handoff from the source conversation.
 `,
 };
 
@@ -330,6 +347,17 @@ async function main() {
       source: catalog.source,
       hasApiKey: Boolean(auth?.key),
     });
+    return;
+  }
+
+  if (command === 'sessions') {
+    if (isHelpArg(args[1])) {
+      console.log(COMMAND_HELP.sessions);
+      return;
+    }
+    const profile = await loadProfile(profileName);
+    requireNamedProfile(profile);
+    await sessionsCommand(args.slice(1), { profile });
     return;
   }
 

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { agentList } from './agents.js';
 import { getApiKey } from './auth.js';
 import { resolveModelCatalog } from './models.js';
+import { discoverSessions, SESSION_HARNESSES } from './sessions.js';
 import {
   DEFAULT_PROFILE,
   listProfiles,
@@ -123,6 +124,7 @@ export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}
     fallbackModels: PACKAGED_MODELS,
   });
   const selectedModel = requestedModel;
+  const sessions = await discoverSessions({ max: options.maxSessions || 500 });
 
   return {
     version: await packageVersion(),
@@ -139,6 +141,21 @@ export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}
     gatewayOverridden: Boolean(process.env.SUBCONSCIOUS_BASE_URL?.trim()),
     modelError: catalog.error?.message || '',
     modelSource: catalog.source,
+    sessions: sessions.map((session) => ({
+      key: session.key,
+      harness: session.harness,
+      harnessName: session.harnessName,
+      title: session.title,
+      cwd: session.cwd,
+      updatedAt: session.updatedAt,
+      model: session.model,
+      portable: session.portable,
+    })),
+    sessionHarnesses: Object.entries(SESSION_HARNESSES).map(([id, harness]) => ({
+      id,
+      name: harness.name,
+      portable: harness.portable,
+    })),
     agents: agentList().map((agent) => ({
       command: agent.alias,
       name: agent.name,
