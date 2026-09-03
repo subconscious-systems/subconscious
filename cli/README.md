@@ -227,8 +227,11 @@ so models left in older OpenCode configuration files do not leak into the list.
 If a saved profile default has been removed, launches use the first live model;
 an explicit `--model` or `SUBCONSCIOUS_MODEL` override is always preserved.
 Claude Code exposes four native Opus/Sonnet/Haiku/Fable picker slots plus one
-custom model option, so the CLI maps the first five models into those slots; any other
-model can still be selected with `subc claude --model MODEL`. Cursor requires adding
+custom model option. The CLI remaps those aliases to the live catalog, then
+replaces the built-in `/model` lineup (`modelPicker.replaceBuiltInOptions`) and
+allowlists only those models (`availableModels`) so Anthropic Fable and
+ungranted slugs do not appear. Any other model can still be selected with
+`subc claude --model MODEL`. Cursor requires adding
 the printed model IDs in its OpenAI API Key Override settings. Use the printed
 `/v1` Base URL in Cursor Settings; the profile itself stores the gateway origin
 so correlation hooks can post to `/v1/agent-hooks`.

@@ -263,28 +263,90 @@ test('config edit requires a terminal and rejects unknown editors', async () => 
   assert.match(unknown.stderr, /vim or nano/);
 });
 
-test('profile extras override injected Claude model-picker defaults', () => {
+test('profile extras can remap Claude picker slots only to catalog models', () => {
   const previous = process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
   delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
   try {
     const claude = agents.resolveAgent('claude');
-    const env = agents.runbookEnv(
+    const catalog = ['subconscious/glm-5.2', 'subconscious/tim-qwen3.6-27b'];
+    const remapped = agents.runbookEnv(
       'sk-test',
-      registry.defaults.model,
+      catalog[0],
       undefined,
       {
         name: 'picker',
         path: '/profiles/picker.env',
-        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/custom-opus' },
+        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: catalog[1] },
       },
       claude,
+      catalog,
     );
-    assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, 'subconscious/custom-opus');
-    assert.equal(env.API_KEY, 'sk-test');
-    assert.equal(env.MODEL, registry.defaults.model);
+    assert.equal(remapped.ANTHROPIC_DEFAULT_OPUS_MODEL, catalog[1]);
+    assert.equal(remapped.API_KEY, 'sk-test');
+    assert.equal(remapped.MODEL, catalog[0]);
+
+    const rejected = agents.runbookEnv(
+      'sk-test',
+      catalog[0],
+      undefined,
+      {
+        name: 'picker',
+        path: '/profiles/picker.env',
+        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/glm-5.3-marathon' },
+      },
+      claude,
+      catalog,
+    );
+    assert.equal(rejected.ANTHROPIC_DEFAULT_OPUS_MODEL, catalog[0]);
   } finally {
     if (previous === undefined) delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
     else process.env.ANTHROPIC_DEFAULT_OPUS_MODEL = previous;
+  }
+});
+
+test('Claude picker slots stay inside the live catalog', () => {
+  const previousHaiku = process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+  const previousFable = process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
+  const previousCustom = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
+  process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = 'subconscious/deepseek-v4-flash-marathon';
+  process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = 'subconscious/glm-5.3-marathon';
+  process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = 'subconscious/glm-5.3-marathon';
+  try {
+    const claude = agents.resolveAgent('claude');
+    const catalog = ['subconscious/glm-5.2', 'subconscious/tim-qwen3.6-27b'];
+    const env = agents.runbookEnv(
+      'sk-test',
+      catalog[0],
+      undefined,
+      { name: 'live', path: '/profiles/live.env', values: {} },
+      claude,
+      catalog,
+    );
+
+    assert.equal(env.ANTHROPIC_DEFAULT_OPUS_MODEL, catalog[0]);
+    assert.equal(env.ANTHROPIC_DEFAULT_SONNET_MODEL, catalog[1]);
+    assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL, catalog[1]);
+    assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL, catalog[1]);
+    assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION, undefined);
+    assert.equal(env.SUBCONSCIOUS_MODELS, catalog.join('\n'));
+    assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME, catalog[1]);
+    assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL_NAME, catalog[1]);
+    assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, undefined);
+    assert.equal(env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY, '0');
+    const settings = JSON.parse(env.SUBC_CLAUDE_SETTINGS);
+    assert.deepEqual(settings.availableModels, catalog);
+    assert.equal(settings.modelPicker.replaceBuiltInOptions, true);
+    assert.deepEqual(
+      settings.modelPicker.options.map((option) => option.model),
+      catalog,
+    );
+  } finally {
+    if (previousHaiku === undefined) delete process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+    else process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = previousHaiku;
+    if (previousFable === undefined) delete process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
+    else process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = previousFable;
+    if (previousCustom === undefined) delete process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
+    else process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = previousCustom;
   }
 });
 
@@ -318,6 +380,9 @@ test('live models flow into runbooks and all five Claude picker slots', () => {
     env.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION,
     `Subconscious model ${liveModels[4]}`,
   );
+  const settings = JSON.parse(env.SUBC_CLAUDE_SETTINGS);
+  assert.deepEqual(settings.availableModels, liveModels);
+  assert.equal(settings.modelPicker.replaceBuiltInOptions, true);
 });
 
 test('a removed saved default yields to the first live model but explicit overrides do not', () => {

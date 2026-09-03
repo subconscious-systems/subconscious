@@ -639,21 +639,48 @@ const CLAUDE_MODEL_PICKER_KEYS = [
   'ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION',
 ];
 
+const CLAUDE_MODEL_PICKER_ID_KEYS = [
+  'ANTHROPIC_DEFAULT_OPUS_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL',
+  'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+  'ANTHROPIC_DEFAULT_FABLE_MODEL',
+  'ANTHROPIC_CUSTOM_MODEL_OPTION',
+];
+
+function uniqueCatalogModels(models, fallbackModel) {
+  const unique = [];
+  for (const model of models) {
+    if (model && !unique.includes(model)) unique.push(model);
+  }
+  if (unique.length === 0 && fallbackModel) unique.push(fallbackModel);
+  return unique;
+}
+
+export function claudePickerSettings(models, fallbackModel) {
+  const unique = uniqueCatalogModels(models, fallbackModel);
+  return {
+    availableModels: unique,
+    modelPicker: {
+      replaceBuiltInOptions: true,
+      options: unique.map((model) => ({
+        model,
+        label: model,
+        description: `Subconscious model ${model}`,
+      })),
+    },
+  };
+}
+
 function claudeModelPickerEnv(agent, ctx, models) {
   if (agent.id !== 'claude-code') return {};
-  const configured = substitute(agent.env || {}, ctx);
-  const configuredModels = [
-    configured.ANTHROPIC_DEFAULT_OPUS_MODEL,
-    configured.ANTHROPIC_DEFAULT_SONNET_MODEL,
-    configured.ANTHROPIC_DEFAULT_HAIKU_MODEL,
-    configured.ANTHROPIC_DEFAULT_FABLE_MODEL,
-    configured.ANTHROPIC_CUSTOM_MODEL_OPTION,
-  ];
-  const pickerModels = [];
-  for (const model of [...models, ...configuredModels]) {
-    if (model && !pickerModels.includes(model)) pickerModels.push(model);
-  }
-  while (pickerModels.length < 3) pickerModels.push(pickerModels.at(-1) || ctx.model);
+  // Only the live catalog belongs in Claude's picker. Packaged registry slots
+  // (Haiku → DeepSeek, etc.) must not be unioned back in — that advertised
+  // models the key cannot call.
+  //
+  // Pad through Fable so the built-in `fable` alias cannot resolve to Anthropic
+  // Fable 5. The /model menu itself is replaced via claudePickerSettings.
+  const pickerModels = uniqueCatalogModels(models, ctx.model);
+  while (pickerModels.length < 4) pickerModels.push(pickerModels.at(-1) || ctx.model);
 
   const roles = ['OPUS', 'SONNET', 'HAIKU', 'FABLE'];
   const env = {};
@@ -676,6 +703,27 @@ function claudeModelPickerEnv(agent, ctx, models) {
   );
 }
 
+function applyClaudePickerCatalog(env, picker, models) {
+  if (Object.keys(picker).length === 0) return env;
+  const allowed = new Set(models);
+
+  for (const key of CLAUDE_MODEL_PICKER_KEYS) {
+    if (!picker[key]) {
+      delete env[key];
+    }
+  }
+
+  for (const key of CLAUDE_MODEL_PICKER_ID_KEYS) {
+    if (!picker[key] || !env[key] || allowed.has(env[key])) continue;
+    env[key] = picker[key];
+    const nameKey = `${key}_NAME`;
+    const descriptionKey = `${key}_DESCRIPTION`;
+    if (picker[nameKey]) env[nameKey] = picker[nameKey];
+    if (picker[descriptionKey]) env[descriptionKey] = picker[descriptionKey];
+  }
+  return env;
+}
+
 export function runbookEnv(
   apiKey,
   model,
@@ -687,18 +735,29 @@ export function runbookEnv(
   const ctx = buildContext(apiKey, model, profile);
   const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
   const specificApiKey = agentApiKeySetting(agent)?.key;
-  return {
-    ...claudeModelPickerEnv(agent, ctx, models),
-    ...(profile?.values || {}),
-    ...process.env,
-    GATEWAY_URL: ctx.baseUrl,
-    API_KEY: apiKey,
-    ...(specificApiKey ? { [specificApiKey]: apiKey } : {}),
-    MODEL: model,
-    SUBCONSCIOUS_MODELS: models.join('\n'),
-    SUBC_ENV_FILE: os.devNull,
-    PATH: augmentPath(extraDirs),
-  };
+  const picker = claudeModelPickerEnv(agent, ctx, models);
+  return applyClaudePickerCatalog(
+    {
+      ...picker,
+      ...(profile?.values || {}),
+      ...process.env,
+      GATEWAY_URL: ctx.baseUrl,
+      API_KEY: apiKey,
+      ...(specificApiKey ? { [specificApiKey]: apiKey } : {}),
+      MODEL: model,
+      SUBCONSCIOUS_MODELS: models.join('\n'),
+      ...(agent.id === 'claude-code'
+        ? {
+            SUBC_CLAUDE_SETTINGS: JSON.stringify(claudePickerSettings(models, model)),
+            CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '0',
+          }
+        : {}),
+      SUBC_ENV_FILE: os.devNull,
+      PATH: augmentPath(extraDirs),
+    },
+    picker,
+    models,
+  );
 }
 
 async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
