@@ -27,14 +27,15 @@
       "bin": "sc",
       "install": {
         "darwin": "subc sc install",
-        "linux": "subc sc install",
-        "fallback": "subc sc install"
+        "linux": "subc sc install"
       },
       "runbook": {
         "mode": "launch",
         "script": "subconscious-code/run.sh",
         "setupScript": "subconscious-code/install.sh",
         "binaryInstallScript": "subconscious-code/install.sh",
+        "installDirEnv": "SC_INSTALL_DIR",
+        "installDir": ".local/bin",
         "setupActions": ["install"],
         "setupNeedsAuth": false
       },

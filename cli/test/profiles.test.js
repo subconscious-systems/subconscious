@@ -507,3 +507,26 @@ test('agent-specific credentials work without a shared profile key', async () =>
     else process.env.SUBCONSCIOUS_API_KEY = previousShared;
   }
 });
+
+test('managed agent binaries take precedence over older PATH installations', () => {
+  const sc = agents.resolveAgent('sc');
+  const managed = path.join(path.sep, 'managed', 'sc-bin');
+  const cargo = path.join(path.sep, 'legacy', 'cargo-bin');
+
+  assert.deepEqual(
+    agents.preferredBinDirsForAgent(sc, { SC_INSTALL_DIR: managed }, '/home/test'),
+    [managed],
+  );
+  assert.deepEqual(
+    agents.preferredBinDirsForAgent(sc, {}, '/home/test'),
+    [path.join('/home/test', '.local', 'bin')],
+  );
+  assert.deepEqual(agents.preferredBinDirsForAgent(agents.resolveAgent('codex')), []);
+
+  const augmented = agents.augmentPath(
+    [managed],
+    managed,
+    [cargo, managed, '/usr/bin'].join(path.delimiter),
+  ).split(path.delimiter);
+  assert.deepEqual(augmented, [managed, cargo, '/usr/bin']);
+});

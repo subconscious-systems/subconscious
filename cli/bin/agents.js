@@ -431,6 +431,20 @@ function candidateBinDirs() {
   return [...new Set(dirs.filter(Boolean))];
 }
 
+/** Resolve an agent-managed binary directory declared by the registry. */
+export function preferredBinDirsForAgent(
+  agent,
+  environment = process.env,
+  home = os.homedir(),
+) {
+  const envName = agent.runbook?.installDirEnv;
+  const configured = envName ? environment[envName]?.trim() : '';
+  if (configured) return [path.resolve(configured)];
+
+  const installDir = agent.runbook?.installDir?.trim();
+  return installDir ? [path.resolve(home, installDir)] : [];
+}
+
 /** Executable extensions to probe (Windows uses PATHEXT). */
 function binExts() {
   return process.platform === 'win32'
@@ -443,9 +457,9 @@ function binExts() {
  * containing the executable if found, otherwise null. Searching the candidate
  * dirs lets us find binaries installed this session that aren't on PATH yet.
  */
-async function resolveBinPath(bin) {
+async function resolveBinPath(bin, preferredDirs = []) {
   const pathDirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
-  const dirs = [...pathDirs, ...candidateBinDirs()];
+  const dirs = [...new Set([...preferredDirs, ...pathDirs, ...candidateBinDirs()])];
   const exts = binExts();
   for (const dir of dirs) {
     for (const ext of exts) {
@@ -465,11 +479,24 @@ async function resolveBinPath(bin) {
  * Build a PATH string with `extraDirs` prepended (deduped against PATH).
  * Returns the augmented PATH value for use in a child env.
  */
-function augmentPath(extraDirs) {
-  const current = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+export function augmentPath(
+  extraDirs,
+  preferredDir,
+  currentPath = process.env.PATH || '',
+) {
+  const current = currentPath.split(path.delimiter).filter(Boolean);
   const seen = new Set(current);
-  const prepend = extraDirs.filter((d) => d && !seen.has(d));
-  return [...prepend, ...current].join(path.delimiter);
+  const prepend = extraDirs.filter(
+    (dir, index) =>
+      dir &&
+      dir !== preferredDir &&
+      !seen.has(dir) &&
+      extraDirs.indexOf(dir) === index,
+  );
+  const remaining = current.filter((dir) => dir !== preferredDir);
+  return [...(preferredDir ? [preferredDir] : []), ...prepend, ...remaining].join(
+    path.delimiter,
+  );
 }
 
 /** Ask a yes/no question on the TTY. Empty answer counts as yes. */
@@ -529,7 +556,8 @@ function printInstallCommands(agent) {
  * success. May exit the process on failure or when manual action is needed.
  */
 async function ensureInstalled(agent) {
-  const existing = await resolveBinPath(agent.bin);
+  const preferredDirs = preferredBinDirsForAgent(agent);
+  const existing = await resolveBinPath(agent.bin, preferredDirs);
   if (existing) return existing;
 
   // Agents without an installer are launch-only. Their setup integration may
@@ -580,7 +608,7 @@ async function ensureInstalled(agent) {
 
   // PATH hardening: the freshly-installed binary is often not on the current
   // process's PATH. Re-resolve against PATH + candidate dirs.
-  const found = await resolveBinPath(agent.bin);
+  const found = await resolveBinPath(agent.bin, preferredDirs);
   if (found) return found;
 
   console.error(
@@ -605,7 +633,13 @@ export function readClaudeVersion(bin, binDir, options = {}) {
     const stdout = execFile(bin, ['--version'], {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, PATH: augmentPath([binDir, ...candidateBinDirs()].filter(Boolean)) },
+      env: {
+        ...process.env,
+        PATH: augmentPath(
+          [binDir, ...candidateBinDirs()].filter(Boolean),
+          binDir,
+        ),
+      },
       timeout: options.timeoutMs ?? 3000,
     });
     return parseClaudeVersion(typeof stdout === 'string' ? stdout : stdout?.toString?.());
@@ -852,7 +886,7 @@ export function runbookEnv(
           }
         : {}),
       SUBC_ENV_FILE: os.devNull,
-      PATH: augmentPath(extraDirs),
+      PATH: augmentPath(extraDirs, binDir),
     },
     picker,
     models,
@@ -1005,7 +1039,7 @@ export async function runAgent(agent, argv, options = {}) {
     ...envMap,
     ...(profile?.values || {}),
     ...process.env,
-    PATH: augmentPath(extraDirs),
+    PATH: augmentPath(extraDirs, binDir),
   };
   const args = [...launchArgs, ...rest];
 
