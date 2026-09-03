@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { LOGO_ART_SMALL_LINES } from './branding.js';
 import { c, colorEnabled } from './colors.js';
+import { detectInstallCommand } from './upgrade.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
 export const UPDATE_CHECK_TIMEOUT_MS = 1500;
@@ -121,9 +123,15 @@ export function renderUpdateNotice(installedVersion, latestVersion) {
   ].join('\n');
 }
 
+export function resolveInstallCommand(here = fileURLToPath(import.meta.url)) {
+  return detectInstallCommand(here);
+}
+
 export function renderUpdateOptions(selectedIndex = 0, versions = {}) {
+  const installCommand =
+    versions.installCommand || `npm install -g ${PACKAGE_NAME}@latest`;
   const descriptions = [
-    `Runs \`npm install -g ${PACKAGE_NAME}@latest\``,
+    `Runs \`${installCommand}\``,
     versions.installedVersion
       ? `Continue this command with version ${versions.installedVersion}`
       : 'Continue this command without updating',
@@ -161,6 +169,7 @@ export async function selectUpdateAction(options = {}) {
     `${renderUpdateOptions(selectedIndex, {
       installedVersion: options.installedVersion,
       latestVersion: options.latestVersion,
+      installCommand: options.installCommand,
     })}\n\n${instructions}`;
   const renderedLineCount = render().split('\n').length;
 
@@ -201,10 +210,9 @@ export async function selectUpdateAction(options = {}) {
 
 export async function installLatest(options = {}) {
   const spawnImpl = options.spawnImpl || spawn;
+  const command = options.command || resolveInstallCommand();
   return new Promise((resolve) => {
-    const child = spawnImpl('npm', ['install', '-g', `${PACKAGE_NAME}@latest`], {
-      stdio: 'inherit',
-    });
+    const child = spawnImpl(command, { shell: true, stdio: 'inherit' });
     child.on('error', () => resolve(false));
     child.on('exit', (code) => resolve(code === 0));
   });
@@ -233,8 +241,9 @@ export async function showUpdateNotice(options = {}) {
       options.interactive ?? (process.stdin.isTTY === true && process.stderr.isTTY === true);
     if (!interactive) return { installedVersion, latestVersion, action: 'skip' };
 
+    const installCommand = options.installCommand || resolveInstallCommand();
     const select = options.select || selectUpdateAction;
-    const action = await select({ installedVersion, latestVersion });
+    const action = await select({ installedVersion, latestVersion, installCommand });
     if (action === 'cancel') return { installedVersion, latestVersion, action };
     if (action === 'skip') {
       write(`\n  ${c.dim}Skipping update.${c.reset}\n\n`);
@@ -252,7 +261,7 @@ export async function showUpdateNotice(options = {}) {
     }
 
     write(`\n  ${c.red}Update failed.${c.reset} Try it manually:\n\n`);
-    write(`    ${c.cyan}npm install -g ${PACKAGE_NAME}@latest${c.reset}\n\n`);
+    write(`    ${c.cyan}${installCommand}${c.reset}\n\n`);
     return { installedVersion, latestVersion, action: 'failed' };
   } catch {
     // Update discovery must never prevent the requested command from running.

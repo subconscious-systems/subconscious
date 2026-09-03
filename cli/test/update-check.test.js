@@ -7,6 +7,7 @@ import {
   moveUpdateSelection,
   renderUpdateNotice,
   renderUpdateOptions,
+  resolveInstallCommand,
   showUpdateNotice,
 } from '../bin/update-check.js';
 
@@ -116,11 +117,12 @@ test('showUpdateNotice continues without installing after Skip is selected', asy
   assert.equal(result.action, 'skip');
 });
 
-test('installLatest invokes npm without a shell', async () => {
+test('installLatest runs the detected package-manager command in a shell', async () => {
   let invocation;
   const installed = await installLatest({
-    spawnImpl: (command, args, options) => {
-      invocation = { command, args, options };
+    command: 'pnpm add -g subconscious-cli@latest',
+    spawnImpl: (command, options) => {
+      invocation = { command, options };
       return {
         on(event, callback) {
           if (event === 'exit') callback(0);
@@ -131,10 +133,16 @@ test('installLatest invokes npm without a shell', async () => {
 
   assert.equal(installed, true);
   assert.deepEqual(invocation, {
-    command: 'npm',
-    args: ['install', '-g', 'subconscious-cli@latest'],
-    options: { stdio: 'inherit' },
+    command: 'pnpm add -g subconscious-cli@latest',
+    options: { shell: true, stdio: 'inherit' },
   });
+});
+
+test('resolveInstallCommand delegates to the active install path', () => {
+  assert.equal(
+    resolveInstallCommand('/Users/me/.pnpm/global/subconscious-cli/bin/update-check.js'),
+    'pnpm add -g subconscious-cli@latest',
+  );
 });
 
 test('showUpdateNotice stays silent when current, disabled, or offline', async () => {
