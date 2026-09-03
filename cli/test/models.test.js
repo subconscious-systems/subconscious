@@ -34,6 +34,16 @@ test('normalizeModelIds reorders a present selected model and removes invalid du
   );
 });
 
+test('normalizeModelIds keeps gateway order when no selected model is set', () => {
+  assert.deepEqual(
+    normalizeModelIds(
+      ['subconscious/glm-5.3-marathon', 'subconscious/glm-5.2'],
+      '',
+    ),
+    ['subconscious/glm-5.3-marathon', 'subconscious/glm-5.2'],
+  );
+});
+
 test('normalizeModelIds does not invent a selected model absent from the live catalog', () => {
   assert.deepEqual(
     normalizeModelIds(['subconscious/live'], 'subconscious/removed'),

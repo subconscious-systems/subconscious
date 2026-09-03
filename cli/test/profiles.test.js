@@ -132,11 +132,17 @@ test('subagent model can be saved independently or reset to follow the default',
     'subconscious/deepseek-v4-flash-marathon',
   );
 
-  await profiles.configCommand(['--subagent-model', 'follow-default'], 'subagents', {
+  await profiles.configCommand(['--subagent-model', 'UNSET'], 'subagents', {
     profileExplicit: true,
   });
   profile = await profiles.loadProfile('subagents');
   assert.equal(profile.values.CLAUDE_CODE_SUBAGENT_MODEL, '');
+
+  await profiles.configCommand(['--model', 'UNSET'], 'subagents', {
+    profileExplicit: true,
+  });
+  profile = await profiles.loadProfile('subagents');
+  assert.equal(profile.values.MODEL, '');
 
   const claudeSettings = profiles.PROFILE_SETTING_GROUPS.find(
     (group) => group.id === 'claude-code',
@@ -383,6 +389,52 @@ test('live models flow into runbooks and all five Claude picker slots', () => {
   const settings = JSON.parse(env.SUBC_CLAUDE_SETTINGS);
   assert.deepEqual(settings.availableModels, liveModels);
   assert.equal(settings.modelPicker.replaceBuiltInOptions, true);
+});
+
+test('UNSET and legacy aliases clear model settings', () => {
+  assert.equal(profiles.isUnsetSetting('UNSET'), true);
+  assert.equal(profiles.isUnsetSetting('unset'), true);
+  assert.equal(profiles.isUnsetSetting('follow-default'), true);
+  assert.equal(profiles.isUnsetSetting('follow-gateway'), true);
+  assert.equal(profiles.isUnsetSetting('subconscious/glm-5.2'), false);
+  assert.equal(profiles.resolvedModelSetting('UNSET'), '');
+  assert.equal(profiles.resolvedModelSetting('subconscious/glm-5.2'), 'subconscious/glm-5.2');
+});
+
+test('a blank profile model follows the first live catalog entry', () => {
+  const previous = process.env.SUBCONSCIOUS_MODEL;
+  delete process.env.SUBCONSCIOUS_MODEL;
+
+  try {
+    const extracted = agents.extractModel([], {
+      name: 'blank',
+      path: '/profiles/blank.env',
+      values: { MODEL: 'UNSET' },
+    });
+    assert.equal(extracted.model, '');
+    assert.equal(extracted.modelSource, 'catalog');
+    assert.deepEqual(agents.extractModel(['--model', 'UNSET'], {
+      name: 'blank',
+      path: '/profiles/blank.env',
+      values: { MODEL: 'subconscious/glm-5.2' },
+    }), { model: '', modelSource: 'catalog', rest: [] });
+
+    const catalog = {
+      source: 'available',
+      models: ['subconscious/glm-5.3-marathon', 'subconscious/glm-5.2'],
+    };
+    assert.equal(
+      agents.selectLaunchModel('', 'catalog', catalog),
+      'subconscious/glm-5.3-marathon',
+    );
+    assert.equal(
+      agents.selectLaunchModel('subconscious/glm-5.2', 'profile', catalog),
+      'subconscious/glm-5.2',
+    );
+  } finally {
+    if (previous === undefined) delete process.env.SUBCONSCIOUS_MODEL;
+    else process.env.SUBCONSCIOUS_MODEL = previous;
+  }
 });
 
 test('a removed saved default yields to the first live model but explicit overrides do not', () => {

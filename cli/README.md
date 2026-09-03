@@ -153,8 +153,9 @@ subc config                         # list every profile and its file path
 subc -p staging config create      # create a profile with default settings
 subc -p staging config              # print that path and env file
 subc -p staging config --model subconscious/glm-5.2
+subc -p staging config --model UNSET
 subc -p staging config --subagent-model subconscious/deepseek-v4-flash-marathon
-subc -p staging config --subagent-model follow-default
+subc -p staging config --subagent-model UNSET
 subc config --gateway-url https://gateway.example
 subc config path
 subc config edit                    # open the selected profile in $VISUAL, $EDITOR, vim, or nano
@@ -170,9 +171,12 @@ Subconscious-injected defaults; resolved login identity (`GATEWAY_URL`,
 In scripts and CI, keep using `subc config --gateway-url`, `--api-key`,
 `--model`, and `--subagent-model`.
 
+Use `UNSET` to clear the profile default so launches use the first model in
+the live catalog (gateway priority order).
+
 The subagent setting controls `CLAUDE_CODE_SUBAGENT_MODEL` for Claude Code.
-Use `follow-default` to clear the override so subagents automatically follow
-the profile's default model.
+Use `UNSET` to clear the override so subagents automatically follow the
+profile's default model.
 
 Each agent section can hold its own API key. An agent-specific key takes
 precedence over the shared profile key and can be used on its own, so profiles
@@ -224,8 +228,9 @@ list. The selected profile model is listed first only while the gateway still
 advertises it.
 OpenCode rebuilds its isolated runtime provider on every `subc opencode` launch,
 so models left in older OpenCode configuration files do not leak into the list.
-If a saved profile default has been removed, launches use the first live model;
-an explicit `--model` or `SUBCONSCIOUS_MODEL` override is always preserved.
+If a saved profile default is UNSET or has been removed, launches use the first
+live model; an explicit `--model` or `SUBCONSCIOUS_MODEL` override is always
+preserved.
 Claude Code exposes four native Opus/Sonnet/Haiku/Fable picker slots plus one
 custom model option. The CLI remaps those aliases to the live catalog, then
 replaces the built-in `/model` lineup (`modelPicker.replaceBuiltInOptions`) and

@@ -11,6 +11,7 @@ import {
   DEFAULT_PROFILE,
   listProfiles,
   loadProfile,
+  resolvedModelSetting,
   RUNBOOK_DEFAULTS,
   SUPPORTED_MODELS as PACKAGED_MODELS,
 } from './profiles.js';
@@ -70,15 +71,11 @@ export async function resolveTuiExecutable(options = {}) {
 }
 
 function selectedModelFor(profile) {
-  return (
-    process.env.SUBCONSCIOUS_MODEL?.trim() ||
-    profile.values.MODEL?.trim() ||
-    RUNBOOK_DEFAULTS.MODEL
-  );
+  return resolvedModelSetting(process.env.SUBCONSCIOUS_MODEL || profile.values.MODEL);
 }
 
 function subagentModelFor(profile) {
-  return profile.values.CLAUDE_CODE_SUBAGENT_MODEL?.trim() || '';
+  return resolvedModelSetting(profile.values.CLAUDE_CODE_SUBAGENT_MODEL);
 }
 
 function gatewayFor(profile) {
@@ -117,14 +114,15 @@ export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}
   );
 
   const auth = await getApiKey(activeProfile);
-  const selectedModel = selectedModelFor(activeProfile);
+  const requestedModel = selectedModelFor(activeProfile);
   const gatewayUrl = gatewayFor(activeProfile);
   const catalog = await resolveModelCatalog({
     baseUrl: gatewayUrl,
     apiKey: auth?.key,
-    selectedModel,
+    selectedModel: requestedModel,
     fallbackModels: PACKAGED_MODELS,
   });
+  const selectedModel = requestedModel;
 
   return {
     version: await packageVersion(),

@@ -20,7 +20,12 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
 import { getApiKey } from './auth.js';
-import { profileSettingsForAgent, resolvedProfileValues } from './profiles.js';
+import {
+  isUnsetSetting,
+  profileSettingsForAgent,
+  resolvedModelSetting,
+  resolvedProfileValues,
+} from './profiles.js';
 import { isLiveModelSource, PUBLIC_CATALOG_FALLBACK_MESSAGE, resolveModelCatalog } from './models.js';
 import { compareVersions } from './update-check.js';
 
@@ -261,6 +266,12 @@ function displayProfileValue(setting, value, values) {
     if (value) return '(set)';
     return setting.key !== 'API_KEY' && values.API_KEY ? '(shared key)' : '(not set)';
   }
+  if (
+    !value &&
+    (setting.key === 'MODEL' || setting.key === 'CLAUDE_CODE_SUBAGENT_MODEL')
+  ) {
+    return 'UNSET';
+  }
   return value || '(auto)';
 }
 
@@ -328,28 +339,40 @@ function buildContext(apiKey, model, profile) {
 /**
  * Pull a `--model <value>` / `--model=<value>` flag out of the passthrough
  * args (so it sets the Subconscious model rather than reaching the agent).
- * Falls back to SUBCONSCIOUS_MODEL, then the registry default.
+ * Falls back to SUBCONSCIOUS_MODEL, then the profile MODEL. UNSET or a blank
+ * profile model means "use the first live catalog entry" (gateway priority).
  */
-function extractModel(argv, profile) {
-  const environmentModel = process.env.SUBCONSCIOUS_MODEL?.trim();
-  const profileModel = profile?.values?.MODEL?.trim();
-  let model = environmentModel || profileModel || DEFAULTS.model;
-  let modelSource = environmentModel ? 'environment' : profileModel ? 'profile' : 'default';
+export function extractModel(argv, profile) {
+  const environmentModel = resolvedModelSetting(process.env.SUBCONSCIOUS_MODEL);
+  const profileModel = resolvedModelSetting(profile?.values?.MODEL);
+  let model = environmentModel || profileModel || '';
+  let modelSource = environmentModel ? 'environment' : profileModel ? 'profile' : 'catalog';
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--model') {
       const v = argv[i + 1];
       if (v && !v.startsWith('-')) {
-        model = v;
-        modelSource = 'command';
+        if (isUnsetSetting(v)) {
+          model = '';
+          modelSource = 'catalog';
+        } else {
+          model = v;
+          modelSource = 'command';
+        }
         i++;
       }
       continue;
     }
     if (a.startsWith('--model=')) {
-      model = a.slice('--model='.length);
-      modelSource = 'command';
+      const v = a.slice('--model='.length);
+      if (isUnsetSetting(v)) {
+        model = '';
+        modelSource = 'catalog';
+      } else {
+        model = v;
+        modelSource = 'command';
+      }
       continue;
     }
     rest.push(a);
@@ -838,12 +861,16 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
 }
 
 export function selectLaunchModel(requestedModel, modelSource, catalog) {
+  const first = catalog.models[0] || requestedModel || DEFAULTS.model;
+  if (modelSource === 'catalog' || !requestedModel) {
+    return first;
+  }
   const useLiveDefault =
     isLiveModelSource(catalog.source) &&
     catalog.models.length > 0 &&
     !catalog.models.includes(requestedModel) &&
     (modelSource === 'profile' || modelSource === 'default');
-  return useLiveDefault ? catalog.models[0] : requestedModel;
+  return useLiveDefault ? first : requestedModel;
 }
 
 async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runbook.script) {
@@ -860,7 +887,7 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
   if (!apiKey) return 1;
   const catalog = await resolvedModelsForLaunch(profile, apiKey, requestedModel);
   const model = selectLaunchModel(requestedModel, modelSource, catalog);
-  if (model !== requestedModel) {
+  if (requestedModel && model !== requestedModel) {
     console.error(
       `  ${c.yellow}Configured model ${requestedModel} is not in the live catalog; using ${model}.${c.reset}\n`,
     );
@@ -930,7 +957,7 @@ export async function runAgent(agent, argv, options = {}) {
   await ensureClaudeCompatible(agent, binDir);
   const catalog = await resolvedModelsForLaunch(profile, apiKey, requestedModel);
   const model = selectLaunchModel(requestedModel, modelSource, catalog);
-  if (model !== requestedModel) {
+  if (requestedModel && model !== requestedModel) {
     console.error(
       `  ${c.yellow}Configured model ${requestedModel} is not in the live catalog; using ${model}.${c.reset}\n`,
     );

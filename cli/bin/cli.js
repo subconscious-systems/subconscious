@@ -34,6 +34,7 @@ import {
   loadProfile,
   modelsCommand,
   printConfigHelp,
+  resolvedModelSetting,
   RUNBOOK_DEFAULTS,
   SUPPORTED_MODELS as PACKAGED_MODELS,
   updateUrlCommand,
@@ -74,7 +75,7 @@ function printHelp() {
 ${agents}
 
   ${c.bold}Options${c.reset}
-    ${c.dim}--model <id>${c.reset}   Model to use (default subconscious/glm-5.2)
+    ${c.dim}--model <id>${c.reset}   Model to use (profile MODEL, or first live catalog model if UNSET)
     ${c.dim}-p, --profile${c.reset}  Select a profile (default: default)
     ${c.dim}-h, --help${c.reset}     Show this help
     ${c.dim}-v, --version${c.reset}  Show version
@@ -154,7 +155,8 @@ Usage:
   subc models
   subc models help
 
-List available Subconscious models.
+List available Subconscious models. The default is the profile MODEL,
+or the first live catalog model if MODEL is UNSET.
 `,
 };
 
@@ -309,10 +311,9 @@ async function main() {
     }
     const profile = await loadProfile(profileName);
     const auth = await getApiKey(profile);
-    const selectedModel =
-      process.env.SUBCONSCIOUS_MODEL?.trim() ||
-      profile.values.MODEL?.trim() ||
-      RUNBOOK_DEFAULTS.MODEL;
+    const selectedModel = resolvedModelSetting(
+      process.env.SUBCONSCIOUS_MODEL || profile.values.MODEL,
+    );
     const baseUrl =
       process.env.SUBCONSCIOUS_BASE_URL?.trim() ||
       profile.values.GATEWAY_URL?.trim() ||

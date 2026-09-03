@@ -24,11 +24,38 @@ func TestActionArgsDoNotSendModelToSetupAgent(t *testing.T) {
 	}
 }
 
+func TestDefaultModelPickerIncludesUnset(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "work",
+		SelectedModel: "",
+		Models:        []string{"subconscious/default", "subconscious/fast"},
+	})
+	if m.modelCursor != 0 {
+		t.Fatalf("model cursor = %d, want 0", m.modelCursor)
+	}
+	options := defaultModelOptions(m.state)
+	if options[0] != "UNSET" {
+		t.Fatalf("first model option = %q", options[0])
+	}
+
+	next, _ := m.updateModels("enter")
+	updated := next.(model)
+	want := []string{"-p", "work", "config", "--model", "UNSET"}
+	if !reflect.DeepEqual(updated.result.Args, want) {
+		t.Fatalf("picker result = %#v, want %#v", updated.result.Args, want)
+	}
+}
+
 func TestSetDefaultModelActionPersistsThroughConfig(t *testing.T) {
 	item := menuItem{Command: "config", Kind: itemSetDefaultModel}
 	want := []string{"-p", "work", "config", "--model", "subconscious/deepseek"}
 	if got := actionArgs(item, "work", "subconscious/deepseek", ""); !reflect.DeepEqual(got, want) {
 		t.Fatalf("actionArgs() = %#v, want %#v", got, want)
+	}
+
+	wantUnset := []string{"-p", "work", "config", "--model", "UNSET"}
+	if got := actionArgs(item, "work", "", ""); !reflect.DeepEqual(got, wantUnset) {
+		t.Fatalf("actionArgs() = %#v, want %#v", got, wantUnset)
 	}
 }
 
@@ -39,13 +66,13 @@ func TestSetSubagentModelActionPersistsThroughConfig(t *testing.T) {
 		t.Fatalf("actionArgs() = %#v, want %#v", got, want)
 	}
 
-	wantFollowDefault := []string{"-p", "work", "config", "--subagent-model", "follow-default"}
-	if got := actionArgs(item, "work", "subconscious/default", ""); !reflect.DeepEqual(got, wantFollowDefault) {
-		t.Fatalf("actionArgs() = %#v, want %#v", got, wantFollowDefault)
+	wantUnset := []string{"-p", "work", "config", "--subagent-model", "UNSET"}
+	if got := actionArgs(item, "work", "subconscious/default", ""); !reflect.DeepEqual(got, wantUnset) {
+		t.Fatalf("actionArgs() = %#v, want %#v", got, wantUnset)
 	}
 }
 
-func TestSubagentModelPickerIncludesFollowDefault(t *testing.T) {
+func TestSubagentModelPickerIncludesUnset(t *testing.T) {
 	m := newModel(inputState{
 		ActiveProfile: "work",
 		SelectedModel: "subconscious/default",
@@ -56,16 +83,27 @@ func TestSubagentModelPickerIncludesFollowDefault(t *testing.T) {
 		t.Fatalf("subagent cursor = %d, want 2", m.subagentCursor)
 	}
 	options := subagentModelOptions(m.state)
-	if options[0] != "Follow default model" {
+	if options[0] != "UNSET" {
 		t.Fatalf("first subagent option = %q", options[0])
 	}
 
 	m.subagentCursor = 0
 	next, _ := m.updateSubagentModels("enter")
 	updated := next.(model)
-	want := []string{"-p", "work", "config", "--subagent-model", "follow-default"}
+	want := []string{"-p", "work", "config", "--subagent-model", "UNSET"}
 	if !reflect.DeepEqual(updated.result.Args, want) {
 		t.Fatalf("picker result = %#v, want %#v", updated.result.Args, want)
+	}
+}
+
+func TestNormalizeStateKeepsUnsetDefaultModel(t *testing.T) {
+	state := normalizeState(inputState{
+		ActiveProfile: "staging",
+		SelectedModel: "",
+		Models:        []string{"subconscious/glm-5.3"},
+	})
+	if state.SelectedModel != "" {
+		t.Fatalf("unset model was filled: %#v", state.SelectedModel)
 	}
 }
 

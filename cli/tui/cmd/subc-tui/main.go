@@ -16,6 +16,8 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+const unsetSetting = "UNSET"
+
 const (
 	brandOrange = "#FF5C27"
 	brandDim    = "#B84A1E"
@@ -139,8 +141,8 @@ func newModel(state inputState) model {
 	items = append(items,
 		menuItem{Section: "Account & configuration", Name: "Sign in", Command: "login", Action: "Authenticate", Description: "Authenticate this profile and securely save its Subconscious API key.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Available models", Command: "models", Action: "Inspect", Description: "Fetch and display the live model catalog from the selected gateway.", Kind: itemCommand},
-		menuItem{Section: "Account & configuration", Name: "Set default model", Command: "config", Action: "Configure", Description: "Choose and save the default model for the selected profile.", Kind: itemSetDefaultModel},
-		menuItem{Section: "Account & configuration", Name: "Set subagent model", Command: "config", Action: "Configure", Description: "Choose the model Claude Code uses for subagents, or follow the default model.", Kind: itemSetSubagentModel},
+		menuItem{Section: "Account & configuration", Name: "Set default model", Command: "config", Action: "Configure", Description: "Choose and save the default model for the selected profile, or UNSET to follow the live catalog.", Kind: itemSetDefaultModel},
+		menuItem{Section: "Account & configuration", Name: "Set subagent model", Command: "config", Action: "Configure", Description: "Choose the model Claude Code uses for subagents, or UNSET to follow the default model.", Kind: itemSetSubagentModel},
 		menuItem{Section: "Account & configuration", Name: "Update base URL", Command: "update-url", Action: "Configure", Description: "Validate and save a new gateway base URL without leaving the TUI.", Kind: itemUpdateBaseURL},
 		menuItem{Section: "Account & configuration", Name: "Create profile", Command: "config", Action: "Create", Description: "Create an isolated profile with its own gateway, model, and agent settings.", Kind: itemCreateProfile},
 		menuItem{Section: "Account & configuration", Name: "Profile settings", Command: "config", Action: "Configure", Description: "View the selected profile, gateway URL, model, and agent settings.", Kind: itemCommand},
@@ -148,7 +150,7 @@ func newModel(state inputState) model {
 	)
 
 	profileCursor := indexProfile(state.Profiles, state.ActiveProfile)
-	modelCursor := max(0, indexString(state.Models, state.SelectedModel))
+	modelCursor := defaultModelIndex(state)
 	subagentCursor := subagentModelIndex(state)
 	return model{
 		state:          state,
@@ -168,9 +170,6 @@ func normalizeState(state inputState) inputState {
 	}
 	if indexProfile(state.Profiles, state.ActiveProfile) < 0 {
 		state.Profiles = append([]profileState{{Name: state.ActiveProfile, Model: state.SelectedModel, SubagentModel: state.SubagentModel}}, state.Profiles...)
-	}
-	if state.SelectedModel == "" && len(state.Models) > 0 {
-		state.SelectedModel = state.Models[0]
 	}
 	if state.SelectedModel != "" && indexString(state.Models, state.SelectedModel) < 0 {
 		state.Models = append([]string{state.SelectedModel}, state.Models...)
@@ -231,7 +230,7 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 		item := m.items[m.cursor]
 		if item.Kind == itemSetDefaultModel {
 			if len(m.state.Models) > 0 {
-				m.modelCursor = max(0, indexString(m.state.Models, m.state.SelectedModel))
+				m.modelCursor = defaultModelIndex(m.state)
 				m.screen = screenSetDefaultModel
 			}
 			return m, nil
@@ -274,13 +273,11 @@ func (m model) updateProfiles(key string) (tea.Model, tea.Cmd) {
 	case "enter":
 		selected := m.state.Profiles[m.profileCursor]
 		m.state.ActiveProfile = selected.Name
-		if selected.Model != "" {
-			m.state.SelectedModel = selected.Model
-			if indexString(m.state.Models, selected.Model) < 0 {
-				m.state.Models = append([]string{selected.Model}, m.state.Models...)
-			}
-			m.modelCursor = indexString(m.state.Models, selected.Model)
+		m.state.SelectedModel = selected.Model
+		if selected.Model != "" && indexString(m.state.Models, selected.Model) < 0 {
+			m.state.Models = append([]string{selected.Model}, m.state.Models...)
 		}
+		m.modelCursor = defaultModelIndex(m.state)
 		m.state.SubagentModel = selected.SubagentModel
 		if selected.SubagentModel != "" && indexString(m.state.Models, selected.SubagentModel) < 0 {
 			m.state.Models = append(m.state.Models, selected.SubagentModel)
@@ -292,15 +289,20 @@ func (m model) updateProfiles(key string) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateModels(key string) (tea.Model, tea.Cmd) {
+	options := defaultModelOptions(m.state)
 	switch key {
 	case "q", "esc":
 		m.screen = screenMain
 	case "up", "k":
-		m.modelCursor = wrapIndex(m.modelCursor-1, len(m.state.Models))
+		m.modelCursor = wrapIndex(m.modelCursor-1, len(options))
 	case "down", "j":
-		m.modelCursor = wrapIndex(m.modelCursor+1, len(m.state.Models))
+		m.modelCursor = wrapIndex(m.modelCursor+1, len(options))
 	case "enter":
-		m.result.Args = []string{"-p", m.state.ActiveProfile, "config", "--model", m.state.Models[m.modelCursor]}
+		selected := unsetSetting
+		if m.modelCursor > 0 {
+			selected = options[m.modelCursor]
+		}
+		m.result.Args = []string{"-p", m.state.ActiveProfile, "config", "--model", selected}
 		return m, tea.Quit
 	}
 	return m, nil
@@ -316,7 +318,7 @@ func (m model) updateSubagentModels(key string) (tea.Model, tea.Cmd) {
 	case "down", "j":
 		m.subagentCursor = wrapIndex(m.subagentCursor+1, len(options))
 	case "enter":
-		selected := "follow-default"
+		selected := unsetSetting
 		if m.subagentCursor > 0 {
 			selected = options[m.subagentCursor]
 		}
@@ -457,11 +459,14 @@ func updateProfileValue(path, key, value string) error {
 
 func actionArgs(item menuItem, profile, selectedModel, subagentModel string) []string {
 	if item.Kind == itemSetDefaultModel {
+		if selectedModel == "" {
+			selectedModel = unsetSetting
+		}
 		return []string{"-p", profile, "config", "--model", selectedModel}
 	}
 	if item.Kind == itemSetSubagentModel {
 		if subagentModel == "" {
-			subagentModel = "follow-default"
+			subagentModel = unsetSetting
 		}
 		return []string{"-p", profile, "config", "--subagent-model", subagentModel}
 	}
@@ -484,9 +489,9 @@ func (m model) View() tea.View {
 	if m.screen == screenProfiles {
 		content = m.renderPicker("Select profile", profileNames(m.state.Profiles), m.profileCursor, "Profiles keep gateway, model, and agent settings separate.")
 	} else if m.screen == screenSetDefaultModel {
-		content = m.renderPicker("Set default model", m.state.Models, m.modelCursor, defaultModelPickerDescription(m.state))
+		content = m.renderPicker("Set default model", defaultModelOptions(m.state), m.modelCursor, defaultModelPickerDescription(m.state))
 	} else if m.screen == screenSetSubagentModel {
-		content = m.renderPicker("Set subagent model", subagentModelOptions(m.state), m.subagentCursor, "Choose the model Claude Code uses for subagents. Follow default keeps it in sync with the profile model.")
+		content = m.renderPicker("Set subagent model", subagentModelOptions(m.state), m.subagentCursor, "Choose the model Claude Code uses for subagents. UNSET keeps it in sync with the profile model.")
 	} else if m.screen == screenCreateProfile {
 		content = m.renderProfileInput()
 	} else if m.screen == screenUpdateBaseURL {
@@ -551,7 +556,7 @@ func (m model) renderHeader(width int) string {
 		lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("Native terminal control center"),
 		"",
 		lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Render("Profile  ") + orange.Render(m.state.ActiveProfile) + "  " + auth,
-		lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Render("Model    ") + lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(ellipsize(m.state.SelectedModel, max(20, width-48))),
+		lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Render("Model    ") + lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(ellipsize(defaultModelDisplay(m.state), max(20, width-48))),
 		lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Render("Subagent ") + lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(ellipsize(subagentModelDisplay(m.state), max(20, width-48))),
 	}, "\n")
 	return lipgloss.JoinHorizontal(lipgloss.Bottom, logoBlock, "   ", info)
@@ -617,7 +622,7 @@ func (m model) renderDetail(width int) string {
 
 	lines := []string{title + "  " + action, "", description, "", preview}
 	if item.Kind == itemAgent && item.Launch {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("Model"), ellipsize(m.state.SelectedModel, max(20, width-4)))
+		lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("Model"), ellipsize(defaultModelDisplay(m.state), max(20, width-4)))
 	}
 	if m.state.GatewayURL != "" {
 		lines = append(lines, "", lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("Gateway"), ellipsize(m.state.GatewayURL, max(20, width-4)))
@@ -663,7 +668,7 @@ func (m model) renderModelCatalog(width int) string {
 	for _, modelID := range m.state.Models {
 		marker := "  "
 		label := ellipsize(modelID, max(20, width-9))
-		if modelID == m.state.SelectedModel {
+		if modelID == catalogDefaultModel(m.state) {
 			marker = lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render("● ")
 			label += lipgloss.NewStyle().Foreground(lipgloss.Color(brandDim)).Render("  default")
 		} else {
@@ -785,8 +790,43 @@ func currentProfile(state inputState) profileState {
 	return profileState{Name: state.ActiveProfile, Model: state.SelectedModel, SubagentModel: state.SubagentModel}
 }
 
+func defaultModelOptions(state inputState) []string {
+	return append([]string{unsetSetting}, state.Models...)
+}
+
+func defaultModelIndex(state inputState) int {
+	if state.SelectedModel == "" {
+		return 0
+	}
+	index := indexString(state.Models, state.SelectedModel)
+	if index < 0 {
+		return 0
+	}
+	return index + 1
+}
+
+func catalogDefaultModel(state inputState) string {
+	if state.SelectedModel != "" {
+		return state.SelectedModel
+	}
+	if len(state.Models) > 0 {
+		return state.Models[0]
+	}
+	return ""
+}
+
+func defaultModelDisplay(state inputState) string {
+	if state.SelectedModel != "" {
+		return state.SelectedModel
+	}
+	if len(state.Models) > 0 {
+		return state.Models[0] + " (" + unsetSetting + ")"
+	}
+	return unsetSetting
+}
+
 func subagentModelOptions(state inputState) []string {
-	return append([]string{"Follow default model"}, state.Models...)
+	return append([]string{unsetSetting}, state.Models...)
 }
 
 func subagentModelIndex(state inputState) int {
@@ -804,7 +844,7 @@ func subagentModelDisplay(state inputState) string {
 	if state.SubagentModel != "" {
 		return state.SubagentModel
 	}
-	return state.SelectedModel + " (follows default)"
+	return unsetSetting
 }
 
 func profileNames(profiles []profileState) []string {
@@ -907,7 +947,7 @@ func defaultModelPickerDescription(state inputState) string {
 		if state.ModelSource == "" && state.ModelError != "" {
 			return "Live catalog unavailable; packaged models are shown."
 		}
-		return "This model will be saved as the default for the selected profile."
+		return "This model will be saved as the default for the selected profile. UNSET follows the first live catalog model."
 	}
 }
 

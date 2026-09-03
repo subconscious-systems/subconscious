@@ -84,14 +84,15 @@ const SETTINGS = {
   MODEL: {
     key: 'MODEL',
     label: 'Default model',
-    description: 'Initial model used by coding-agent launches and setup.',
+    description:
+      'Initial model used by coding-agent launches and setup. UNSET uses the first live catalog model.',
     type: 'choice',
     choices: SUPPORTED_MODELS,
   },
   CLAUDE_CODE_SUBAGENT_MODEL: {
     key: 'CLAUDE_CODE_SUBAGENT_MODEL',
     label: 'Subagent model',
-    description: 'Model used by Claude Code subagents; blank follows the default model.',
+    description: 'Model used by Claude Code subagents. UNSET follows the default model.',
     type: 'choice',
     choices: SUPPORTED_MODELS,
   },
@@ -340,7 +341,7 @@ function profileTemplate() {
 
 GATEWAY_URL={GATEWAY_URL}
 API_KEY={API_KEY}
-# Available models:
+# Available models (MODEL=UNSET uses the first live catalog model):
 ${modelComments}
 MODEL={MODEL}
 
@@ -356,7 +357,7 @@ DEEPSEEK_HARNESS_API_KEY={DEEPSEEK_HARNESS_API_KEY}
 # Claude Code
 # Leave CLAUDE_GATEWAY_URL blank to use GATEWAY_URL above.
 CLAUDE_GATEWAY_URL={CLAUDE_GATEWAY_URL}
-# Leave blank to use MODEL above for Claude Code subagents.
+# CLAUDE_CODE_SUBAGENT_MODEL=UNSET follows MODEL above.
 CLAUDE_CODE_SUBAGENT_MODEL={CLAUDE_CODE_SUBAGENT_MODEL}
 CLAUDE_CODE_AUTO_COMPACT_WINDOW={CLAUDE_CODE_AUTO_COMPACT_WINDOW}
 CLAUDE_CODE_MAX_CONTEXT_TOKENS={CLAUDE_CODE_MAX_CONTEXT_TOKENS}
@@ -600,6 +601,16 @@ async function printProfile(profile) {
   console.log();
 }
 
+export function isUnsetSetting(value) {
+  const normalized = String(value ?? '').trim().toUpperCase();
+  return normalized === 'UNSET' || normalized === 'FOLLOW-GATEWAY' || normalized === 'FOLLOW-DEFAULT';
+}
+
+export function resolvedModelSetting(value) {
+  const trimmed = String(value ?? '').trim();
+  return isUnsetSetting(trimmed) ? '' : trimmed;
+}
+
 export function validateSettingValue(setting, value) {
   if (!value) {
     if (setting.required) return `${setting.label} cannot be blank`;
@@ -691,8 +702,9 @@ Usage:
   subc config edit [vim|nano]
   subc -p NAME config edit [vim|nano]
   subc config [show|path|list|create|delete]
-              [--gateway-url URL] [--api-key KEY] [--model MODEL]
-              [--subagent-model MODEL|follow-default]
+              [--gateway-url URL] [--api-key KEY]
+              [--model MODEL|UNSET]
+              [--subagent-model MODEL|UNSET]
 
   subc config                      List every profile and its file path
   subc -p NAME config              Print that profile's path and env file
@@ -702,6 +714,9 @@ Usage:
   subc config path                 Print the selected profile path
   subc -p NAME config create       Create a new profile with default settings
   subc -p NAME config delete       Delete a non-default profile
+
+  --model UNSET                    Clear MODEL so launches use the first live catalog model
+  --subagent-model UNSET           Clear the Claude subagent override so it follows MODEL
 `);
 }
 
@@ -745,7 +760,8 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
         '--model': 'MODEL',
         '--subagent-model': 'CLAUDE_CODE_SUBAGENT_MODEL',
       }[arg];
-      updates[key] = arg === '--subagent-model' && value === 'follow-default' ? '' : value;
+      updates[key] =
+        (arg === '--model' || arg === '--subagent-model') && isUnsetSetting(value) ? '' : value;
     } else if (action === 'edit' && ALLOWED_EDITORS.has(arg)) {
       if (editor) throw new Error('Specify only one editor (vim or nano)');
       editor = arg;
@@ -813,7 +829,7 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
 }
 
 export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
-  const selectedModel = options.selectedModel || registry.defaults.model;
+  const selectedModel = options.selectedModel || models[0] || registry.defaults.model;
   console.log(`\n  ${c.bold}Available models${c.reset}\n`);
   for (const model of models) {
     const suffix = model === selectedModel ? ` ${c.dim}(default)${c.reset}` : '';
