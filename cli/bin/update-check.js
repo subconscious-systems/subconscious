@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import readline from 'node:readline';
+import { fileURLToPath } from 'node:url';
 import { LOGO_ART_SMALL_LINES } from './branding.js';
 import { c, colorEnabled } from './colors.js';
 
@@ -8,6 +9,59 @@ export const PACKAGE_NAME = 'subconscious-cli';
 export const UPDATE_CHECK_TIMEOUT_MS = 1500;
 const UPDATE_ACTIONS = ['Update now', 'Skip for now'];
 const UPDATE_LOGO = LOGO_ART_SMALL_LINES;
+
+function shellQuote(value) {
+  const text = String(value);
+  return /^[-/@A-Za-z0-9._:]+$/.test(text)
+    ? text
+    : `'${text.replaceAll("'", `'"'"'`)}'`;
+}
+
+export function detectInstallTarget(
+  here = fileURLToPath(import.meta.url),
+  platform = process.platform,
+) {
+  const normalized = here.replace(/\\/g, '/');
+  if (normalized.includes('/.pnpm/') || normalized.includes('/pnpm/global/')) {
+    return {
+      command: 'pnpm',
+      args: ['add', '-g', `${PACKAGE_NAME}@latest`],
+      display: `pnpm add -g ${PACKAGE_NAME}@latest`,
+    };
+  }
+  if (normalized.includes('/.yarn/') || normalized.includes('/yarn/global/')) {
+    return {
+      command: 'yarn',
+      args: ['global', 'add', `${PACKAGE_NAME}@latest`],
+      display: `yarn global add ${PACKAGE_NAME}@latest`,
+    };
+  }
+  if (normalized.includes('/.bun/install/global/')) {
+    return {
+      command: 'bun',
+      args: ['add', '-g', `${PACKAGE_NAME}@latest`],
+      display: `bun add -g ${PACKAGE_NAME}@latest`,
+    };
+  }
+
+  const marker = `/lib/node_modules/${PACKAGE_NAME}/`;
+  let prefix = normalized.includes(marker) ? normalized.slice(0, normalized.indexOf(marker)) : '';
+  if (!prefix && platform === 'win32') {
+    const windowsMarker = `/node_modules/${PACKAGE_NAME}/`;
+    if (normalized.includes(windowsMarker)) {
+      prefix = normalized.slice(0, normalized.indexOf(windowsMarker));
+    }
+  }
+  const args = ['install', '-g'];
+  if (prefix) args.push('--prefix', prefix);
+  args.push(`${PACKAGE_NAME}@latest`);
+  return {
+    command: 'npm',
+    args,
+    display: ['npm', ...args].map(shellQuote).join(' '),
+    prefix,
+  };
+}
 
 function parseVersion(version) {
   const match = String(version)
@@ -122,8 +176,9 @@ export function renderUpdateNotice(installedVersion, latestVersion) {
 }
 
 export function renderUpdateOptions(selectedIndex = 0, versions = {}) {
+  const installCommand = versions.installCommand || detectInstallTarget().display;
   const descriptions = [
-    `Runs \`npm install -g ${PACKAGE_NAME}@latest\``,
+    `Runs \`${installCommand}\``,
     versions.installedVersion
       ? `Continue this command with version ${versions.installedVersion}`
       : 'Continue this command without updating',
@@ -161,6 +216,7 @@ export async function selectUpdateAction(options = {}) {
     `${renderUpdateOptions(selectedIndex, {
       installedVersion: options.installedVersion,
       latestVersion: options.latestVersion,
+      installCommand: options.installCommand,
     })}\n\n${instructions}`;
   const renderedLineCount = render().split('\n').length;
 
@@ -201,12 +257,29 @@ export async function selectUpdateAction(options = {}) {
 
 export async function installLatest(options = {}) {
   const spawnImpl = options.spawnImpl || spawn;
+  const target = options.target || detectInstallTarget();
   return new Promise((resolve) => {
-    const child = spawnImpl('npm', ['install', '-g', `${PACKAGE_NAME}@latest`], {
+    const child = spawnImpl(target.command, target.args, {
       stdio: 'inherit',
     });
     child.on('error', () => resolve(false));
-    child.on('exit', (code) => resolve(code === 0));
+    child.on('exit', async (code) => {
+      if (code !== 0) {
+        resolve(false);
+        return;
+      }
+      if (!options.expectedVersion) {
+        resolve(true);
+        return;
+      }
+      try {
+        const readVersion = options.readVersion || currentVersion;
+        const actualVersion = await readVersion();
+        resolve(compareVersions(actualVersion, options.expectedVersion) >= 0);
+      } catch {
+        resolve(false);
+      }
+    });
   });
 }
 
@@ -234,7 +307,12 @@ export async function showUpdateNotice(options = {}) {
     if (!interactive) return { installedVersion, latestVersion, action: 'skip' };
 
     const select = options.select || selectUpdateAction;
-    const action = await select({ installedVersion, latestVersion });
+    const installTarget = options.installTarget || detectInstallTarget();
+    const action = await select({
+      installedVersion,
+      latestVersion,
+      installCommand: installTarget.display,
+    });
     if (action === 'cancel') return { installedVersion, latestVersion, action };
     if (action === 'skip') {
       write(`\n  ${c.dim}Skipping update.${c.reset}\n\n`);
@@ -242,8 +320,10 @@ export async function showUpdateNotice(options = {}) {
     }
 
     write(`\n  ${c.cyan}Updating ${PACKAGE_NAME} to ${latestVersion}...${c.reset}\n\n`);
-    const install = options.install || installLatest;
-    const installed = await install();
+    const install =
+      options.install ||
+      ((expectedVersion) => installLatest({ expectedVersion, target: installTarget }));
+    const installed = await install(latestVersion);
     if (installed) {
       write(
         `\n  ${c.green}${c.bold}Update complete.${c.reset} Re-run your subc command.\n\n`,
@@ -251,8 +331,9 @@ export async function showUpdateNotice(options = {}) {
       return { installedVersion, latestVersion, action: 'updated' };
     }
 
-    write(`\n  ${c.red}Update failed.${c.reset} Try it manually:\n\n`);
-    write(`    ${c.cyan}npm install -g ${PACKAGE_NAME}@latest${c.reset}\n\n`);
+    write(`\n  ${c.red}Update failed or the running installation stayed unchanged.${c.reset}\n`);
+    write(`  Try the exact detected install target manually:\n\n`);
+    write(`    ${c.cyan}${installTarget.display}${c.reset}\n\n`);
     return { installedVersion, latestVersion, action: 'failed' };
   } catch {
     // Update discovery must never prevent the requested command from running.

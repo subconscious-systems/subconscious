@@ -10,6 +10,7 @@ import fs from 'node:fs/promises';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
+import { detectInstallTarget } from './update-check.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
 export const MIN_LOGIN_VERSION = '4.0';
@@ -24,17 +25,7 @@ export function parseUpgradeArgs(argv = []) {
 }
 
 export function detectInstallCommand(here = fileURLToPath(import.meta.url)) {
-  const normalized = here.replace(/\\/g, '/');
-  if (normalized.includes('/.pnpm/') || normalized.includes('/pnpm/global/')) {
-    return `pnpm add -g ${PACKAGE_NAME}@latest`;
-  }
-  if (normalized.includes('/.yarn/') || normalized.includes('/yarn/global/')) {
-    return `yarn global add ${PACKAGE_NAME}@latest`;
-  }
-  if (normalized.includes('/.bun/install/global/')) {
-    return `bun add -g ${PACKAGE_NAME}@latest`;
-  }
-  return `npm install -g ${PACKAGE_NAME}@latest`;
+  return detectInstallTarget(here).display;
 }
 
 export async function currentCliVersion() {
@@ -130,6 +121,26 @@ export async function installLatest(options = {}) {
     console.error(`\n  ${c.red}Upgrade failed.${c.reset} Try it manually:\n`);
     console.error(`    ${c.cyan}${command}${c.reset}\n`);
     return false;
+  }
+
+  if (latest) {
+    try {
+      const readVersion = options.readVersion || currentCliVersion;
+      const installedVersion = await readVersion();
+      if (compareVersions(installedVersion, latest) < 0) {
+        console.error(
+          `\n  ${c.red}Upgrade command completed, but this installation is still ${installedVersion}.${c.reset}`,
+        );
+        console.error(`  Run the exact detected command manually:\n`);
+        console.error(`    ${c.cyan}${command}${c.reset}\n`);
+        return false;
+      }
+    } catch {
+      console.error(`\n  ${c.red}Could not verify the updated CLI installation.${c.reset}`);
+      console.error(`  Run the exact detected command manually:\n`);
+      console.error(`    ${c.cyan}${command}${c.reset}\n`);
+      return false;
+    }
   }
 
   console.log(`\n  ${c.green}${c.bold}✓ Upgraded.${c.reset} Re-run ${c.cyan}subc login${c.reset} if you were signing in.\n`);

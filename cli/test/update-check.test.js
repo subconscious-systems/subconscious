@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   compareVersions,
+  detectInstallTarget,
   fetchLatestVersion,
   installLatest,
   moveUpdateSelection,
@@ -50,6 +51,28 @@ test('renderUpdateNotice keeps the selectable options outside the box', () => {
   assert.match(options, /Runs `npm install -g subconscious-cli@latest`/);
   assert.match(options, /\s+Skip for now/);
   assert.match(options, /Continue this command with version 4\.0\.0/);
+});
+
+test('detectInstallTarget updates the npm prefix that contains the running CLI', () => {
+  assert.deepEqual(
+    detectInstallTarget(
+      '/Users/me/.nvm/versions/node/v22/lib/node_modules/subconscious-cli/bin/update-check.js',
+      'darwin',
+    ),
+    {
+      command: 'npm',
+      args: [
+        'install',
+        '-g',
+        '--prefix',
+        '/Users/me/.nvm/versions/node/v22',
+        'subconscious-cli@latest',
+      ],
+      display:
+        'npm install -g --prefix /Users/me/.nvm/versions/node/v22 subconscious-cli@latest',
+      prefix: '/Users/me/.nvm/versions/node/v22',
+    },
+  );
 });
 
 test('arrow keys move and wrap the highlighted update option', () => {
@@ -135,6 +158,19 @@ test('installLatest invokes npm without a shell', async () => {
     args: ['install', '-g', 'subconscious-cli@latest'],
     options: { stdio: 'inherit' },
   });
+});
+
+test('installLatest rejects npm success when the running package version did not change', async () => {
+  const installed = await installLatest({
+    expectedVersion: '4.1.0',
+    readVersion: async () => '4.0.10',
+    spawnImpl: () => ({
+      on(event, callback) {
+        if (event === 'exit') callback(0);
+      },
+    }),
+  });
+  assert.equal(installed, false);
 });
 
 test('showUpdateNotice stays silent when current, disabled, or offline', async () => {
