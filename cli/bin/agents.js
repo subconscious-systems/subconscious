@@ -164,6 +164,17 @@ export function parseAgentAction(agent, argv = []) {
 }
 
 const AGENT_HELP = {
+  'subconscious-code': {
+    usage: 'subc [-p NAME] sc [help|install] [Subconscious Code arguments...]',
+    behavior:
+      'Launches the native Subconscious coding agent with the selected profile gateway, credential, and model.',
+    options: [
+      ['help', 'Show this help'],
+      ['install', 'Install the latest Linux release, or build from source on macOS'],
+      ['--model MODEL', 'Override the profile model for this launch'],
+      ['ARGS...', 'Pass arguments directly to Subconscious Code'],
+    ],
+  },
   'claude-code': {
     usage: 'subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]',
     behavior:
@@ -309,9 +320,10 @@ export function printAgentHelp(agent, profile) {
   );
   const actions = agentSetupActions(agent);
   if (actions.includes('install')) {
-    console.log(
-      `  Install the persistent integration with ${c.cyan}subc ${command} install${c.reset}.`,
-    );
+    const installDescription = agent.runbook?.binaryInstallScript
+      ? 'Install the agent binary with'
+      : 'Install the persistent integration with';
+    console.log(`  ${installDescription} ${c.cyan}subc ${command} install${c.reset}.`);
   }
   if (actions.includes('uninstall')) {
     console.log(
@@ -397,6 +409,7 @@ function candidateBinDirs() {
     if (home) dirs.push(path.join(home, '.local', 'bin'));
   } else {
     dirs.push(path.join(home, '.local', 'bin'));
+    dirs.push(path.join(home, '.cargo', 'bin'));
     dirs.push('/opt/homebrew/bin');
     dirs.push('/usr/local/bin');
   }
@@ -481,10 +494,15 @@ function waitForEnter(prompt) {
   });
 }
 
-/** Run the agent's install command (may contain `&&`, so shell:true). */
-function runInstaller(install) {
+/** Run the agent's packaged binary installer, or its shell install command. */
+function runInstaller(agent, install = agent.install, usePackagedScript = true) {
   return new Promise((resolve) => {
-    const child = spawn(install, { shell: true, stdio: 'inherit' });
+    const installScript = usePackagedScript && agent.runbook?.binaryInstallScript;
+    const child = installScript
+      ? spawn('bash', [runbookScriptPath(agent, installScript), 'install'], {
+          stdio: 'inherit',
+        })
+      : spawn(install, { shell: true, stdio: 'inherit' });
     child.on('error', () => resolve(false));
     child.on('exit', (code) => resolve(code === 0));
   });
@@ -544,14 +562,14 @@ async function ensureInstalled(agent) {
   }
 
   console.error(`\n  ${c.dim}Running ${c.reset}${c.cyan}${agent.install}${c.reset}\n`);
-  let installed = await runInstaller(agent.install);
+  let installed = await runInstaller(agent);
 
   // Primary failed and a fallback exists — try it once.
   if (!installed && agent.installFallback) {
     console.error(
       `\n  ${c.dim}That didn't work. Trying the fallback: ${c.reset}${c.cyan}${agent.installFallback}${c.reset}\n`,
     );
-    installed = await runInstaller(agent.installFallback);
+    installed = await runInstaller(agent, agent.installFallback, false);
   }
 
   if (!installed) {
@@ -874,7 +892,7 @@ export function selectLaunchModel(requestedModel, modelSource, catalog) {
 }
 
 async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runbook.script) {
-  if (isSetupWithoutAuth(argv)) {
+  if (isSetupWithoutAuth(argv) || agent.runbook?.setupNeedsAuth === false) {
     return spawnRunbook(agent, argv, {
       ...(profile?.values || {}),
       ...process.env,

@@ -39,6 +39,7 @@ test('agent actions support per-agent install, status, and leftover uninstall', 
   const pi = agents.resolveAgent('pi');
   const claude = agents.resolveAgent('claude');
   const codex = agents.resolveAgent('codex');
+  const sc = agents.resolveAgent('sc');
 
   const cursorInstall = agents.parseAgentAction(cursor, ['install']);
   assert.equal(cursorInstall.action, 'install');
@@ -54,6 +55,10 @@ test('agent actions support per-agent install, status, and leftover uninstall', 
 
   const claudeUninstall = agents.parseAgentAction(claude, ['uninstall']);
   assert.equal(claudeUninstall.action, 'uninstall');
+
+  assert.equal(sc.id, 'subconscious-code');
+  assert.equal(agents.parseAgentAction(sc, []).action, 'launch');
+  assert.equal(agents.parseAgentAction(sc, ['install']).action, 'install');
 
   assert.throws(
     () => agents.parseAgentAction(claude, ['install']),

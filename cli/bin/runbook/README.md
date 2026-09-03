@@ -1,7 +1,7 @@
 # Coding-agent integrations
 
 These scripts are part of `subc`. They launch or surgically install Claude Code,
-Codex, OpenCode, DeepSeek Harness, Cursor, Copilot, and Pi against the
+Subconscious Code, Codex, OpenCode, DeepSeek Harness, Cursor, Copilot, and Pi against the
 Subconscious gateway.
 
 `subc` reads `~/.subconscious/profiles/<name>.env` and injects those values into
@@ -10,6 +10,7 @@ directly, `SUBC_ENV_FILE` (or `cli/bin/runbook/.env`) can supply the same keys.
 
 Included integrations:
 
+- `subconscious-code/install.sh` and `run.sh`
 - `claude-code/install.sh` and `run.sh`
 - `codex/install.sh`, `run.sh`, `hook.sh`, `hooks.json`, and `hooks-lib.sh`
 - `opencode/install.sh`, `run.sh`, and `subconscious-compaction.ts`

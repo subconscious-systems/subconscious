@@ -7,6 +7,7 @@ Log in to Subconscious, then run coding agents against the Subconscious gateway.
 ```bash
 npm install -g subconscious-cli
 subc login
+subc sc
 subc claude
 ```
 
@@ -21,7 +22,7 @@ never block the requested command. Set `SUBC_DISABLE_UPDATE_CHECK=1` to suppress
 the check in offline automation.
 
 Login creates both the saved credential and a ready-to-use `default` profile,
-so Claude Code, Codex, OpenCode, and DeepSeek Harness can launch immediately.
+so Subconscious Code, Claude Code, Codex, OpenCode, and DeepSeek Harness can launch immediately.
 Persistent editor and Pi integrations are installed per agent:
 
 ```bash
@@ -52,6 +53,7 @@ profile; they do not authenticate, install, configure, or launch anything:
 
 ```bash
 subc claude help
+subc sc help
 subc codex help
 subc cursor help
 subc config help
@@ -66,6 +68,7 @@ gateway environment applied for that process. Arguments pass through as usual:
 
 ```bash
 subc claude --continue
+subc sc -- -p "fix the tests"
 subc codex exec "write a test"
 subc opencode
 subc pi
@@ -78,6 +81,7 @@ The packaged integrations live in `cli/bin/runbook`.
 
 | Command | Behavior |
 | --- | --- |
+| `subc sc` | Launch Subconscious Code with the active gateway, key, model, and DLR transport |
 | `subc claude` | Launch Claude Code with the runbook environment, context limits, subagent limits, and OTEL usage reporting |
 | `subc codex` | Launch Codex with the runbook provider, temporary model catalog, and surgically merged compaction hooks |
 | `subc opencode` | Launch OpenCode with the runbook provider, client header, and context/output limits |
@@ -86,10 +90,15 @@ The packaged integrations live in `cli/bin/runbook`.
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
-If Claude Code, Codex, OpenCode, or DeepSeek Harness is missing, an interactive terminal offers
+If Subconscious Code, Claude Code, Codex, OpenCode, or DeepSeek Harness is missing, an interactive terminal offers
 to install it before launching. Pi refreshes its Subconscious provider on every
 `subc pi` launch while preserving all other providers in `models.json`; its
 executable must already be installed.
+
+`subc sc install` downloads and checksum-verifies the latest static Linux release
+from `subconscious-systems/subconscious-code`. The upstream release currently
+publishes x86_64 and ARM64 Linux assets. On macOS, the installer uses Cargo to
+build the tagged release until Darwin assets are published.
 
 `subc codex` disables Codex apps and plugin tools for that launch by default so
 requests remain below the gateway's 128-tool limit. Core coding tools remain
@@ -145,7 +154,7 @@ rewritten. Run a one-shot task with `subc dsh headless "PROMPT"`.
 ```
 
 The file is mode `600` and contains the shared gateway URL, API key, model,
-optional per-agent key overrides, and all Claude/Codex/OpenCode/Pi/Copilot/
+optional per-agent key overrides, and all Subconscious Code/Claude/Codex/OpenCode/Pi/Copilot/
 DeepSeek Harness context and output settings used by the packaged runbook scripts.
 
 ```bash

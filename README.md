@@ -136,6 +136,7 @@ Log in to Subconscious from your terminal, then launch or configure coding agent
 ```bash
 npm install -g subconscious-cli
 subc login                           # sign in, saves your API key
+subc sc                              # launch Subconscious Code
 subc claude                          # launch Claude Code on Subconscious
 subc dsh                             # launch DeepSeek Harness on Subconscious
 subc cursor install                  # merge Cursor hooks
@@ -148,6 +149,7 @@ creates a secure default profile.
 
 | Command | Behavior |
 |---------|----------|
+| `subc sc` | Launch the native Subconscious Code agent (or `subc sc install`) |
 | `subc claude` | Launch Claude Code |
 | `subc codex` | Launch Codex CLI (merges compaction hooks) |
 | `subc opencode` | Launch OpenCode |

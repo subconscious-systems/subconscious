@@ -13,6 +13,41 @@
   },
   "agents": [
     {
+      "id": "subconscious-code",
+      "command": "sc",
+      "name": "Subconscious Code",
+      "aliases": ["subconscious-code"],
+      "description": "Launch the native Subconscious coding agent with the active profile, gateway, and model.",
+      "framework": "Subconscious Code",
+      "language": "rust",
+      "category": "coding-agent",
+      "tags": ["local", "cli", "agents"],
+      "protocol": "openai",
+      "homepage": "https://github.com/subconscious-systems/subconscious-code",
+      "bin": "sc",
+      "install": {
+        "darwin": "cargo install --locked --git https://github.com/subconscious-systems/subconscious-code --bin sc rc-cli",
+        "linux": "subc sc install",
+        "fallback": "cargo install --locked --git https://github.com/subconscious-systems/subconscious-code --bin sc rc-cli"
+      },
+      "runbook": {
+        "mode": "launch",
+        "script": "subconscious-code/run.sh",
+        "setupScript": "subconscious-code/install.sh",
+        "binaryInstallScript": "subconscious-code/install.sh",
+        "setupActions": ["install"],
+        "setupNeedsAuth": false
+      },
+      "launch": "sc",
+      "env": {
+        "SC_BASE_URL": "{baseUrlV1}",
+        "SC_DLR_URL": "{baseUrl}",
+        "SC_DLR_ENABLED": "true",
+        "SC_API_KEY": "{apiKey}",
+        "SC_MODEL": "{model}"
+      }
+    },
+    {
       "id": "claude-code",
       "command": "claude",
       "exampleDir": "claude_code",

@@ -38,6 +38,7 @@ export const RUNBOOK_DEFAULTS = {
   GATEWAY_URL: registry.defaults.baseUrl,
   API_KEY: '',
   MODEL: registry.defaults.model,
+  SC_API_KEY: '',
   CLAUDE_CODE_SUBAGENT_MODEL: '',
   CLAUDE_GATEWAY_URL: '',
   CLAUDE_CODE_API_KEY: '',
@@ -88,6 +89,12 @@ const SETTINGS = {
       'Initial model used by coding-agent launches and setup. UNSET uses the first live catalog model.',
     type: 'choice',
     choices: SUPPORTED_MODELS,
+  },
+  SC_API_KEY: {
+    key: 'SC_API_KEY',
+    label: 'Subconscious Code API key',
+    description: 'Subconscious Code credential override; blank uses API_KEY.',
+    type: 'secret',
   },
   CLAUDE_CODE_SUBAGENT_MODEL: {
     key: 'CLAUDE_CODE_SUBAGENT_MODEL',
@@ -274,6 +281,7 @@ const SETTINGS = {
 };
 
 const AGENT_SETTING_KEYS = {
+  'subconscious-code': ['SC_API_KEY'],
   'claude-code': [
     'CLAUDE_GATEWAY_URL',
     'CLAUDE_CODE_API_KEY',
@@ -346,6 +354,7 @@ ${modelComments}
 MODEL={MODEL}
 
 # Optional per-agent keys. Leave blank to use API_KEY above.
+SC_API_KEY={SC_API_KEY}
 CLAUDE_CODE_API_KEY={CLAUDE_CODE_API_KEY}
 CODEX_API_KEY={CODEX_API_KEY}
 OPENCODE_API_KEY={OPENCODE_API_KEY}
