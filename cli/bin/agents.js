@@ -22,6 +22,9 @@ import { c } from './colors.js';
 import { getApiKey } from './auth.js';
 import { profileSettingsForAgent, resolvedProfileValues } from './profiles.js';
 import { isLiveModelSource, PUBLIC_CATALOG_FALLBACK_MESSAGE, resolveModelCatalog } from './models.js';
+import { compareVersions } from './update-check.js';
+
+export const MIN_CLAUDE_CODE_VERSION = '2.1.242';
 
 // --- Registry (single source of truth, generated copy shipped in the package).
 const registry = JSON.parse(
@@ -536,6 +539,47 @@ async function ensureInstalled(agent) {
   process.exit(0);
 }
 
+export function parseClaudeVersion(text) {
+  const match = String(text ?? '').match(/v?(\d+\.\d+\.\d+)/);
+  return match?.[1] ?? null;
+}
+
+export function claudeVersionNeedsUpgrade(installed, minimum = MIN_CLAUDE_CODE_VERSION) {
+  return Boolean(installed && minimum && compareVersions(installed, minimum) < 0);
+}
+
+export function readClaudeVersion(bin, binDir, options = {}) {
+  const execFile = options.execFileSync || execFileSync;
+  try {
+    const stdout = execFile(bin, ['--version'], {
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: augmentPath([binDir, ...candidateBinDirs()].filter(Boolean)) },
+      timeout: options.timeoutMs ?? 3000,
+    });
+    return parseClaudeVersion(typeof stdout === 'string' ? stdout : stdout?.toString?.());
+  } catch {
+    return null;
+  }
+}
+
+async function ensureClaudeCompatible(agent, binDir) {
+  if (agent.id !== 'claude-code') return;
+  const version = readClaudeVersion(agent.bin, binDir);
+  if (!claudeVersionNeedsUpgrade(version)) return;
+
+  console.error(
+    `\n  Minimum supported Claude Code version is ${MIN_CLAUDE_CODE_VERSION}. Your version is ${version}. Upgrade to get the best experience.\n`,
+  );
+  console.error(`  Upgrade it with:`);
+  console.error(`    ${c.cyan}${agent.install}${c.reset}`);
+  if (agent.installFallback) {
+    console.error(`  or`);
+    console.error(`    ${c.cyan}${agent.installFallback}${c.reset}`);
+  }
+  console.error('');
+}
+
 /** Resolve and validate a script inside the packaged runbook directory. */
 function runbookScriptPath(agent, relativeScript = agent.runbook.script) {
   const script = path.resolve(RUNBOOK_DIR, relativeScript);
@@ -869,6 +913,7 @@ export async function runAgent(agent, argv, options = {}) {
   if (!apiKey) return 1;
 
   const binDir = await ensureInstalled(agent);
+  await ensureClaudeCompatible(agent, binDir);
   const catalog = await resolvedModelsForLaunch(profile, apiKey, requestedModel);
   const model = selectLaunchModel(requestedModel, modelSource, catalog);
   if (model !== requestedModel) {
