@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Install Subconscious Code. Tagged releases currently contain static Linux
-# binaries; macOS builds from the tagged source until Darwin assets are added.
+# Install a precompiled Subconscious Code release for the current platform.
 
 set -euo pipefail
 
@@ -13,7 +12,7 @@ usage() {
 Usage: subc sc install
 
 Install the latest Subconscious Code release. Linux downloads and verifies the
-published static binary. macOS builds the release from source with Cargo.
+published static binary. macOS downloads and verifies the matching native binary.
 EOF
 }
 
@@ -56,37 +55,9 @@ release_tag() {
   return 1
 }
 
-install_from_source() {
-  if ! command -v cargo >/dev/null 2>&1; then
-    echo "error: macOS installation currently requires Cargo (Rust 1.89 or newer)" >&2
-    echo "Install Rust from https://rustup.rs, then run: subc sc install" >&2
-    exit 1
-  fi
-
-  local version="${1:-}"
-  local args=(install --locked --git "$REPOSITORY_URL" --bin sc)
-  if [[ -n "$version" ]]; then
-    args+=(--tag "v${version}")
-    echo "Building Subconscious Code v${version} from source..."
-  else
-    echo "No published release is visible yet; building Subconscious Code from the default branch..."
-  fi
-  args+=(rc-cli)
-  CARGO_NET_GIT_FETCH_WITH_CLI=true cargo "${args[@]}"
-}
-
 platform="$(uname -s)"
+architecture="$(uname -m)"
 version="$(release_tag || true)"
-
-if [[ "$platform" == "Darwin" ]]; then
-  install_from_source "$version"
-  exit 0
-fi
-
-if [[ "$platform" != "Linux" ]]; then
-  echo "error: Subconscious Code automatic installation supports Linux and macOS" >&2
-  exit 1
-fi
 
 if [[ -z "$version" ]]; then
   echo "error: no published Subconscious Code release is available yet" >&2
@@ -94,11 +65,13 @@ if [[ -z "$version" ]]; then
   exit 1
 fi
 
-case "$(uname -m)" in
-  x86_64|amd64) target="x86_64-unknown-linux-musl" ;;
-  aarch64|arm64) target="aarch64-unknown-linux-musl" ;;
+case "${platform}:${architecture}" in
+  Darwin:arm64) target="aarch64-apple-darwin" ;;
+  Darwin:x86_64) target="x86_64-apple-darwin" ;;
+  Linux:aarch64|Linux:arm64) target="aarch64-unknown-linux-musl" ;;
+  Linux:x86_64|Linux:amd64) target="x86_64-unknown-linux-musl" ;;
   *)
-    echo "error: unsupported Linux architecture: $(uname -m)" >&2
+    echo "error: unsupported platform or architecture: ${platform} ${architecture}" >&2
     exit 1
     ;;
 esac

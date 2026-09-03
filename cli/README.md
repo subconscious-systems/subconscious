@@ -95,10 +95,10 @@ to install it before launching. Pi refreshes its Subconscious provider on every
 `subc pi` launch while preserving all other providers in `models.json`; its
 executable must already be installed.
 
-`subc sc install` downloads and checksum-verifies the latest static Linux release
-from `subconscious-systems/subconscious-code`. The upstream release currently
-publishes x86_64 and ARM64 Linux assets. On macOS, the installer uses Cargo to
-build the tagged release until Darwin assets are published.
+`subc sc install` detects the operating system and architecture, then downloads
+and checksum-verifies the matching precompiled release from
+`subconscious-systems/subconscious-code`. Apple Silicon and Intel macOS plus
+x86_64 and ARM64 Linux are supported; Cargo is not required.
 
 `subc codex` disables Codex apps and plugin tools for that launch by default so
 requests remain below the gateway's 128-tool limit. Core coding tools remain
