@@ -448,6 +448,16 @@ function askYesNo(question) {
   });
 }
 
+function waitForEnter(prompt) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(prompt, () => {
+      rl.close();
+      resolve();
+    });
+  });
+}
+
 /** Run the agent's install command (may contain `&&`, so shell:true). */
 function runInstaller(install) {
   return new Promise((resolve) => {
@@ -578,6 +588,10 @@ async function ensureClaudeCompatible(agent, binDir) {
     console.error(`    ${c.cyan}${agent.installFallback}${c.reset}`);
   }
   console.error('');
+  if (process.stdin.isTTY === true && process.stdout.isTTY === true) {
+    await waitForEnter(`  ${c.dim}Press Enter to continue.${c.reset} `);
+    console.error('');
+  }
 }
 
 /** Resolve and validate a script inside the packaged runbook directory. */
