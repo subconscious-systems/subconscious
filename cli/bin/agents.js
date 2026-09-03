@@ -170,7 +170,7 @@ const AGENT_HELP = {
       'Launches the native Subconscious coding agent with the selected profile gateway, credential, and model.',
     options: [
       ['help', 'Show this help'],
-      ['install', 'Install the latest Linux release, or build from source on macOS'],
+      ['install', 'Install the latest precompiled Linux or macOS release'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['ARGS...', 'Pass arguments directly to Subconscious Code'],
     ],

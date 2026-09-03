@@ -26,9 +26,9 @@
       "homepage": "https://github.com/subconscious-systems/subconscious-code",
       "bin": "sc",
       "install": {
-        "darwin": "cargo install --locked --git https://github.com/subconscious-systems/subconscious-code --bin sc rc-cli",
+        "darwin": "subc sc install",
         "linux": "subc sc install",
-        "fallback": "cargo install --locked --git https://github.com/subconscious-systems/subconscious-code --bin sc rc-cli"
+        "fallback": "subc sc install"
       },
       "runbook": {
         "mode": "launch",

@@ -56,6 +56,95 @@ function runSc(root, binDir, args = [], overrides = {}) {
   });
 }
 
+function runInstaller(root, binDir, overrides = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('bash', [installPath.pathname, 'install'], {
+      env: {
+        ...process.env,
+        PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`,
+        SC_CODE_VERSION: 'v0.1.1',
+        SC_INSTALL_DIR: path.join(root, 'install'),
+        SC_TEST_GH_CALLS_FILE: path.join(root, 'gh-calls'),
+        ...overrides,
+      },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code, stdout, stderr }));
+  });
+}
+
+async function makeFakeInstallerTools(root) {
+  const binDir = path.join(root, 'bin');
+  await fs.mkdir(binDir, { recursive: true });
+  await fs.writeFile(
+    path.join(binDir, 'uname'),
+    `#!/usr/bin/env bash
+set -euo pipefail
+case "\${1:-}" in
+  -s) printf '%s\\n' "$SC_TEST_UNAME_S" ;;
+  -m) printf '%s\\n' "$SC_TEST_UNAME_M" ;;
+  *) exit 2 ;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  await fs.writeFile(
+    path.join(binDir, 'gh'),
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\\n' "$*" >>"$SC_TEST_GH_CALLS_FILE"
+if [[ "$1" == release && "$2" == view ]]; then
+  exit 0
+fi
+[[ "$1" == release && "$2" == download ]] || exit 2
+shift 2
+dir=''
+patterns=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dir) dir="$2"; shift 2 ;;
+    --pattern) patterns+=("$2"); shift 2 ;;
+    *) shift ;;
+  esac
+done
+mkdir -p "$dir"
+for pattern in "\${patterns[@]}"; do
+  : >"$dir/$pattern"
+done
+`,
+    { mode: 0o755 },
+  );
+  await fs.writeFile(
+    path.join(binDir, 'sha256sum'),
+    '#!/usr/bin/env bash\nexit 0\n',
+    { mode: 0o755 },
+  );
+  await fs.writeFile(
+    path.join(binDir, 'tar'),
+    `#!/usr/bin/env bash
+set -euo pipefail
+dest=''
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    -C) dest="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+printf '#!/usr/bin/env bash\\n' >"$dest/sc"
+chmod 0755 "$dest/sc"
+`,
+    { mode: 0o755 },
+  );
+  return binDir;
+}
+
 test('Subconscious Code receives the selected profile and passthrough arguments', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-test-'));
   try {
@@ -91,54 +180,52 @@ test('Subconscious Code launch mirrors its exit status', async () => {
   }
 });
 
-test('macOS installer passes rc-cli as Cargo\'s positional crate argument', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-install-test-'));
-  const binDir = path.join(root, 'bin');
-  const argsFile = path.join(root, 'cargo-args');
-  try {
-    await fs.mkdir(binDir, { recursive: true });
-    await fs.writeFile(
-      path.join(binDir, 'uname'),
-      '#!/usr/bin/env bash\nprintf \'Darwin\\n\'\n',
-      { mode: 0o755 },
-    );
-    await fs.writeFile(
-      path.join(binDir, 'cargo'),
-      '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" >"$SC_TEST_CARGO_ARGS_FILE"\n',
-      { mode: 0o755 },
-    );
+test('Subconscious Code installer selects the matching release target', async (t) => {
+  const cases = [
+    ['Darwin', 'arm64', 'aarch64-apple-darwin'],
+    ['Darwin', 'x86_64', 'x86_64-apple-darwin'],
+    ['Linux', 'aarch64', 'aarch64-unknown-linux-musl'],
+    ['Linux', 'arm64', 'aarch64-unknown-linux-musl'],
+    ['Linux', 'x86_64', 'x86_64-unknown-linux-musl'],
+    ['Linux', 'amd64', 'x86_64-unknown-linux-musl'],
+  ];
 
-    const result = await new Promise((resolve, reject) => {
-      const child = spawn('bash', [installPath.pathname, 'install'], {
-        env: {
-          ...process.env,
-          PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`,
-          SC_CODE_VERSION: 'v0.1.0',
-          SC_TEST_CARGO_ARGS_FILE: argsFile,
-        },
-        stdio: ['ignore', 'pipe', 'pipe'],
-      });
-      let stderr = '';
-      child.stderr.setEncoding('utf8');
-      child.stderr.on('data', (chunk) => { stderr += chunk; });
-      child.on('error', reject);
-      child.on('close', (code) => resolve({ code, stderr }));
+  for (const [platform, architecture, target] of cases) {
+    await t.test(`${platform} ${architecture}`, async () => {
+      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-install-test-'));
+      try {
+        const binDir = await makeFakeInstallerTools(root);
+        const result = await runInstaller(root, binDir, {
+          SC_TEST_UNAME_S: platform,
+          SC_TEST_UNAME_M: architecture,
+        });
+
+        assert.equal(result.code, 0, result.stderr);
+        assert.match(result.stdout, new RegExp(`for ${target}`));
+        assert.match(result.stdout, /Installed Subconscious Code v0\.1\.1/);
+        await fs.access(path.join(root, 'install', 'sc'));
+
+        const ghCalls = await fs.readFile(path.join(root, 'gh-calls'), 'utf8');
+        assert.match(ghCalls, new RegExp(`--pattern sc-${target}\\.tar\\.gz(?:\\s|$)`));
+        assert.match(ghCalls, new RegExp(`--pattern sc-${target}\\.tar\\.gz\\.sha256(?:\\s|$)`));
+      } finally {
+        await fs.rm(root, { recursive: true, force: true });
+      }
+    });
+  }
+});
+
+test('Subconscious Code installer rejects unsupported platforms', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-install-unsupported-'));
+  try {
+    const binDir = await makeFakeInstallerTools(root);
+    const result = await runInstaller(root, binDir, {
+      SC_TEST_UNAME_S: 'FreeBSD',
+      SC_TEST_UNAME_M: 'x86_64',
     });
 
-    assert.equal(result.code, 0, result.stderr);
-    const args = (await fs.readFile(argsFile, 'utf8')).trim().split('\n');
-    assert.deepEqual(args, [
-      'install',
-      '--locked',
-      '--git',
-      'https://github.com/subconscious-systems/subconscious-code',
-      '--bin',
-      'sc',
-      '--tag',
-      'v0.1.0',
-      'rc-cli',
-    ]);
-    assert.ok(!args.includes('--package'));
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /unsupported platform or architecture: FreeBSD x86_64/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
