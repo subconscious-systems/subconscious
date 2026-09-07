@@ -5,6 +5,7 @@ import {
   fetchGatewayModels,
   isLiveModelSource,
   normalizeModelIds,
+  pickPrimaryModelId,
   PUBLIC_MODELS_PATH,
   resolveModelCatalog,
 } from '../bin/models.js';
@@ -17,11 +18,18 @@ function jsonResponse(data, status = 200) {
   };
 }
 
-function catalogResponse(ids) {
-  return jsonResponse({
-    object: 'list',
-    data: ids.map((id) => ({ id, object: 'model' })),
+function catalogResponse(entries, primaryId) {
+  const data = entries.map((entry) => {
+    const model = typeof entry === 'string' ? { id: entry } : { id: entry.id, metadata: entry.metadata };
+    return { ...model, object: 'model' };
   });
+  if (primaryId) {
+    const primary = data.find((model) => model.id === primaryId);
+    if (primary) {
+      primary.metadata = { ...(primary.metadata || {}), primary: true };
+    }
+  }
+  return jsonResponse({ object: 'list', data });
 }
 
 test('normalizeModelIds reorders a present selected model and removes invalid duplicates', () => {
@@ -51,6 +59,44 @@ test('normalizeModelIds does not invent a selected model absent from the live ca
   );
 });
 
+test('normalizeModelIds moves the gateway primary to the front when no selected model is set', () => {
+  assert.deepEqual(
+    normalizeModelIds(
+      ['subconscious/one', 'subconscious/two', 'subconscious/three'],
+      '',
+      'subconscious/three',
+    ),
+    ['subconscious/three', 'subconscious/one', 'subconscious/two'],
+  );
+});
+
+test('normalizeModelIds keeps the selected model ahead of the gateway primary', () => {
+  assert.deepEqual(
+    normalizeModelIds(
+      ['subconscious/one', 'subconscious/two', 'subconscious/three'],
+      'subconscious/one',
+      'subconscious/three',
+    ),
+    ['subconscious/one', 'subconscious/two', 'subconscious/three'],
+  );
+});
+
+test('normalizeModelIds leaves the catalog alone when the primary is absent', () => {
+  assert.deepEqual(
+    normalizeModelIds(['subconscious/one', 'subconscious/two'], '', 'subconscious/gone'),
+    ['subconscious/one', 'subconscious/two'],
+  );
+});
+
+test('pickPrimaryModelId returns the catalog primary and null for offline fallbacks', () => {
+  assert.equal(pickPrimaryModelId({ models: [], primaryId: 'subconscious/primary' }), 'subconscious/primary');
+  assert.equal(pickPrimaryModelId({ models: [], primaryId: '  subconscious/primary  ' }), 'subconscious/primary');
+  assert.equal(pickPrimaryModelId({ models: [], primaryId: null }), null);
+  assert.equal(pickPrimaryModelId({ models: [], primaryId: '' }), null);
+  assert.equal(pickPrimaryModelId({ models: [] }), null);
+  assert.equal(pickPrimaryModelId(null), null);
+});
+
 test('isLiveModelSource treats available and public catalogs as live', () => {
   assert.equal(isLiveModelSource('available'), true);
   assert.equal(isLiveModelSource('public'), true);
@@ -60,7 +106,7 @@ test('isLiveModelSource treats available and public catalogs as live', () => {
 
 test('fetchGatewayModels reads IDs from the provisioned endpoint when a key is supplied', async () => {
   let request;
-  const models = await fetchGatewayModels({
+  const discovered = await fetchGatewayModels({
     baseUrl: 'https://gateway.example/',
     apiKey: 'sk-test',
     path: AVAILABLE_MODELS_PATH,
@@ -70,7 +116,8 @@ test('fetchGatewayModels reads IDs from the provisioned endpoint when a key is s
     },
   });
 
-  assert.deepEqual(models, ['subconscious/one', 'subconscious/two']);
+  assert.deepEqual(discovered.models, ['subconscious/one', 'subconscious/two']);
+  assert.equal(discovered.primaryId, null);
   assert.equal(request.url, 'https://gateway.example/v1/models/available');
   assert.equal(request.options.method, 'GET');
   assert.equal(request.options.headers.Authorization, 'Bearer sk-test');
@@ -81,7 +128,7 @@ test('fetchGatewayModels reads IDs from the provisioned endpoint when a key is s
 
 test('fetchGatewayModels omits Authorization on the public catalog', async () => {
   let request;
-  const models = await fetchGatewayModels({
+  const discovered = await fetchGatewayModels({
     baseUrl: 'https://gateway.example/',
     path: PUBLIC_MODELS_PATH,
     fetchImpl: async (url, options) => {
@@ -90,9 +137,40 @@ test('fetchGatewayModels omits Authorization on the public catalog', async () =>
     },
   });
 
-  assert.deepEqual(models, ['subconscious/public']);
+  assert.deepEqual(discovered.models, ['subconscious/public']);
+  assert.equal(discovered.primaryId, null);
   assert.equal(request.url, 'https://gateway.example/v1/models');
   assert.equal(request.options.headers.Authorization, undefined);
+});
+
+test('fetchGatewayModels reads the primary model from metadata', async () => {
+  const discovered = await fetchGatewayModels({
+    baseUrl: 'https://gateway.example',
+    path: PUBLIC_MODELS_PATH,
+    fetchImpl: async () =>
+      catalogResponse(['subconscious/one', 'subconscious/two'], 'subconscious/two'),
+  });
+
+  assert.deepEqual(discovered.models, ['subconscious/one', 'subconscious/two']);
+  assert.equal(discovered.primaryId, 'subconscious/two');
+});
+
+test('fetchGatewayModels ignores a primary flag pointing at an unusable model', async () => {
+  const discovered = await fetchGatewayModels({
+    baseUrl: 'https://gateway.example',
+    path: PUBLIC_MODELS_PATH,
+    fetchImpl: async () =>
+      jsonResponse({
+        object: 'list',
+        data: [
+          { id: 'subconscious/one', object: 'model' },
+          { id: 'not-a-model-id!', object: 'model', metadata: { primary: true } },
+        ],
+      }),
+  });
+
+  assert.deepEqual(discovered.models, ['subconscious/one']);
+  assert.equal(discovered.primaryId, null);
 });
 
 test('resolveModelCatalog uses provisioned models and preserves the selected model first', async () => {
@@ -190,6 +268,51 @@ test('resolveModelCatalog skips /available and uses the public catalog when no k
   ]);
 });
 
+test('resolveModelCatalog follows the gateway primary when no model is selected', async () => {
+  const result = await resolveModelCatalog({
+    baseUrl: 'https://gateway.example',
+    apiKey: 'sk-test',
+    selectedModel: '',
+    fetchImpl: async () =>
+      catalogResponse(['subconscious/one', 'subconscious/two'], 'subconscious/two'),
+  });
+
+  assert.equal(result.source, 'available');
+  assert.equal(result.error, null);
+  assert.equal(result.primaryId, 'subconscious/two');
+  assert.deepEqual(result.models, ['subconscious/two', 'subconscious/one']);
+});
+
+test('resolveModelCatalog moves the primary ahead of a stale selection and still exposes it', async () => {
+  const result = await resolveModelCatalog({
+    baseUrl: 'https://gateway.example',
+    apiKey: 'sk-test',
+    selectedModel: 'subconscious/gone',
+    fetchImpl: async () =>
+      catalogResponse(['subconscious/one', 'subconscious/two'], 'subconscious/two'),
+  });
+
+  assert.equal(result.source, 'available');
+  assert.equal(result.primaryId, 'subconscious/two');
+  assert.deepEqual(result.models, ['subconscious/two', 'subconscious/one']);
+});
+
+test('resolveModelCatalog carries the primary from the public catalog fallback', async () => {
+  const result = await resolveModelCatalog({
+    baseUrl: 'https://gateway.example',
+    fetchImpl: async (url) => {
+      if (url.endsWith(AVAILABLE_MODELS_PATH)) {
+        return { ok: false, status: 401, json: async () => ({}) };
+      }
+      return catalogResponse(['subconscious/one', 'subconscious/two'], 'subconscious/two');
+    },
+  });
+
+  assert.equal(result.source, 'public');
+  assert.equal(result.primaryId, 'subconscious/two');
+  assert.deepEqual(result.models, ['subconscious/two', 'subconscious/one']);
+});
+
 test('resolveModelCatalog falls back to packaged models when both live endpoints fail', async () => {
   const result = await resolveModelCatalog({
     baseUrl: 'https://gateway.example',
@@ -200,6 +323,7 @@ test('resolveModelCatalog falls back to packaged models when both live endpoints
   });
 
   assert.equal(result.source, 'packaged');
+  assert.equal(result.primaryId, null);
   assert.match(result.error.message, /HTTP 503/);
   assert.deepEqual(result.models, [
     'subconscious/custom',

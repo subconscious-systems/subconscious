@@ -130,6 +130,7 @@ export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}
     profilePath: activeProfile.path,
     profiles,
     models: catalog.models,
+    primaryModel: catalog.primaryId || '',
     selectedModel,
     subagentModel: subagentModelFor(activeProfile),
     gatewayUrl,

@@ -39,7 +39,7 @@ if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${CODEX_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.2}"
+MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
 MAX_CONCURRENT_SUBAGENTS="${MAX_CONCURRENT_SUBAGENTS:-4}"
 SUBAGENTS=false
 EXTERNAL_TOOLS="${CODEX_EXTERNAL_TOOLS:-false}"
@@ -102,7 +102,7 @@ case "$CODEX_REASONING_EFFORT" in
     ;;
 esac
 
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.2
+DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
 subconscious/tim-qwen3.6-27b
 subconscious/deepseek-v4-flash-marathon"
 SUPPORTED_MODELS=()

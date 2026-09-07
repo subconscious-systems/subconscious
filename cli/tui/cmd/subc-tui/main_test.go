@@ -96,6 +96,59 @@ func TestSubagentModelPickerIncludesUnset(t *testing.T) {
 	}
 }
 
+func TestCatalogDefaultModelFollowsPrimaryWhenUnset(t *testing.T) {
+	state := inputState{
+		SelectedModel: "",
+		PrimaryModel:  "subconscious/glm-5.3-marathon",
+		Models:        []string{"subconscious/tim-qwen3.6-27b", "subconscious/glm-5.3-marathon"},
+	}
+	if got := catalogDefaultModel(state); got != "subconscious/glm-5.3-marathon" {
+		t.Fatalf("catalogDefaultModel() = %q, want primary model", got)
+	}
+	if got := defaultModelDisplay(state); got != "subconscious/glm-5.3-marathon (UNSET)" {
+		t.Fatalf("defaultModelDisplay() = %q, want primary display", got)
+	}
+
+	// A selected model always wins over the gateway primary.
+	state.SelectedModel = "subconscious/tim-qwen3.6-27b"
+	if got := catalogDefaultModel(state); got != "subconscious/tim-qwen3.6-27b" {
+		t.Fatalf("catalogDefaultModel() = %q, want selected model", got)
+	}
+
+	// Packaged fallbacks carry no primary and keep the first model.
+	packaged := inputState{Models: []string{"subconscious/glm-5.3-marathon", "subconscious/tim-qwen3.6-27b"}}
+	if got := catalogDefaultModel(packaged); got != "subconscious/glm-5.3-marathon" {
+		t.Fatalf("catalogDefaultModel(packaged) = %q, want first packaged model", got)
+	}
+}
+
+func TestModelCatalogLabelsThePrimaryModel(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "default",
+		SelectedModel: "subconscious/glm-5.2",
+		PrimaryModel:  "subconscious/glm-5.3-marathon",
+		ModelSource:   "available",
+		Models: []string{
+			"subconscious/glm-5.2",
+			"subconscious/glm-5.3-marathon",
+		},
+		Agents: []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
+	})
+	for index, item := range m.items {
+		if item.Command == "models" {
+			m.cursor = index
+			break
+		}
+	}
+	detail := m.renderDetail(64)
+	if !strings.Contains(detail, "default") {
+		t.Fatalf("selected model not labeled default: %q", detail)
+	}
+	if !strings.Contains(detail, "primary") {
+		t.Fatalf("primary model not labeled: %q", detail)
+	}
+}
+
 func TestNormalizeStateKeepsUnsetDefaultModel(t *testing.T) {
 	state := normalizeState(inputState{
 		ActiveProfile: "staging",

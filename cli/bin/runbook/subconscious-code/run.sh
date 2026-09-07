@@ -5,7 +5,7 @@ set -euo pipefail
 
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${SC_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.2}"
+MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
 
 if [[ -z "$GATEWAY_URL" || -z "$API_KEY" ]]; then
   echo "error: GATEWAY_URL and API_KEY are required to launch Subconscious Code" >&2

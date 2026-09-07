@@ -8,7 +8,7 @@
 #   ./run.sh                         # uses GATEWAY_URL/API_KEY from ../.env
 #   ./run.sh --continue               # pass args through to claude
 #   ./run.sh --compact-window 1000000 -- --continue
-#   ./run.sh --model subconscious/glm-5.2 -p "hi"
+#   ./run.sh --model subconscious/glm-5.3-marathon -p "hi"
 #
 # Config: copy ../env.example to ../.env and edit. .env is gitignored.
 # Profile env is injected by subc. A sibling .env is only used when SUBC_ENV_FILE is unset.
@@ -25,7 +25,7 @@ SHARED_ENV="${SUBC_ENV_FILE:-${SCRIPT_DIR}/../.env}"
 [[ -f "$SHARED_ENV" ]] || SHARED_ENV="${SCRIPT_DIR}/../env.example"
 if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
-DEFAULT_MODEL="subconscious/glm-5.2"
+DEFAULT_MODEL="subconscious/glm-5.3-marathon"
 DEFAULT_COMPACT_WINDOW="1000000"
 DEFAULT_MAX_CONTEXT_TOKENS="3000000"
 DEFAULT_MAX_CONCURRENT_SUBAGENTS="4"
@@ -136,7 +136,7 @@ Usage:
 Options (same as install.sh; flags override env for this run):
   --gateway-url URL      Gateway origin (e.g. https://gateway.example)
   --api-key KEY          Gateway API key (sk-gw-...)
-  --model MODEL          Model name (default: subconscious/glm-5.2)
+  --model MODEL          Model name (default: subconscious/glm-5.3-marathon)
   --compact-window N     CLAUDE_CODE_AUTO_COMPACT_WINDOW (default: 1000000; Claude Code clamps to 100000–1000000)
                          See https://code.claude.com/docs/en/env-vars and
                          https://code.claude.com/docs/en/context-window#set-the-auto-compact-window

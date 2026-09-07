@@ -36,7 +36,7 @@ npm install openai
 pip install openai
 ```
 
-Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform). The base URL is `https://api.subconscious.dev/v1` and the default model is `subconscious/glm-5.2`.
+Get your API key at [subconscious.dev/platform](https://www.subconscious.dev/platform). The base URL is `https://api.subconscious.dev/v1` and the default model is `subconscious/glm-5.3-marathon`.
 
 ### Run your first agent
 
@@ -51,7 +51,7 @@ const client = new OpenAI({
 });
 
 const completion = await client.chat.completions.create({
-  model: 'subconscious/glm-5.2',
+  model: 'subconscious/glm-5.3-marathon',
   messages: [{ role: 'user', content: 'Explain what an API is in 3 sentences.' }],
 });
 
@@ -69,7 +69,7 @@ client = OpenAI(
 )
 
 completion = client.chat.completions.create(
-    model="subconscious/glm-5.2",
+    model="subconscious/glm-5.3-marathon",
     messages=[{"role": "user", "content": "Explain what an API is in 3 sentences."}],
 )
 
@@ -82,7 +82,7 @@ print(completion.choices[0].message.content)
 
 Available models include:
 
-- **`subconscious/glm-5.2`** (default)
+- **`subconscious/glm-5.3-marathon`** (default)
 - **`subconscious/tim-qwen3.6-27b`**
 - **`subconscious/deepseek-v4-flash-marathon`**
 
@@ -111,7 +111,7 @@ tools = [{
 }]
 
 resp = client.chat.completions.create(
-    model="subconscious/glm-5.2",
+    model="subconscious/glm-5.3-marathon",
     messages=[{"role": "user", "content": "What's the weather in Boston?"}],
     tools=tools,
 )

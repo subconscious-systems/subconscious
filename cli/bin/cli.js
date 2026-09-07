@@ -75,7 +75,7 @@ function printHelp() {
 ${agents}
 
   ${c.bold}Options${c.reset}
-    ${c.dim}--model <id>${c.reset}   Model to use (profile MODEL, or first live catalog model if UNSET)
+    ${c.dim}--model <id>${c.reset}   Model to use (profile MODEL, or the gateway primary model if UNSET)
     ${c.dim}-p, --profile${c.reset}  Select a profile (default: default)
     ${c.dim}-h, --help${c.reset}     Show this help
     ${c.dim}-v, --version${c.reset}  Show version
@@ -156,7 +156,7 @@ Usage:
   subc models help
 
 List available Subconscious models. The default is the profile MODEL,
-or the first live catalog model if MODEL is UNSET.
+or the gateway primary model if MODEL is UNSET.
 `,
 };
 
@@ -326,6 +326,7 @@ async function main() {
     });
     modelsCommand(catalog.models, {
       selectedModel,
+      primaryId: catalog.primaryId,
       error: catalog.error,
       source: catalog.source,
       hasApiKey: Boolean(auth?.key),

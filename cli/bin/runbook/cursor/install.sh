@@ -53,10 +53,10 @@ if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${CURSOR_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.2}"
+MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
 COMMAND="install"
 
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.2
+DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
 subconscious/tim-qwen3.6-27b
 subconscious/deepseek-v4-flash-marathon"
 

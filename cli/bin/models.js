@@ -5,6 +5,12 @@
  * /v1/models/available list. If that request fails, fall back to the public
  * /v1/models fleet catalog. Launches keep working with the packaged registry
  * when the gateway is offline or returns nothing usable.
+ *
+ * Live catalog entries may carry `metadata: { primary: boolean }`. The
+ * gateway-designated primary is surfaced as `primaryId` on live catalogs
+ * (null on packaged fallbacks) and moved to the front of `models` when the
+ * profile has no selected model in the catalog, so UNSET/stale profiles
+ * follow the fleet default.
  */
 
 const MODEL_ID_PATTERN = /^[-A-Za-z0-9._:/+]+$/;
@@ -18,7 +24,16 @@ export function isLiveModelSource(source) {
   return source === 'available' || source === 'public';
 }
 
-export function normalizeModelIds(modelIds = [], selectedModel) {
+/**
+ * Pick the gateway-designated primary model id from a catalog, or null when
+ * the catalog does not carry one (packaged/offline fallbacks).
+ */
+export function pickPrimaryModelId(catalog) {
+  const primaryId = typeof catalog?.primaryId === 'string' ? catalog.primaryId.trim() : '';
+  return primaryId || null;
+}
+
+export function normalizeModelIds(modelIds = [], selectedModel, primaryId) {
   const models = [];
   const seen = new Set();
 
@@ -29,9 +44,20 @@ export function normalizeModelIds(modelIds = [], selectedModel) {
     models.push(model);
   }
 
+  // The selected model keeps winning the front slot (legacy behavior).
   const selectedIndex = models.indexOf(selectedModel?.trim());
-  if (selectedIndex > 0) {
-    models.unshift(models.splice(selectedIndex, 1)[0]);
+  if (selectedIndex >= 0) {
+    if (selectedIndex > 0) {
+      models.unshift(models.splice(selectedIndex, 1)[0]);
+    }
+    return models;
+  }
+
+  // With no selected model in the catalog (UNSET or stale), the gateway
+  // primary takes the front slot so models[0] follows the fleet default.
+  const primaryIndex = models.indexOf(primaryId?.trim());
+  if (primaryIndex > 0) {
+    models.unshift(models.splice(primaryIndex, 1)[0]);
   }
 
   return models;
@@ -45,6 +71,15 @@ function gatewayOrigin(baseUrl) {
 function modelsEndpoint(baseUrl, path) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${gatewayOrigin(baseUrl)}${normalizedPath}`;
+}
+
+function modelsPrimaryId(entries, models) {
+  for (const entry of entries) {
+    if (!entry?.metadata?.primary) continue;
+    const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+    if (id && models.includes(id)) return id;
+  }
+  return null;
 }
 
 export async function fetchGatewayModels({
@@ -89,7 +124,9 @@ export async function fetchGatewayModels({
       throw new Error('Model discovery returned an invalid response');
     }
 
-    return normalizeModelIds(payload.data.map((model) => model?.id));
+    const models = normalizeModelIds(payload.data.map((model) => model?.id));
+    const primaryId = modelsPrimaryId(payload.data, models);
+    return { models, primaryId };
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error(`Model discovery timed out after ${timeoutMs}ms`);
@@ -101,27 +138,33 @@ export async function fetchGatewayModels({
 }
 
 async function fetchPublicModels({ baseUrl, fetchImpl, timeoutMs }) {
-  const models = await fetchGatewayModels({
+  const discovered = await fetchGatewayModels({
     baseUrl,
     path: PUBLIC_MODELS_PATH,
     fetchImpl,
     timeoutMs,
   });
-  if (!models.length) throw new Error('Model discovery returned no usable model IDs');
-  return models;
+  if (!discovered.models.length) {
+    throw new Error('Model discovery returned no usable model IDs');
+  }
+  return discovered;
 }
 
 function packagedCatalog(selectedModel, fallbackModels, error) {
+  // Offline fallbacks have no gateway metadata, so they carry no primary.
   return {
     models: normalizeModelIds([selectedModel, ...fallbackModels], selectedModel),
+    primaryId: null,
     source: 'packaged',
     error,
   };
 }
 
-function liveCatalog(models, selectedModel, source) {
+function liveCatalog(discovered, selectedModel, source) {
+  const models = normalizeModelIds(discovered.models, selectedModel, discovered.primaryId);
   return {
-    models: normalizeModelIds(models, selectedModel),
+    models,
+    primaryId: models.includes(discovered.primaryId) ? discovered.primaryId : null,
     source,
     error: null,
   };

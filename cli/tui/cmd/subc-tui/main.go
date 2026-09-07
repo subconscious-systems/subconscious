@@ -59,6 +59,7 @@ type inputState struct {
 	ProfilePath       string         `json:"profilePath"`
 	Profiles          []profileState `json:"profiles"`
 	Models            []string       `json:"models"`
+	PrimaryModel      string         `json:"primaryModel"`
 	SelectedModel     string         `json:"selectedModel"`
 	SubagentModel     string         `json:"subagentModel"`
 	GatewayURL        string         `json:"gatewayUrl"`
@@ -668,10 +669,19 @@ func (m model) renderModelCatalog(width int) string {
 	for _, modelID := range m.state.Models {
 		marker := "  "
 		label := ellipsize(modelID, max(20, width-9))
-		if modelID == catalogDefaultModel(m.state) {
+		isDefault := modelID == catalogDefaultModel(m.state)
+		isPrimary := m.state.PrimaryModel != "" && modelID == m.state.PrimaryModel
+		switch {
+		case isDefault:
 			marker = lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render("● ")
 			label += lipgloss.NewStyle().Foreground(lipgloss.Color(brandDim)).Render("  default")
-		} else {
+			if isPrimary {
+				label += lipgloss.NewStyle().Foreground(lipgloss.Color(brandDim)).Render("  primary")
+			}
+		case isPrimary:
+			marker = lipgloss.NewStyle().Foreground(lipgloss.Color(greenColor)).Render("● ")
+			label += lipgloss.NewStyle().Foreground(lipgloss.Color(brandDim)).Render("  primary")
+		default:
 			marker = lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render("○ ")
 		}
 		lines = append(lines, marker+label)
@@ -809,6 +819,11 @@ func catalogDefaultModel(state inputState) string {
 	if state.SelectedModel != "" {
 		return state.SelectedModel
 	}
+	// Live catalogs carry the gateway-designated primary; UNSET profiles
+	// launch with it. Packaged fallbacks keep the first packaged model.
+	if state.PrimaryModel != "" && indexString(state.Models, state.PrimaryModel) >= 0 {
+		return state.PrimaryModel
+	}
 	if len(state.Models) > 0 {
 		return state.Models[0]
 	}
@@ -820,7 +835,7 @@ func defaultModelDisplay(state inputState) string {
 		return state.SelectedModel
 	}
 	if len(state.Models) > 0 {
-		return state.Models[0] + " (" + unsetSetting + ")"
+		return catalogDefaultModel(state) + " (" + unsetSetting + ")"
 	}
 	return unsetSetting
 }
@@ -947,7 +962,7 @@ func defaultModelPickerDescription(state inputState) string {
 		if state.ModelSource == "" && state.ModelError != "" {
 			return "Live catalog unavailable; packaged models are shown."
 		}
-		return "This model will be saved as the default for the selected profile. UNSET follows the first live catalog model."
+		return "This model will be saved as the default for the selected profile. UNSET follows the gateway primary model."
 	}
 }
 

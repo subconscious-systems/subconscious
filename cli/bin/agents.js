@@ -26,7 +26,12 @@ import {
   resolvedModelSetting,
   resolvedProfileValues,
 } from './profiles.js';
-import { isLiveModelSource, PUBLIC_CATALOG_FALLBACK_MESSAGE, resolveModelCatalog } from './models.js';
+import {
+  isLiveModelSource,
+  pickPrimaryModelId,
+  PUBLIC_CATALOG_FALLBACK_MESSAGE,
+  resolveModelCatalog,
+} from './models.js';
 import { compareVersions } from './update-check.js';
 
 export const MIN_CLAUDE_CODE_VERSION = '2.1.242';
@@ -352,7 +357,8 @@ function buildContext(apiKey, model, profile) {
  * Pull a `--model <value>` / `--model=<value>` flag out of the passthrough
  * args (so it sets the Subconscious model rather than reaching the agent).
  * Falls back to SUBCONSCIOUS_MODEL, then the profile MODEL. UNSET or a blank
- * profile model means "use the first live catalog entry" (gateway priority).
+ * profile model means "use the gateway primary model" (or the first catalog
+ * entry when the gateway is offline).
  */
 export function extractModel(argv, profile) {
   const environmentModel = resolvedModelSetting(process.env.SUBCONSCIOUS_MODEL);
@@ -913,7 +919,11 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
 }
 
 export function selectLaunchModel(requestedModel, modelSource, catalog) {
-  const first = catalog.models[0] || requestedModel || DEFAULTS.model;
+  // Live catalogs carry the gateway-designated primary; packaged fallbacks
+  // fall back to the first packaged model (registry default), preserving the
+  // legacy offline behavior.
+  const first =
+    pickPrimaryModelId(catalog) || catalog.models[0] || requestedModel || DEFAULTS.model;
   if (modelSource === 'catalog' || !requestedModel) {
     return first;
   }

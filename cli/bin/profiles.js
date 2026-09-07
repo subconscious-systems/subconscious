@@ -86,7 +86,7 @@ const SETTINGS = {
     key: 'MODEL',
     label: 'Default model',
     description:
-      'Initial model used by coding-agent launches and setup. UNSET uses the first live catalog model.',
+      'Initial model used by coding-agent launches and setup. UNSET follows the gateway primary model.',
     type: 'choice',
     choices: SUPPORTED_MODELS,
   },
@@ -349,7 +349,7 @@ function profileTemplate() {
 
 GATEWAY_URL={GATEWAY_URL}
 API_KEY={API_KEY}
-# Available models (MODEL=UNSET uses the first live catalog model):
+# Available models (MODEL=UNSET follows the gateway primary model):
 ${modelComments}
 MODEL={MODEL}
 
@@ -724,7 +724,7 @@ Usage:
   subc -p NAME config create       Create a new profile with default settings
   subc -p NAME config delete       Delete a non-default profile
 
-  --model UNSET                    Clear MODEL so launches use the first live catalog model
+  --model UNSET                    Clear MODEL so launches follow the gateway primary model
   --subagent-model UNSET           Clear the Claude subagent override so it follows MODEL
 `);
 }
@@ -838,11 +838,18 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
 }
 
 export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
-  const selectedModel = options.selectedModel || models[0] || registry.defaults.model;
+  const primaryModel =
+    options.primaryId && models.includes(options.primaryId) ? options.primaryId : '';
+  const selectedModel =
+    options.selectedModel || primaryModel || models[0] || registry.defaults.model;
   console.log(`\n  ${c.bold}Available models${c.reset}\n`);
   for (const model of models) {
-    const suffix = model === selectedModel ? ` ${c.dim}(default)${c.reset}` : '';
-    console.log(`  ${c.cyan}${model}${c.reset}${suffix}`);
+    const tags = [];
+    if (model === selectedModel) tags.push(`${c.dim}(default)${c.reset}`);
+    if (primaryModel && model === primaryModel && model !== selectedModel) {
+      tags.push(`${c.dim}(primary)${c.reset}`);
+    }
+    console.log(`  ${c.cyan}${model}${c.reset}${tags.length ? ` ${tags.join(' ')}` : ''}`);
   }
   if (options.source === 'public' && options.hasApiKey) {
     console.error(`\n  ${c.dim}${PUBLIC_CATALOG_FALLBACK_MESSAGE}${c.reset}`);

@@ -406,7 +406,7 @@ test('UNSET and legacy aliases clear model settings', () => {
   assert.equal(profiles.resolvedModelSetting('subconscious/glm-5.2'), 'subconscious/glm-5.2');
 });
 
-test('a blank profile model follows the first live catalog entry', () => {
+test('a blank profile model follows the gateway primary catalog entry', () => {
   const previous = process.env.SUBCONSCIOUS_MODEL;
   delete process.env.SUBCONSCIOUS_MODEL;
 
@@ -440,6 +440,44 @@ test('a blank profile model follows the first live catalog entry', () => {
     if (previous === undefined) delete process.env.SUBCONSCIOUS_MODEL;
     else process.env.SUBCONSCIOUS_MODEL = previous;
   }
+});
+
+test('launches follow the gateway primary when the catalog carries one', () => {
+  const catalog = {
+    source: 'available',
+    primaryId: 'subconscious/primary',
+    models: ['subconscious/primary', 'subconscious/other'],
+  };
+
+  // UNSET profiles launch with the gateway primary.
+  assert.equal(
+    agents.selectLaunchModel('', 'catalog', catalog),
+    'subconscious/primary',
+  );
+  // Stale profile defaults yield to the primary instead of the first entry.
+  assert.equal(
+    agents.selectLaunchModel('subconscious/removed', 'profile', catalog),
+    'subconscious/primary',
+  );
+  // A profile model still present in the catalog keeps winning.
+  assert.equal(
+    agents.selectLaunchModel('subconscious/other', 'profile', catalog),
+    'subconscious/other',
+  );
+  // Explicit command-line overrides keep their precedence.
+  assert.equal(
+    agents.selectLaunchModel('subconscious/removed', 'command', catalog),
+    'subconscious/removed',
+  );
+  // Packaged fallbacks carry no primary and keep the legacy behavior.
+  assert.equal(
+    agents.selectLaunchModel('subconscious/removed', 'profile', {
+      source: 'packaged',
+      primaryId: null,
+      models: ['subconscious/packaged-first'],
+    }),
+    'subconscious/removed',
+  );
 });
 
 test('a removed saved default yields to the first live model but explicit overrides do not', () => {

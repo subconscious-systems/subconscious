@@ -33,7 +33,7 @@
 #       "apiType": "messages",
 #       "models": [
 #         {
-#           "id": "subconscious/glm-5.2",
+#           "id": "subconscious/glm-5.3-marathon",
 #           "name": "Subconscious GLM 5.2",
 #           "url": "https://your-gateway.example/v1/messages",
 #           "toolCalling": true,
@@ -77,7 +77,7 @@ if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 COMMAND="install"
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${COPILOT_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.2}"
+MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
 MAX_INPUT_TOKENS="${COPILOT_MAX_INPUT_TOKENS:-5000000}"
 MAX_OUTPUT_TOKENS="${COPILOT_MAX_OUTPUT_TOKENS:-65536}"
 VSCODE_APP="${VSCODE_APP:-}"  # auto-detected: Code | Code - Insiders | VSCodium
@@ -122,7 +122,7 @@ default. Restart VS Code after install.
 Options:
   --gateway-url URL         Gateway origin (default: $GATEWAY_URL from .env)
   --api-key KEY             Gateway API key for hooks (default: $API_KEY from .env)
-  --model MODEL             Model id (default: subconscious/glm-5.2)
+  --model MODEL             Model id (default: subconscious/glm-5.3-marathon)
   --max-input-tokens N      Model context window input tokens (default: 5000000)
   --max-output-tokens N     Model max output tokens (default: 65536)
   --vscode-app APP          Code, Code - Insiders, or VSCodium (auto-detected)
@@ -174,7 +174,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.2
+DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
 subconscious/tim-qwen3.6-27b
 subconscious/deepseek-v4-flash-marathon"
 SUPPORTED_MODELS=()
