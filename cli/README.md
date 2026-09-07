@@ -34,8 +34,9 @@ subc <agent> uninstall
 
 Running `subc` with no arguments in a terminal opens the native Go TUI. Use
 the arrow keys and Enter to launch agents or manage the active profile, `p` to
-switch profiles, and `q` to quit. The menu includes dedicated **Create profile**,
-**Set default model**, **Set subagent model**, and **Update base URL** actions.
+switch profiles, and `q` to quit. The menu includes dedicated **Usage**,
+**Create profile**, **Set default model**, **Set subagent model**,
+**Update base URL**, and **Update platform URL** actions.
 Model and URL changes are validated and saved to the active profile without
 leaving the TUI.
 `subc help` and `subc --help` continue to print script-friendly command help.
@@ -275,6 +276,9 @@ also maintains `~/.subconscious/config.json`.
 subc login
 subc update-key sk-new-key-...
 subc update-url https://api.subconscious.dev
+subc update-platform-url https://platform.subconscious.dev
+subc usage
+subc usage --json
 subc whoami
 subc logout
 ```
@@ -304,6 +308,21 @@ updated automatically as well.
 
 `SUBCONSCIOUS_BASE_URL` continues to take precedence when set. A configured
 `CLAUDE_GATEWAY_URL` remains a Claude-specific override.
+
+`subc update-platform-url <platform-url>` validates the URL and saves
+`PLATFORM_URL` in the active profile. Login, `whoami`, and `usage` call this
+host. Production defaults to `https://platform.subconscious.dev`:
+
+```bash
+subc update-platform-url https://platform.subconscious.dev
+subc config --platform-url http://localhost:3000
+```
+
+`SUBCONSCIOUS_URL` overrides the saved profile value for local development.
+
+`subc usage` fetches billing mode, daily token allowance, credit balance,
+overage, and per-model consumption from `GET /api/v1/usage` on the resolved
+platform host. Pass `--json` for machine-readable output.
 
 `SUBCONSCIOUS_API_KEY` takes precedence over profile and saved config keys,
 which is useful for CI and temporary sessions. `subc logout` clears the

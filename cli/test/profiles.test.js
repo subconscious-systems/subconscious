@@ -530,3 +530,34 @@ test('managed agent binaries take precedence over older PATH installations', () 
   ).split(path.delimiter);
   assert.deepEqual(augmented, [managed, cargo, '/usr/bin']);
 });
+
+test('validateOriginUrl normalizes trailing slashes and rejects invalid URLs', () => {
+  assert.equal(
+    profiles.validateOriginUrl('https://platform.example/'),
+    'https://platform.example',
+  );
+  assert.throws(() => profiles.validateOriginUrl('not-a-url'), /valid http/);
+  assert.throws(
+    () => profiles.validateOriginUrl('https://user:pass@platform.example'),
+    /embedded credentials/,
+  );
+});
+
+test('updatePlatformUrlCommand saves PLATFORM_URL to the active profile', async () => {
+  await profiles.ensureProfile('platform-url', 'secret');
+  await profiles.updatePlatformUrlCommand(['https://platform-dev.example/'], {
+    profileName: 'platform-url',
+  });
+  const profile = await profiles.loadProfile('platform-url');
+  assert.equal(profile.values.PLATFORM_URL, 'https://platform-dev.example');
+});
+
+test('config accepts --platform-url updates', async () => {
+  await profiles.configCommand(
+    ['--platform-url', 'https://platform-staging.example'],
+    'platform-config',
+    { profileExplicit: true },
+  );
+  const profile = await profiles.loadProfile('platform-config');
+  assert.equal(profile.values.PLATFORM_URL, 'https://platform-staging.example');
+});

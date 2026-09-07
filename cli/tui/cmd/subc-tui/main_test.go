@@ -290,6 +290,50 @@ func TestCommandHelpIsNotAMenuItem(t *testing.T) {
 	}
 }
 
+func TestUsageMenuItemIsAvailable(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "default",
+		Agents:        []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
+	})
+	foundUsage := false
+	foundPlatform := false
+	for _, item := range m.items {
+		if item.Command == "usage" {
+			foundUsage = true
+		}
+		if item.Kind == itemUpdatePlatformURL {
+			foundPlatform = true
+		}
+	}
+	if !foundUsage {
+		t.Fatalf("usage menu item missing: %#v", m.items)
+	}
+	if !foundPlatform {
+		t.Fatalf("platform URL menu item missing: %#v", m.items)
+	}
+}
+
+func TestUpdatePlatformURLUsesInlineDetail(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "default",
+		PlatformURL:   "https://platform.example",
+		Agents:        []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
+	})
+	for index, item := range m.items {
+		if item.Kind == itemUpdatePlatformURL {
+			m.cursor = index
+			break
+		}
+	}
+	detail := m.renderDetail(56)
+	if !strings.Contains(detail, "https://platform.example") || !strings.Contains(detail, "Inline editor") {
+		t.Fatalf("inline platform detail missing: %q", detail)
+	}
+	if strings.Contains(detail, "$ subc") {
+		t.Fatalf("platform editor should not show a command preview: %q", detail)
+	}
+}
+
 func TestVersionIsVisibleInTUIHeader(t *testing.T) {
 	m := newModel(inputState{
 		Version:       "4.0.10",
