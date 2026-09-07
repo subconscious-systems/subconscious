@@ -331,6 +331,7 @@ async function main() {
       console.log(COMMAND_HELP.models);
       return;
     }
+    const jsonOutput = args.includes('--json');
     const profile = await loadProfile(profileName);
     const auth = await getApiKey(profile);
     const selectedModel = resolvedModelSetting(
@@ -346,8 +347,24 @@ async function main() {
       selectedModel,
       fallbackModels: PACKAGED_MODELS,
     });
-    modelsCommand(catalog.models, {
+    if (jsonOutput) {
+      console.log(
+        JSON.stringify(
+          {
+            data: catalog.models,
+            default: catalog.defaultModel,
+            source: catalog.source,
+            ...(catalog.error ? { error: catalog.error.message } : {}),
+          },
+          null,
+          2,
+        ),
+      );
+      return;
+    }
+    modelsCommand(catalog.modelIds, {
       selectedModel,
+      defaultModel: catalog.defaultModel,
       error: catalog.error,
       source: catalog.source,
       hasApiKey: Boolean(auth?.key),

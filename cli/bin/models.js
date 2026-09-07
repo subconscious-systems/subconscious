@@ -13,28 +13,57 @@ export const AVAILABLE_MODELS_PATH = '/v1/models/available';
 export const PUBLIC_MODELS_PATH = '/v1/models';
 export const PUBLIC_CATALOG_FALLBACK_MESSAGE =
   'Provisioned catalog unavailable; showing the public model list.';
+export const PACKAGED_DEFAULT_MODEL = 'subconscious/glm-5.3-marathon';
 
 export function isLiveModelSource(source) {
   return source === 'available' || source === 'public';
 }
 
-export function normalizeModelIds(modelIds = [], selectedModel) {
-  const models = [];
+function isFlagshipModel(model) {
+  return model?.metadata?.is_flagship === true;
+}
+
+export function pickFlagshipModelId(models = []) {
+  const flagged = models.filter(isFlagshipModel);
+  if (flagged.length === 1) return flagged[0].id;
+  return null;
+}
+
+export function orderModelIds(models = [], selectedModel) {
+  const ids = [];
   const seen = new Set();
 
-  for (const value of modelIds) {
-    const model = typeof value === 'string' ? value.trim() : '';
-    if (!model || !MODEL_ID_PATTERN.test(model) || seen.has(model)) continue;
-    seen.add(model);
-    models.push(model);
+  for (const model of models) {
+    const id = typeof model?.id === 'string' ? model.id.trim() : '';
+    if (!id || !MODEL_ID_PATTERN.test(id) || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
   }
 
-  const selectedIndex = models.indexOf(selectedModel?.trim());
+  const flagshipId = pickFlagshipModelId(models);
+  if (flagshipId) {
+    const flagshipIndex = ids.indexOf(flagshipId);
+    if (flagshipIndex > 0) {
+      ids.unshift(ids.splice(flagshipIndex, 1)[0]);
+    }
+  }
+
+  const selected = selectedModel?.trim();
+  const selectedIndex = selected ? ids.indexOf(selected) : -1;
   if (selectedIndex > 0) {
-    models.unshift(models.splice(selectedIndex, 1)[0]);
+    ids.unshift(ids.splice(selectedIndex, 1)[0]);
   }
 
-  return models;
+  return ids;
+}
+
+export function resolveDefaultModel({ models = [], modelIds = [], fallbackModels = [] }) {
+  return (
+    pickFlagshipModelId(models) ||
+    modelIds[0] ||
+    fallbackModels.find((model) => MODEL_ID_PATTERN.test(model)) ||
+    PACKAGED_DEFAULT_MODEL
+  );
 }
 
 function gatewayOrigin(baseUrl) {
@@ -45,6 +74,42 @@ function gatewayOrigin(baseUrl) {
 function modelsEndpoint(baseUrl, path) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   return `${gatewayOrigin(baseUrl)}${normalizedPath}`;
+}
+
+function normalizeGatewayModels(payloadModels = []) {
+  return payloadModels
+    .filter((model) => model && typeof model === 'object')
+    .map((model) => {
+      const id = typeof model.id === 'string' ? model.id.trim() : '';
+      if (!id || !MODEL_ID_PATTERN.test(id)) return null;
+      const normalized = { id };
+      if (typeof model.object === 'string') normalized.object = model.object;
+      if (typeof model.created === 'number') normalized.created = model.created;
+      if (typeof model.owned_by === 'string') normalized.owned_by = model.owned_by;
+      if (typeof model.context_length === 'number') {
+        normalized.context_length = model.context_length;
+      }
+      if (typeof model.max_output_length === 'number') {
+        normalized.max_output_length = model.max_output_length;
+      }
+      if (Array.isArray(model.input_modalities)) {
+        normalized.input_modalities = model.input_modalities;
+      }
+      if (Array.isArray(model.output_modalities)) {
+        normalized.output_modalities = model.output_modalities;
+      }
+      if (Array.isArray(model.supported_sampling_parameters)) {
+        normalized.supported_sampling_parameters = model.supported_sampling_parameters;
+      }
+      if (Array.isArray(model.supported_features)) {
+        normalized.supported_features = model.supported_features;
+      }
+      if (model.metadata && typeof model.metadata === 'object') {
+        normalized.metadata = model.metadata;
+      }
+      return normalized;
+    })
+    .filter(Boolean);
 }
 
 export async function fetchGatewayModels({
@@ -89,7 +154,11 @@ export async function fetchGatewayModels({
       throw new Error('Model discovery returned an invalid response');
     }
 
-    return normalizeModelIds(payload.data.map((model) => model?.id));
+    const models = normalizeGatewayModels(payload.data);
+    if (!models.length) {
+      throw new Error('Model discovery returned no usable model IDs');
+    }
+    return models;
   } catch (error) {
     if (controller.signal.aborted) {
       throw new Error(`Model discovery timed out after ${timeoutMs}ms`);
@@ -101,27 +170,48 @@ export async function fetchGatewayModels({
 }
 
 async function fetchPublicModels({ baseUrl, fetchImpl, timeoutMs }) {
-  const models = await fetchGatewayModels({
+  return fetchGatewayModels({
     baseUrl,
     path: PUBLIC_MODELS_PATH,
     fetchImpl,
     timeoutMs,
   });
-  if (!models.length) throw new Error('Model discovery returned no usable model IDs');
-  return models;
 }
 
 function packagedCatalog(selectedModel, fallbackModels, error) {
+  const seed = [];
+  const selected = selectedModel?.trim();
+  if (selected && MODEL_ID_PATTERN.test(selected)) {
+    seed.push(selected);
+  }
+  for (const model of fallbackModels) {
+    if (typeof model === 'string' && MODEL_ID_PATTERN.test(model.trim())) {
+      seed.push(model.trim());
+    }
+  }
+  const models = [];
+  const seen = new Set();
+  for (const id of seed) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    models.push({ id });
+  }
+  const modelIds = orderModelIds(models, selectedModel);
   return {
-    models: normalizeModelIds([selectedModel, ...fallbackModels], selectedModel),
+    models,
+    modelIds,
+    defaultModel: resolveDefaultModel({ models, modelIds, fallbackModels }),
     source: 'packaged',
     error,
   };
 }
 
 function liveCatalog(models, selectedModel, source) {
+  const modelIds = orderModelIds(models, selectedModel);
   return {
-    models: normalizeModelIds(models, selectedModel),
+    models,
+    modelIds,
+    defaultModel: resolveDefaultModel({ models, modelIds }),
     source,
     error: null,
   };
@@ -163,4 +253,10 @@ export async function resolveModelCatalog({
   } catch (error) {
     return packagedCatalog(selectedModel, fallbackModels, error);
   }
+}
+
+/** Backward-compatible helper for callers that only need ordered slug IDs. */
+export function normalizeModelIds(modelIds = [], selectedModel) {
+  const models = modelIds.map((id) => ({ id }));
+  return orderModelIds(models, selectedModel);
 }

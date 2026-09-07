@@ -846,10 +846,11 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
 }
 
 export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
-  const selectedModel = options.selectedModel || models[0] || registry.defaults.model;
+  const defaultModel =
+    options.defaultModel || options.selectedModel || models[0] || registry.defaults.model;
   console.log(`\n  ${c.bold}Available models${c.reset}\n`);
   for (const model of models) {
-    const suffix = model === selectedModel ? ` ${c.dim}(default)${c.reset}` : '';
+    const suffix = model === defaultModel ? ` ${c.dim}(default)${c.reset}` : '';
     console.log(`  ${c.cyan}${model}${c.reset}${suffix}`);
   }
   if (options.source === 'public' && options.hasApiKey) {

@@ -913,14 +913,22 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
 }
 
 export function selectLaunchModel(requestedModel, modelSource, catalog) {
-  const first = catalog.models[0] || requestedModel || DEFAULTS.model;
+  const first =
+    catalog.defaultModel ||
+    catalog.modelIds?.[0] ||
+    catalog.models?.[0]?.id ||
+    requestedModel ||
+    DEFAULTS.model;
   if (modelSource === 'catalog' || !requestedModel) {
     return first;
   }
+  const liveIds = catalog.modelIds?.length
+    ? catalog.modelIds
+    : catalog.models?.map((model) => model.id) || [];
   const useLiveDefault =
     isLiveModelSource(catalog.source) &&
-    catalog.models.length > 0 &&
-    !catalog.models.includes(requestedModel) &&
+    liveIds.length > 0 &&
+    !liveIds.includes(requestedModel) &&
     (modelSource === 'profile' || modelSource === 'default');
   return useLiveDefault ? first : requestedModel;
 }

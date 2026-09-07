@@ -426,7 +426,12 @@ test('a blank profile model follows the first live catalog entry', () => {
 
     const catalog = {
       source: 'available',
-      models: ['subconscious/glm-5.3-marathon', 'subconscious/glm-5.2'],
+      modelIds: ['subconscious/glm-5.3-marathon', 'subconscious/glm-5.2'],
+      defaultModel: 'subconscious/glm-5.3-marathon',
+      models: [
+        { id: 'subconscious/glm-5.3-marathon', metadata: { is_flagship: true } },
+        { id: 'subconscious/glm-5.2' },
+      ],
     };
     assert.equal(
       agents.selectLaunchModel('', 'catalog', catalog),
@@ -446,7 +451,9 @@ test('a removed saved default yields to the first live model but explicit overri
   for (const source of ['available', 'public']) {
     const catalog = {
       source,
-      models: ['subconscious/live', 'subconscious/other'],
+      modelIds: ['subconscious/live', 'subconscious/other'],
+      defaultModel: 'subconscious/live',
+      models: [{ id: 'subconscious/live' }, { id: 'subconscious/other' }],
     };
 
     assert.equal(
@@ -467,7 +474,7 @@ test('a removed saved default yields to the first live model but explicit overri
     agents.selectLaunchModel(
       'subconscious/removed',
       'profile',
-      { source: 'packaged', models: ['subconscious/live'] },
+      { source: 'packaged', modelIds: ['subconscious/live'], models: [{ id: 'subconscious/live' }] },
     ),
     'subconscious/removed',
   );
