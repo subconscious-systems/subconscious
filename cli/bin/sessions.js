@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { spawnWindowsSync } from './windows/process.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -418,7 +419,7 @@ function discoverOpenCodeSessions(execute, max) {
 export async function discoverSessions(options = {}) {
   const home = options.home || os.homedir();
   const max = options.max || 500;
-  const execute = options.execute || spawnSync;
+  const execute = options.execute || (process.platform === 'win32' ? spawnWindowsSync : spawnSync);
   const roots = options.roots || {
     claude: path.join(home, '.claude', 'projects'),
     codex: path.join(home, '.codex', 'sessions'),
@@ -479,7 +480,7 @@ async function openCodeMessages(session, execute) {
 
 export async function readSessionMessages(session, options = {}) {
   if (session.harness === 'opencode') {
-    return openCodeMessages(session, options.execute || spawnSync);
+    return openCodeMessages(session, options.execute || (process.platform === 'win32' ? spawnWindowsSync : spawnSync));
   }
   if (!session.sourcePath) return [];
   const records = parseLines(await readBounded(session.sourcePath));

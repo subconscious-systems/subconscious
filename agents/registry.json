@@ -27,7 +27,8 @@
       "bin": "sc",
       "install": {
         "darwin": "subc sc install",
-        "linux": "subc sc install"
+        "linux": "subc sc install",
+        "win32": "subc sc install"
       },
       "runbook": {
         "mode": "launch",

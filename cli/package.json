@@ -9,6 +9,7 @@
     "build:tui": "node scripts/build-tui.js",
     "build:tui:host": "node scripts/build-tui.js --host",
     "test": "node --test",
+    "test:windows": "node --test test/windows.test.js test/models.test.js test/auth.test.js test/tui.test.js test/update-check.test.js test/sessions.test.js test/branding.test.js test/claude-version.test.js",
     "test:tui": "go -C tui test ./...",
     "prepack": "npm run build:tui",
     "prepublishOnly": "node scripts/require-publish-script.js"

@@ -76,6 +76,66 @@ subc pi
 subc dsh
 ```
 
+## Native Windows support
+
+Windows has its own implementation in `cli/bin/windows/`, selected only when
+Node runs on Windows. macOS/Linux continue to use the existing, unchanged shell
+runbooks. WSL continues to use the Linux implementation.
+
+Use Node.js 18+ and Windows PowerShell 5.1+ (included with Windows), from either
+PowerShell or Command Prompt. The Windows CLI integrations do not require Bash,
+`jq`, `curl`, or WSL. The agents themselves must support your Windows version;
+their own dependencies still apply.
+
+```powershell
+npm install -g subconscious-cli
+subc login
+subc claude
+subc codex
+subc opencode
+subc dsh
+subc cursor install
+subc copilot install
+subc pi
+subc config edit notepad
+subc upgrade --latest
+```
+
+If PowerShell's execution policy blocks npm-generated `.ps1` entry points, use
+`npm.cmd` and `subc.cmd` or run the same commands in Command Prompt. No policy
+change is required. Pi must already be installed; other terminal agents offer
+their Windows installer when missing in an interactive terminal.
+
+Native executables and standard npm `.cmd` shims are supported. The launcher
+invokes the underlying executable or Node entry point directly, preserving
+JSON, quotes, Unicode, and multiline arguments. It checks the user's `.local\bin`,
+npm globals, WinGet links, and the system-profile `.local\bin` location reported
+by some elevated Claude installations. It does not change your global PATH.
+Custom batch wrappers are rejected with guidance to use a native executable or
+standard npm package.
+
+Login, saved profiles, model discovery, session browsing/resume, self-update,
+and the native TUI use Windows paths and processes. Profile editing defaults to
+Notepad, honors `VISUAL`/`EDITOR`, and supports `code`/`code-insiders` with `--wait`.
+The existing profile location remains `%USERPROFILE%\.subconscious`.
+
+Cursor, Copilot, Codex, and Pi setup use native JSON merges and Node hooks. Other
+providers and hooks are preserved; malformed configuration is left unchanged.
+Hook credentials are stored in `subconscious-windows.json` within the agent's
+user directory; treat that file as a secret. Copilot's model provider still uses
+VS Code's secret store and prompts for its key. Its configuration goes under
+`%APPDATA%\Code\User` (or Code - Insiders/VSCodium). Rerun install after moving
+your Node installation, because hooks record the absolute Node executable path.
+
+`subc sc` can launch an installed native `sc.exe`. `subc sc install` requires an
+upstream Windows x64/ARM64 release asset and its SHA-256 checksum; it reports a
+clear error if they have not been published. It never downloads a Unix binary
+as a fallback.
+
+Run `npm run test:windows` from `cli/` for the separate Windows suite. The
+Windows CI job also builds/tests the Go TUI. Existing Unix tests and runbooks
+remain separate and unchanged.
+
 ## Supported agents
 
 The packaged integrations live in `cli/bin/runbook`.

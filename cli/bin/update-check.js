@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { spawnWindows } from './windows/process.js';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { LOGO_ART_SMALL_LINES } from './branding.js';
@@ -58,7 +59,7 @@ export function detectInstallTarget(
   return {
     command: 'npm',
     args,
-    display: ['npm', ...args].map(shellQuote).join(' '),
+    display: ['npm', ...args].map(platform === 'win32' ? value => /^[-/@A-Za-z0-9._:]+$/.test(value) ? value : `"${value}"` : shellQuote).join(' '),
     prefix,
   };
 }
@@ -256,7 +257,7 @@ export async function selectUpdateAction(options = {}) {
 }
 
 export async function installLatest(options = {}) {
-  const spawnImpl = options.spawnImpl || spawn;
+  const spawnImpl = options.spawnImpl || (process.platform === 'win32' ? spawnWindows : spawn);
   const target = options.target || detectInstallTarget();
   return new Promise((resolve) => {
     const child = spawnImpl(target.command, target.args, {

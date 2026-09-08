@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -239,7 +240,9 @@ func TestUpdateProfileValuePreservesOtherSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	// Windows uses ACLs, not Unix owner/group mode bits. Keep the Unix
+	// permission assertion while exercising the profile update on Windows.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("profile mode = %o, want 600", info.Mode().Perm())
 	}
 }

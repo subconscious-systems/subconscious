@@ -6,6 +6,7 @@
  */
 
 import { spawn } from 'node:child_process';
+import { runWindows } from './windows/process.js';
 import fs from 'node:fs/promises';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
@@ -81,6 +82,10 @@ function askYesNo(question) {
 }
 
 function runInstall(command) {
+  if (process.platform === 'win32') {
+    const target = detectInstallTarget();
+    return runWindows(target.command, target.args).then(code => code === 0, () => false);
+  }
   return new Promise((resolve) => {
     const child = spawn(command, { shell: true, stdio: 'inherit' });
     child.on('error', () => resolve(false));

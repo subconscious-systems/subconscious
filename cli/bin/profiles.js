@@ -7,6 +7,7 @@
  */
 
 import { spawn, execFileSync } from 'node:child_process';
+import { windowsEditor, runWindows } from './windows/process.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -652,7 +653,7 @@ export function validateSettingValue(setting, value) {
   return null;
 }
 
-const ALLOWED_EDITORS = new Set(['vim', 'nano']);
+const ALLOWED_EDITORS = new Set(process.platform === 'win32' ? ['notepad', 'code', 'code-insiders', 'vim', 'nano'] : ['vim', 'nano']);
 
 function commandExists(bin) {
   try {
@@ -689,6 +690,12 @@ async function editProfile(profileName, requestedEditor) {
   }
 
   const profile = await ensureProfile(profileName);
+  if (process.platform === 'win32') {
+    const { command, args } = windowsEditor(requestedEditor);
+    const code = await runWindows(command, [...args, profile.path]);
+    if (code) process.exitCode = code;
+    return;
+  }
   const { cmd, args } = resolveEditor(requestedEditor);
   await new Promise((resolve, reject) => {
     const child = spawn(cmd, [...args, profile.path], { stdio: 'inherit' });
@@ -708,8 +715,8 @@ Usage:
   subc config
   subc config help
   subc -p NAME config
-  subc config edit [vim|nano]
-  subc -p NAME config edit [vim|nano]
+  subc config edit [${process.platform === 'win32' ? 'notepad|code|code-insiders|vim|nano' : 'vim|nano'}]
+  subc -p NAME config edit [${process.platform === 'win32' ? 'notepad|code|code-insiders|vim|nano' : 'vim|nano'}]
   subc config [show|path|list|create|delete]
               [--gateway-url URL] [--api-key KEY]
               [--model MODEL|UNSET]
@@ -717,7 +724,7 @@ Usage:
 
   subc config                      List every profile and its file path
   subc -p NAME config              Print that profile's path and env file
-  subc config edit                 Open the selected profile in $VISUAL, $EDITOR, vim, or nano
+  subc config edit                 Open the selected profile in ${process.platform === 'win32' ? 'VISUAL, EDITOR, or Notepad' : '$VISUAL, $EDITOR, vim, or nano'}
   subc config edit vim             Open the selected profile in vim
   subc config edit nano            Open the selected profile in nano
   subc config path                 Print the selected profile path

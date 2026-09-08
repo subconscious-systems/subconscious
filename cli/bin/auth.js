@@ -18,6 +18,7 @@
 import http from 'node:http';
 import crypto from 'node:crypto';
 import { exec } from 'node:child_process';
+import { openWindowsBrowser } from './windows/process.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -132,6 +133,12 @@ export function isLoginMissing(status) {
 // ── Browser opener ──────────────────────────────────────────────────────
 
 function openBrowser(url) {
+  if (process.platform === 'win32') {
+    void openWindowsBrowser(url).then(code => {
+      if (code) throw new Error('Browser could not be opened');
+    }).catch(() => console.log(`Please open this URL manually:\n\n  ${url}\n`));
+    return;
+  }
   const cmd =
     process.platform === 'darwin'
       ? `open "${url}"`
