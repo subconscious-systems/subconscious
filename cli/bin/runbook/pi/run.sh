@@ -7,7 +7,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${PI_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.2}"
+MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
 PI_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
 MODELS_JSON="${PI_DIR}/models.json"
 

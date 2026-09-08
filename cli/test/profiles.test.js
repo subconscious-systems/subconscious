@@ -279,7 +279,7 @@ test('profile extras can remap Claude picker slots only to catalog models', () =
   delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
   try {
     const claude = agents.resolveAgent('claude');
-    const catalog = ['subconscious/glm-5.2', 'subconscious/tim-qwen3.6-27b'];
+    const catalog = ['subconscious/glm-5.3-marathon', 'subconscious/tim-qwen3.6-27b'];
     const remapped = agents.runbookEnv(
       'sk-test',
       catalog[0],
@@ -303,7 +303,7 @@ test('profile extras can remap Claude picker slots only to catalog models', () =
       {
         name: 'picker',
         path: '/profiles/picker.env',
-        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/glm-5.3-marathon' },
+        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/glm-5.2' },
       },
       claude,
       catalog,
@@ -320,11 +320,11 @@ test('Claude picker slots stay inside the live catalog', () => {
   const previousFable = process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
   const previousCustom = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
   process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = 'subconscious/deepseek-v4-flash-marathon';
-  process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = 'subconscious/glm-5.3-marathon';
-  process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = 'subconscious/glm-5.3-marathon';
+  process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = 'subconscious/glm-5.2';
+  process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = 'subconscious/glm-5.2';
   try {
     const claude = agents.resolveAgent('claude');
-    const catalog = ['subconscious/glm-5.2', 'subconscious/tim-qwen3.6-27b'];
+    const catalog = ['subconscious/glm-5.3-marathon', 'subconscious/tim-qwen3.6-27b'];
     const env = agents.runbookEnv(
       'sk-test',
       catalog[0],

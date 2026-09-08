@@ -10,8 +10,8 @@ import (
 
 func TestActionArgsPreserveProfileAndModel(t *testing.T) {
 	item := menuItem{Command: "claude", Kind: itemAgent, Launch: true}
-	want := []string{"-p", "staging", "claude", "--model", "subconscious/glm-5.2"}
-	if got := actionArgs(item, "staging", "subconscious/glm-5.2", ""); !reflect.DeepEqual(got, want) {
+	want := []string{"-p", "staging", "claude", "--model", "subconscious/glm-5.3-marathon"}
+	if got := actionArgs(item, "staging", "subconscious/glm-5.3-marathon", ""); !reflect.DeepEqual(got, want) {
 		t.Fatalf("actionArgs() = %#v, want %#v", got, want)
 	}
 }
@@ -19,7 +19,7 @@ func TestActionArgsPreserveProfileAndModel(t *testing.T) {
 func TestActionArgsDoNotSendModelToSetupAgent(t *testing.T) {
 	item := menuItem{Command: "cursor", Kind: itemAgent, Launch: false}
 	want := []string{"-p", "default", "cursor"}
-	if got := actionArgs(item, "default", "subconscious/glm-5.2", ""); !reflect.DeepEqual(got, want) {
+	if got := actionArgs(item, "default", "subconscious/glm-5.3-marathon", ""); !reflect.DeepEqual(got, want) {
 		t.Fatalf("actionArgs() = %#v, want %#v", got, want)
 	}
 }
@@ -112,7 +112,7 @@ func TestNormalizeStateKeepsConfiguredSelectionsVisible(t *testing.T) {
 		ActiveProfile: "staging",
 		SelectedModel: "subconscious/new-model",
 		Profiles:      []profileState{{Name: "default"}},
-		Models:        []string{"subconscious/glm-5.2"},
+		Models:        []string{"subconscious/glm-5.3-marathon"},
 	})
 	if state.Profiles[0].Name != "staging" {
 		t.Fatalf("active profile not inserted: %#v", state.Profiles)
@@ -170,10 +170,10 @@ func TestDefaultModelPickerDescriptionReflectsDiscoverySource(t *testing.T) {
 func TestAvailableModelsDetailShowsCatalogInsteadOfCommand(t *testing.T) {
 	m := newModel(inputState{
 		ActiveProfile: "default",
-		SelectedModel: "subconscious/glm-5.2",
+		SelectedModel: "subconscious/glm-5.3-marathon",
 		ModelSource:   "available",
 		Models: []string{
-			"subconscious/glm-5.2",
+			"subconscious/glm-5.3-marathon",
 			"subconscious/deepseek-v4-flash-marathon",
 		},
 		Agents: []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
@@ -218,7 +218,7 @@ func TestUpdateProfileValuePreservesOtherSettings(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("GATEWAY_URL=https://old.example\nMODEL=subconscious/glm-5.2\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("GATEWAY_URL=https://old.example\nMODEL=subconscious/glm-5.3-marathon\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := updateProfileValue(path, "GATEWAY_URL", "https://new.example"); err != nil {
@@ -232,7 +232,7 @@ func TestUpdateProfileValuePreservesOtherSettings(t *testing.T) {
 	if !strings.Contains(text, "GATEWAY_URL=https://new.example\n") {
 		t.Fatalf("new gateway missing: %q", text)
 	}
-	if !strings.Contains(text, "MODEL=subconscious/glm-5.2\n") {
+	if !strings.Contains(text, "MODEL=subconscious/glm-5.3-marathon\n") {
 		t.Fatalf("other profile settings were not preserved: %q", text)
 	}
 	info, err := os.Stat(path)

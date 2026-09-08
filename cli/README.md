@@ -162,7 +162,7 @@ DeepSeek Harness context and output settings used by the packaged runbook script
 subc config                         # list every profile and its file path
 subc -p staging config create      # create a profile with default settings
 subc -p staging config              # print that path and env file
-subc -p staging config --model subconscious/glm-5.2
+subc -p staging config --model subconscious/glm-5.3-marathon
 subc -p staging config --model UNSET
 subc -p staging config --subagent-model subconscious/deepseek-v4-flash-marathon
 subc -p staging config --subagent-model UNSET
@@ -198,7 +198,7 @@ Named profiles work like AWS CLI profiles:
 subc -p staging config \
   --gateway-url https://staging.example \
   --api-key sk-staging-... \
-  --model subconscious/glm-5.2
+  --model subconscious/glm-5.3-marathon
 
 subc -p staging claude
 subc -p staging cursor install
@@ -217,7 +217,8 @@ that request fails, it falls back to the public `/v1/models` fleet list, then
 to the models packaged with the CLI:
 
 ```text
-subconscious/glm-5.2 (default)
+subconscious/glm-5.3-marathon (default)
+subconscious/glm-5.2
 subconscious/tim-qwen3.6-27b
 subconscious/deepseek-v4-flash-marathon
 ```
@@ -226,10 +227,10 @@ Select a model per run, save it in the current profile, or override it through
 the environment:
 
 ```bash
-subc codex --model subconscious/glm-5.2
+subc codex --model subconscious/glm-5.3-marathon
 subc config --model subconscious/deepseek-v4-flash-marathon
 subc config --subagent-model subconscious/tim-qwen3.6-27b
-export SUBCONSCIOUS_MODEL=subconscious/glm-5.2
+export SUBCONSCIOUS_MODEL=subconscious/glm-5.3-marathon
 ```
 
 Every launch and install fetches the same live catalog without caching. Codex,
