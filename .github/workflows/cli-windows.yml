@@ -1,0 +1,65 @@
+name: CLI Windows
+
+on:
+  push:
+    paths: ['cli/**', 'agents/registry.json', 'publish_package.sh', '.github/workflows/cli-windows.yml']
+  pull_request:
+    paths: ['cli/**', 'agents/registry.json', 'publish_package.sh', '.github/workflows/cli-windows.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  native-windows:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    defaults:
+      run:
+        working-directory: cli
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/tui/go.mod
+          cache-dependency-path: cli/tui/go.sum
+      - run: npm run test:windows
+      - run: npm run test:tui
+      - run: npm run build:tui:host
+      - run: node bin/cli.js --version
+      - run: node bin/cli.js help
+      - name: Pack all platform binaries
+        if: matrix.node == 22
+        run: npm pack --pack-destination ..
+      - uses: actions/upload-artifact@v4
+        if: matrix.node == 22
+        with:
+          name: cli-preview-package
+          path: subconscious-cli-*.tgz
+          if-no-files-found: error
+
+  unix-regression:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/tui/go.mod
+          cache-dependency-path: cli/tui/go.sum
+      - run: npm test
+      - run: npm run test:tui
+      - run: npm run build:tui:host

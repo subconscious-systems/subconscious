@@ -61,7 +61,7 @@ test('detectInstallCommand picks the package manager from the install path', () 
   );
   assert.equal(
     detectInstallCommand('/usr/local/lib/node_modules/subconscious-cli/bin/upgrade.js'),
-    `npm install -g ${PACKAGE_NAME}@latest`,
+    `npm install -g --prefix /usr/local ${PACKAGE_NAME}@latest`,
   );
 });
 
@@ -158,6 +158,26 @@ test('installLatest skips npm when this version is already newest', async () => 
     assert.match(logs.join('\n'), /Already up to date/);
   } finally {
     console.log = orig;
+  }
+});
+
+test('installLatest rejects a successful command when this installation stays old', async () => {
+  const errors = [];
+  const orig = console.error;
+  console.error = (message = '') => errors.push(String(message));
+  try {
+    const ok = await installLatest({
+      currentVersion: '4.0.10',
+      fetchLatest: async () => '4.0.16',
+      install: async () => true,
+      readVersion: async () => '4.0.10',
+      command: 'npm install -g --prefix /expected subconscious-cli@latest',
+    });
+    assert.equal(ok, false);
+    assert.match(errors.join('\n'), /still 4\.0\.10/);
+    assert.match(errors.join('\n'), /--prefix \/expected/);
+  } finally {
+    console.error = orig;
   }
 });
 

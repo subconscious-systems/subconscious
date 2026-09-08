@@ -19,6 +19,7 @@ import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
+import { runWindowsAgent } from './windows/agents.js';
 import { getApiKey } from './auth.js';
 import {
   isUnsetSetting,
@@ -170,7 +171,7 @@ const AGENT_HELP = {
       'Launches the native Subconscious coding agent with the selected profile gateway, credential, and model.',
     options: [
       ['help', 'Show this help'],
-      ['install', 'Install the latest precompiled Linux or macOS release'],
+      ['install', process.platform === 'win32' ? 'Install a verified Windows release, when published upstream' : 'Install the latest precompiled Linux or macOS release'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['ARGS...', 'Pass arguments directly to Subconscious Code'],
     ],
@@ -974,6 +975,14 @@ export async function runAgent(agent, argv, options = {}) {
   if (isAgentHelpRequest(argv)) {
     printAgentHelp(agent, profile);
     return 0;
+  }
+
+  if (process.platform === 'win32') {
+    return runWindowsAgent(agent, argv, {
+      profile, parseAgentAction, extractModel, requireApiKey,
+      resolvedModelsForLaunch, selectLaunchModel, runbookEnv,
+      minimumClaudeVersion: MIN_CLAUDE_CODE_VERSION, parseClaudeVersion, claudeVersionNeedsUpgrade,
+    });
   }
 
   const parsed = parseAgentAction(agent, argv);

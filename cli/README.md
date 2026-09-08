@@ -35,7 +35,7 @@ subc <agent> uninstall
 Running `subc` with no arguments in a terminal opens the native Go TUI. Use
 the arrow keys and Enter to launch agents or manage the active profile, `p` to
 switch profiles, and `q` to quit. The menu includes dedicated **Usage**,
-**Create profile**, **Set default model**, **Set subagent model**,
+**Create profile**, **Coding sessions**, **Set default model**, **Set subagent model**,
 **Update base URL**, and **Update platform URL** actions.
 Model and URL changes are validated and saved to the active profile without
 leaving the TUI.
@@ -76,6 +76,75 @@ subc pi
 subc dsh
 ```
 
+## Native Windows support
+
+Windows has its own implementation in `cli/bin/windows/`, selected only when
+Node runs on Windows. macOS/Linux continue to use the existing, unchanged shell
+runbooks. WSL continues to use the Linux implementation.
+
+Use Node.js 22 or 24 and Windows PowerShell 5.1+ (included with Windows), from either
+PowerShell or Command Prompt. The Windows CLI integrations do not require Bash,
+`jq`, `curl`, or WSL. The agents themselves must support your Windows version;
+their own dependencies still apply.
+
+```powershell
+npm.cmd install -g subconscious-cli@windows
+subc.cmd login
+subc.cmd claude
+subc codex
+subc opencode
+subc dsh
+subc cursor install
+subc copilot install
+subc pi
+subc config edit notepad
+```
+
+This is an opt-in Windows preview; `@latest` remains the stable release. Update
+the preview with `npm.cmd install -g subconscious-cli@windows`.
+
+If PowerShell's execution policy blocks npm-generated `.ps1` entry points, use
+`npm.cmd` and `subc.cmd` or run the same commands in Command Prompt. No policy
+change is required. Pi must already be installed; other terminal agents offer
+their Windows installer when missing in an interactive terminal.
+
+Native executables and standard npm `.cmd` shims are supported. The launcher
+invokes the underlying executable or Node entry point directly, preserving
+JSON, quotes, Unicode, and multiline arguments. It checks the user's `.local\bin`,
+npm globals, WinGet links, and the system-profile `.local\bin` location reported
+by some elevated Claude installations. It does not change your global PATH.
+Custom batch wrappers are rejected with guidance to use a native executable or
+standard npm package.
+
+Login, saved profiles, model discovery, session browsing/resume, self-update,
+and the native TUI use Windows paths and processes. Profile editing defaults to
+Notepad, honors `VISUAL`/`EDITOR`, and supports `code`/`code-insiders` with `--wait`.
+The existing profile location remains `%USERPROFILE%\.subconscious`.
+
+Cursor, Copilot, Codex, and Pi setup use native JSON merges and Node hooks. Other
+providers and hooks are preserved; malformed configuration is left unchanged.
+Hook credentials are stored in `subconscious-windows.json` within the agent's
+user directory; treat that file as a secret. Copilot's model provider still uses
+VS Code's secret store and prompts for its key. Its configuration goes under
+`%APPDATA%\Code\User` (or Code - Insiders/VSCodium). Rerun install after moving
+your Node installation, because hooks record the absolute Node executable path.
+
+To install the native x64 `sc.exe` preview:
+
+```powershell
+$env:SC_CODE_VERSION = '0.1.4-windows.0'
+subc.cmd sc install
+subc.cmd sc
+```
+
+The installer requires the selected release's Windows asset and SHA-256
+checksum; it reports a clear error if unavailable and never downloads a Unix
+binary as a fallback. Windows ARM64 binaries are not published in this preview.
+
+Run `npm run test:windows` from `cli/` for the separate Windows suite. The
+Windows CI job also builds/tests the Go TUI. Existing Unix tests and runbooks
+remain separate and unchanged.
+
 ## Supported agents
 
 The packaged integrations live in `cli/bin/runbook`.
@@ -90,6 +159,35 @@ The packaged integrations live in `cli/bin/runbook`.
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
+
+## Sessions and cross-harness handoff
+
+Run `subc` and choose **Coding sessions**, or list the same local catalog from
+the shell:
+
+```bash
+subc sessions
+subc sessions resume claude:SESSION_ID
+subc sessions resume claude:SESSION_ID --harness codex
+subc sessions resume codex:SESSION_ID --harness opencode
+```
+
+The catalog discovers recent sessions written locally by Claude Code, Codex,
+OpenCode, Pi, and Subconscious Code. It shows each session's originating
+harness, title, last activity, project directory, and model when the harness
+records one. Selecting the original harness uses its native resume mechanism.
+
+Selecting Claude Code, Codex, OpenCode, or Pi as a different destination starts
+a new session in the original project directory with a portable handoff. The
+handoff is limited to the newest 24 user/assistant text messages and 24,000
+characters. Tool payloads, tool results, system prompts, and hidden reasoning
+are not copied. Source transcripts remain owned by their original harness and
+are never rewritten.
+
+Cursor and GitHub Copilot sessions are not listed because their IDE-owned
+conversation stores do not expose a stable local resume interface. A session
+whose local transcript is missing remains available for native resume but does
+not offer cross-harness destinations.
 
 If Subconscious Code, Claude Code, Codex, OpenCode, or DeepSeek Harness is missing, an interactive terminal offers
 to install it before launching. Pi refreshes its Subconscious provider on every
