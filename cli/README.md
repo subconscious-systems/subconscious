@@ -88,7 +88,7 @@ PowerShell or Command Prompt. The Windows CLI integrations do not require Bash,
 their own dependencies still apply.
 
 ```powershell
-npm.cmd install -g subconscious-cli@windows
+npm.cmd install -g subconscious-cli@latest
 subc.cmd login
 subc.cmd claude
 subc codex
@@ -100,8 +100,8 @@ subc pi
 subc config edit notepad
 ```
 
-This is an opt-in Windows preview; `@latest` remains the stable release. Update
-the preview with `npm.cmd install -g subconscious-cli@windows`.
+Native Windows support is included in the stable CLI starting with 4.1.0.
+Update with `npm.cmd install -g subconscious-cli@latest` or `subc.cmd upgrade --latest`.
 
 If PowerShell's execution policy blocks npm-generated `.ps1` entry points, use
 `npm.cmd` and `subc.cmd` or run the same commands in Command Prompt. No policy
@@ -129,17 +129,18 @@ VS Code's secret store and prompts for its key. Its configuration goes under
 `%APPDATA%\Code\User` (or Code - Insiders/VSCodium). Rerun install after moving
 your Node installation, because hooks record the absolute Node executable path.
 
-To install the native x64 `sc.exe` preview:
+To install the native x64 `sc.exe` (stable releases starting with 0.1.4), clear
+any preview version pin from the current PowerShell session:
 
 ```powershell
-$env:SC_CODE_VERSION = '0.1.4-windows.0'
+Remove-Item Env:SC_CODE_VERSION -ErrorAction SilentlyContinue
 subc.cmd sc install
 subc.cmd sc
 ```
 
 The installer requires the selected release's Windows asset and SHA-256
 checksum; it reports a clear error if unavailable and never downloads a Unix
-binary as a fallback. Windows ARM64 binaries are not published in this preview.
+binary as a fallback. Windows ARM64 binaries are not currently published.
 
 Run `npm run test:windows` from `cli/` for the separate Windows suite. The
 Windows CI job also builds/tests the Go TUI. Existing Unix tests and runbooks
