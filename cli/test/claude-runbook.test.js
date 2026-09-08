@@ -70,29 +70,29 @@ test('Claude launch picker stays inside SUBCONSCIOUS_MODELS', async () => {
       PATH: `${pickerDir}:${process.env.PATH}`,
       GATEWAY_URL: 'https://gateway.example',
       API_KEY: 'sk-test',
-      MODEL: 'subconscious/glm-5.2',
-      SUBCONSCIOUS_MODELS: 'subconscious/glm-5.2\nsubconscious/tim-qwen3.6-27b',
+      MODEL: 'subconscious/glm-5.3-marathon',
+      SUBCONSCIOUS_MODELS: 'subconscious/glm-5.3-marathon\nsubconscious/tim-qwen3.6-27b',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'subconscious/deepseek-v4-flash-marathon',
-      ANTHROPIC_DEFAULT_FABLE_MODEL: 'subconscious/glm-5.3-marathon',
-      ANTHROPIC_CUSTOM_MODEL_OPTION: 'subconscious/glm-5.3-marathon',
+      ANTHROPIC_DEFAULT_FABLE_MODEL: 'subconscious/glm-5.2',
+      ANTHROPIC_CUSTOM_MODEL_OPTION: 'subconscious/glm-5.2',
       SUBC_ENV_FILE: os.devNull,
     },
   });
 
   assert.equal(result.status, 0, result.stderr);
   const [opus, sonnet, haiku, fable, custom, settingsJson] = result.stdout.split('\n');
-  assert.equal(opus, 'subconscious/glm-5.2');
+  assert.equal(opus, 'subconscious/glm-5.3-marathon');
   assert.equal(sonnet, 'subconscious/tim-qwen3.6-27b');
   assert.equal(haiku, 'subconscious/tim-qwen3.6-27b');
   assert.equal(fable, 'subconscious/tim-qwen3.6-27b');
   assert.equal(custom, '');
   const settings = JSON.parse(settingsJson);
   assert.deepEqual(settings.availableModels, [
-    'subconscious/glm-5.2',
+    'subconscious/glm-5.3-marathon',
     'subconscious/tim-qwen3.6-27b',
   ]);
   assert.equal(settings.modelPicker.replaceBuiltInOptions, true);
-  assert.equal(settingsJson.includes('glm-5.3-marathon'), false);
+  assert.equal(settingsJson.includes('glm-5.2'), false);
   assert.equal(settingsJson.includes('deepseek-v4-flash-marathon'), false);
 });
 

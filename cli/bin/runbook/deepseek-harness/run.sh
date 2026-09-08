@@ -6,11 +6,12 @@ set -euo pipefail
 
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${DEEPSEEK_HARNESS_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.2}"
+MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
 CONTEXT_WINDOW="${DEEPSEEK_HARNESS_CONTEXT_WINDOW:-5000000}"
 MAX_TOKENS="${DEEPSEEK_HARNESS_MAX_TOKENS:-65536}"
 
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.2
+DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
+subconscious/glm-5.2
 subconscious/tim-qwen3.6-27b
 subconscious/deepseek-v4-flash-marathon"
 

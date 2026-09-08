@@ -35,9 +35,12 @@ const LEGACY_CONFIG_FILE = CONFIG_OVERRIDE
 // Defaults to the platform host. Developers set SUBCONSCIOUS_URL for local dev.
 export const DEFAULT_PLATFORM_URL = 'https://platform.subconscious.dev';
 
-export function getPlatformUrl() {
-  const raw = process.env.SUBCONSCIOUS_URL?.trim() || DEFAULT_PLATFORM_URL;
-  return raw.replace(/\/$/, '');
+export function getPlatformUrl(profile) {
+  const fromEnv = process.env.SUBCONSCIOUS_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, '');
+  const fromProfile = profile?.values?.PLATFORM_URL?.trim();
+  if (fromProfile) return fromProfile.replace(/\/$/, '');
+  return DEFAULT_PLATFORM_URL;
 }
 
 // Login callback CORS. After the marketing/platform split, /cli/auth lives on
@@ -330,7 +333,7 @@ export async function loginCommand(_argv = [], options = {}) {
   );
   console.log();
 
-  const platformUrl = getPlatformUrl();
+  const platformUrl = getPlatformUrl(options.profile);
   const loginStatus = await probeLoginPage(platformUrl);
   if (isLoginMissing(loginStatus)) {
     printLoginUpgradeWarning();
@@ -466,7 +469,7 @@ export async function whoamiCommand(_argv = [], options = {}) {
 
   // Validate the key against the server; falls back to offline display if unreachable
   try {
-    const res = await fetch(`${getPlatformUrl()}/api/cli/whoami`, {
+    const res = await fetch(`${getPlatformUrl(options.profile)}/api/cli/whoami`, {
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(5000),
     });

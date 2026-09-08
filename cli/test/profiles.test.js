@@ -279,7 +279,7 @@ test('profile extras can remap Claude picker slots only to catalog models', () =
   delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
   try {
     const claude = agents.resolveAgent('claude');
-    const catalog = ['subconscious/glm-5.2', 'subconscious/tim-qwen3.6-27b'];
+    const catalog = ['subconscious/glm-5.3-marathon', 'subconscious/tim-qwen3.6-27b'];
     const remapped = agents.runbookEnv(
       'sk-test',
       catalog[0],
@@ -303,7 +303,7 @@ test('profile extras can remap Claude picker slots only to catalog models', () =
       {
         name: 'picker',
         path: '/profiles/picker.env',
-        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/glm-5.3-marathon' },
+        values: { ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/glm-5.2' },
       },
       claude,
       catalog,
@@ -320,11 +320,11 @@ test('Claude picker slots stay inside the live catalog', () => {
   const previousFable = process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
   const previousCustom = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
   process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = 'subconscious/deepseek-v4-flash-marathon';
-  process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = 'subconscious/glm-5.3-marathon';
-  process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = 'subconscious/glm-5.3-marathon';
+  process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = 'subconscious/glm-5.2';
+  process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = 'subconscious/glm-5.2';
   try {
     const claude = agents.resolveAgent('claude');
-    const catalog = ['subconscious/glm-5.2', 'subconscious/tim-qwen3.6-27b'];
+    const catalog = ['subconscious/glm-5.3-marathon', 'subconscious/tim-qwen3.6-27b'];
     const env = agents.runbookEnv(
       'sk-test',
       catalog[0],
@@ -529,4 +529,35 @@ test('managed agent binaries take precedence over older PATH installations', () 
     [cargo, managed, '/usr/bin'].join(path.delimiter),
   ).split(path.delimiter);
   assert.deepEqual(augmented, [managed, cargo, '/usr/bin']);
+});
+
+test('validateOriginUrl normalizes trailing slashes and rejects invalid URLs', () => {
+  assert.equal(
+    profiles.validateOriginUrl('https://platform.example/'),
+    'https://platform.example',
+  );
+  assert.throws(() => profiles.validateOriginUrl('not-a-url'), /valid http/);
+  assert.throws(
+    () => profiles.validateOriginUrl('https://user:pass@platform.example'),
+    /embedded credentials/,
+  );
+});
+
+test('updatePlatformUrlCommand saves PLATFORM_URL to the active profile', async () => {
+  await profiles.ensureProfile('platform-url', 'secret');
+  await profiles.updatePlatformUrlCommand(['https://platform-dev.example/'], {
+    profileName: 'platform-url',
+  });
+  const profile = await profiles.loadProfile('platform-url');
+  assert.equal(profile.values.PLATFORM_URL, 'https://platform-dev.example');
+});
+
+test('config accepts --platform-url updates', async () => {
+  await profiles.configCommand(
+    ['--platform-url', 'https://platform-staging.example'],
+    'platform-config',
+    { profileExplicit: true },
+  );
+  const profile = await profiles.loadProfile('platform-config');
+  assert.equal(profile.values.PLATFORM_URL, 'https://platform-staging.example');
 });

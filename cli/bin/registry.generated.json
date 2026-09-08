@@ -1,8 +1,9 @@
 {
   "_generated": "Source of truth: agents/registry.json. Do not edit by hand.",
   "defaults": {
-    "model": "subconscious/glm-5.2",
+    "model": "subconscious/glm-5.3-marathon",
     "models": [
+      "subconscious/glm-5.3-marathon",
       "subconscious/glm-5.2",
       "subconscious/tim-qwen3.6-27b",
       "subconscious/deepseek-v4-flash-marathon"
@@ -101,8 +102,8 @@
         "ANTHROPIC_AUTH_TOKEN": "{apiKey}",
         "ANTHROPIC_MODEL": "{model}",
         "ANTHROPIC_SMALL_FAST_MODEL": "{model}",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "subconscious/glm-5.2",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "subconscious/glm-5.2",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "subconscious/glm-5.3-marathon",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME": "subconscious/glm-5.3-marathon",
         "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION": "Subconscious default model",
         "ANTHROPIC_DEFAULT_SONNET_MODEL": "subconscious/tim-qwen3.6-27b",
         "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME": "subconscious/tim-qwen3.6-27b",
@@ -220,6 +221,14 @@
                   }
                 },
                 "models": {
+                  "subconscious/glm-5.3-marathon": {
+                    "name": "subconscious/glm-5.3-marathon",
+                    "tools": true,
+                    "limit": {
+                      "context": 5000000,
+                      "output": 65536
+                    }
+                  },
                   "subconscious/glm-5.2": {
                     "name": "subconscious/glm-5.2",
                     "tools": true,

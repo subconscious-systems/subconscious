@@ -15,9 +15,9 @@ function runInstall(home) {
         HOME: home,
         GATEWAY_URL: 'https://gateway.example',
         API_KEY: 'test-cursor-key',
-        MODEL: 'subconscious/glm-5.2',
+        MODEL: 'subconscious/glm-5.3-marathon',
         SUBCONSCIOUS_MODELS: [
-          'subconscious/glm-5.2',
+          'subconscious/glm-5.3-marathon',
           'subconscious/tim-qwen3.6-27b',
         ].join('\n'),
         SUBC_ENV_FILE: '/dev/null',

@@ -34,7 +34,7 @@ test('Codex catalog advertises the configured priority service tier', async () =
       PATH: `${testDir}:${process.env.PATH}`,
       GATEWAY_URL: 'https://gateway.example',
       API_KEY: 'sk-test',
-      MODEL: 'subconscious/glm-5.2',
+      MODEL: 'subconscious/glm-5.3-marathon',
       SUBC_ENV_FILE: os.devNull,
       CODEX_DIR: path.join(testDir, '.codex'),
       CAPTURED_CATALOG: capturedCatalog,
