@@ -20,9 +20,9 @@
 #
 #   export ANTHROPIC_BASE_URL=https://your-gateway.example
 #   export ANTHROPIC_AUTH_TOKEN=sk-gw-...
-#   export ANTHROPIC_MODEL=subconscious/glm-5.2
-#   export ANTHROPIC_SMALL_FAST_MODEL=subconscious/glm-5.2
-#   export CLAUDE_CODE_SUBAGENT_MODEL=subconscious/glm-5.2
+#   export ANTHROPIC_MODEL=subconscious/glm-5.3-marathon
+#   export ANTHROPIC_SMALL_FAST_MODEL=subconscious/glm-5.3-marathon
+#   export CLAUDE_CODE_SUBAGENT_MODEL=subconscious/glm-5.3-marathon
 #   export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS=4
 #   export CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH=1
 #   export CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000
@@ -57,7 +57,7 @@ if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
 CLAUDE_DIR="${HOME}/.claude"
 ENV_FILE="${CLAUDE_DIR}/subconscious-gateway.env"
-DEFAULT_MODEL="subconscious/glm-5.2"
+DEFAULT_MODEL="subconscious/glm-5.3-marathon"
 DEFAULT_COMPACT_WINDOW="1000000"
 DEFAULT_MAX_CONTEXT_TOKENS="3000000"
 DEFAULT_MAX_CONCURRENT_SUBAGENTS="4"

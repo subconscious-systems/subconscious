@@ -37,12 +37,14 @@ import {
   resolvedModelSetting,
   RUNBOOK_DEFAULTS,
   SUPPORTED_MODELS as PACKAGED_MODELS,
+  updatePlatformUrlCommand,
   updateUrlCommand,
   validateProfileName,
 } from './profiles.js';
 import { resolveModelCatalog } from './models.js';
 import { showUpdateNotice } from './update-check.js';
 import { runTui } from './tui.js';
+import { printUsageHelp, usageCommand } from './usage.js';
 
 function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
@@ -63,8 +65,10 @@ function printHelp() {
     ${c.cyan}login${c.reset}        Authenticate and save your API key
     ${c.cyan}update-key${c.reset}   Replace the selected profile's API key
     ${c.cyan}update-url${c.reset}   Update the active profile's gateway URL automatically
+    ${c.cyan}update-platform-url${c.reset}  Update the active profile's platform URL
     ${c.cyan}logout${c.reset}       Remove saved credentials
     ${c.cyan}whoami${c.reset}       Show current authentication status
+    ${c.cyan}usage${c.reset}        Show billing, quota, and model usage
     ${c.cyan}upgrade${c.reset}      Upgrade this CLI to the latest version
 
   ${c.bold}Profiles${c.reset}
@@ -88,6 +92,8 @@ ${agents}
     ${c.dim}$${c.reset} subc config help
     ${c.dim}$${c.reset} subc -p staging config
     ${c.dim}$${c.reset} subc config edit vim
+    ${c.dim}$${c.reset} subc usage
+    ${c.dim}$${c.reset} subc usage --json
     ${c.dim}$${c.reset} subc claude
     ${c.dim}$${c.reset} subc claude help
     ${c.dim}$${c.reset} subc cursor install
@@ -149,6 +155,22 @@ Usage:
   subc update-url help
 
 Update the active profile's gateway URL.
+`,
+  'update-platform-url': `
+Usage:
+  subc update-platform-url <platform-url>
+  subc update-platform-url help
+
+Update the active profile's platform URL for login, whoami, and usage.
+`,
+  usage: `
+Usage:
+  subc usage
+  subc -p NAME usage
+  subc usage --json
+  subc usage help
+
+Show billing mode, daily token allowance, credit balance, and per-model usage.
 `,
   models: `
 Usage:
@@ -348,6 +370,25 @@ async function main() {
       return;
     }
     await updateUrlCommand(args.slice(1), { profileName });
+    return;
+  }
+
+  if (command === 'update-platform-url') {
+    if (isHelpArg(args[1])) {
+      console.log(COMMAND_HELP['update-platform-url']);
+      return;
+    }
+    await updatePlatformUrlCommand(args.slice(1), { profileName });
+    return;
+  }
+
+  if (command === 'usage') {
+    if (isHelpArg(args[1])) {
+      printUsageHelp();
+      return;
+    }
+    const profile = await loadProfile(profileName);
+    await usageCommand(args.slice(1), { profile, profileName });
     return;
   }
 

@@ -76,6 +76,12 @@ const SETTINGS = {
     type: 'url',
     required: true,
   },
+  PLATFORM_URL: {
+    key: 'PLATFORM_URL',
+    label: 'Platform URL',
+    description: 'Subconscious platform origin for login, whoami, and usage.',
+    type: 'url',
+  },
   API_KEY: {
     key: 'API_KEY',
     label: 'Shared API key',
@@ -711,7 +717,7 @@ Usage:
   subc config edit [vim|nano]
   subc -p NAME config edit [vim|nano]
   subc config [show|path|list|create|delete]
-              [--gateway-url URL] [--api-key KEY]
+              [--gateway-url URL] [--platform-url URL] [--api-key KEY]
               [--model MODEL|UNSET]
               [--subagent-model MODEL|UNSET]
 
@@ -757,6 +763,7 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
       action = arg === 'interactive' ? 'edit' : arg;
     } else if (
       arg === '--gateway-url' ||
+      arg === '--platform-url' ||
       arg === '--api-key' ||
       arg === '--model' ||
       arg === '--subagent-model'
@@ -765,6 +772,7 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
       if (!value) throw new Error(`${arg} requires a value`);
       const key = {
         '--gateway-url': 'GATEWAY_URL',
+        '--platform-url': 'PLATFORM_URL',
         '--api-key': 'API_KEY',
         '--model': 'MODEL',
         '--subagent-model': 'CLAUDE_CODE_SUBAGENT_MODEL',
@@ -784,7 +792,7 @@ export async function configCommand(argv, profileName = DEFAULT_PROFILE, options
   if (action === 'edit') {
     if (Object.keys(updates).length) {
       throw new Error(
-        'config edit cannot be combined with --gateway-url, --api-key, --model, or --subagent-model',
+        'config edit cannot be combined with --gateway-url, --platform-url, --api-key, --model, or --subagent-model',
       );
     }
     await editProfile(profileName, editor);
@@ -855,27 +863,35 @@ export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
   console.log();
 }
 
+export function validateOriginUrl(rawUrl, label = 'URL') {
+  const normalized = String(rawUrl ?? '').trim().replace(/\/+$/, '');
+  if (!normalized) {
+    throw new Error(`${label} cannot be blank`);
+  }
+  let parsed;
+  try {
+    parsed = new URL(normalized);
+  } catch {
+    throw new Error(`${label} must be a valid http:// or https:// URL`);
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
+    throw new Error(`${label} must be a valid http:// or https:// URL`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error(`${label} cannot contain embedded credentials`);
+  }
+  if (parsed.search || parsed.hash) {
+    throw new Error(`${label} cannot contain a query string or fragment`);
+  }
+  return normalized;
+}
+
 export async function updateUrlCommand(argv = [], options = {}) {
   if (argv.length !== 1 || !argv[0]?.trim()) {
     throw new Error('Usage: subc update-url <gateway-url>');
   }
 
-  const gatewayUrl = argv[0].trim().replace(/\/+$/, '');
-  let parsed;
-  try {
-    parsed = new URL(gatewayUrl);
-  } catch {
-    throw new Error('Gateway URL must be a valid http:// or https:// URL');
-  }
-  if (!['http:', 'https:'].includes(parsed.protocol) || !parsed.hostname) {
-    throw new Error('Gateway URL must be a valid http:// or https:// URL');
-  }
-  if (parsed.username || parsed.password) {
-    throw new Error('Gateway URL cannot contain embedded credentials');
-  }
-  if (parsed.search || parsed.hash) {
-    throw new Error('Gateway URL cannot contain a query string or fragment');
-  }
+  const gatewayUrl = validateOriginUrl(argv[0], 'Gateway URL');
 
   const profileName = options.profileName || DEFAULT_PROFILE;
   const profile = await updateProfile(profileName, { GATEWAY_URL: gatewayUrl });
@@ -893,6 +909,27 @@ export async function updateUrlCommand(argv = [], options = {}) {
   if (claudeOverride) {
     console.log(
       `  ${c.yellow}CLAUDE_GATEWAY_URL is set, so Claude Code will continue using ${claudeOverride}.${c.reset}`,
+    );
+  }
+  console.log();
+}
+
+export async function updatePlatformUrlCommand(argv = [], options = {}) {
+  if (argv.length !== 1 || !argv[0]?.trim()) {
+    throw new Error('Usage: subc update-platform-url <platform-url>');
+  }
+
+  const platformUrl = validateOriginUrl(argv[0], 'Platform URL');
+
+  const profileName = options.profileName || DEFAULT_PROFILE;
+  const profile = await updateProfile(profileName, { PLATFORM_URL: platformUrl });
+
+  console.log(`\n  ${c.green}${c.bold}✓ Platform URL updated.${c.reset}`);
+  console.log(`  ${c.dim}Updated profile automatically: ${profile.path}${c.reset}`);
+  console.log(`  ${c.dim}URL:     ${platformUrl}${c.reset}`);
+  if (process.env.SUBCONSCIOUS_URL?.trim()) {
+    console.log(
+      `\n  ${c.yellow}SUBCONSCIOUS_URL is set and will override this saved URL.${c.reset}`,
     );
   }
   console.log();

@@ -21,7 +21,7 @@
 #         "apiKey": "sk-gw-...",
 #         "headers": { "x-subconscious-client": "pi" },
 #         "models": [{
-#           "id": "subconscious/glm-5.2",
+#           "id": "subconscious/glm-5.3-marathon",
 #           "contextWindow": 5000000,
 #           "maxTokens": 65536,
 #           "compat": {
@@ -57,7 +57,7 @@ if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 COMMAND="install"
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${PI_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.2}"
+MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
 CONTEXT_WINDOW="${PI_CONTEXT_WINDOW:-5000000}"
 MAX_TOKENS="${PI_MAX_TOKENS:-65536}"
 
@@ -114,7 +114,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.2
+DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
+subconscious/glm-5.2
 subconscious/tim-qwen3.6-27b
 subconscious/deepseek-v4-flash-marathon"
 SUPPORTED_MODELS=()

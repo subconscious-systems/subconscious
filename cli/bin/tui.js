@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { agentList } from './agents.js';
-import { getApiKey } from './auth.js';
+import { DEFAULT_PLATFORM_URL, getApiKey, getPlatformUrl } from './auth.js';
 import { resolveModelCatalog } from './models.js';
 import {
   DEFAULT_PROFILE,
@@ -86,6 +86,10 @@ function gatewayFor(profile) {
   ).replace(/\/+$/, '');
 }
 
+function platformFor(profile) {
+  return getPlatformUrl(profile);
+}
+
 async function packageVersion() {
   const pkg = JSON.parse(
     await fs.readFile(new URL('../package.json', import.meta.url), 'utf-8'),
@@ -116,6 +120,7 @@ export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}
   const auth = await getApiKey(activeProfile);
   const requestedModel = selectedModelFor(activeProfile);
   const gatewayUrl = gatewayFor(activeProfile);
+  const platformUrl = platformFor(activeProfile);
   const catalog = await resolveModelCatalog({
     baseUrl: gatewayUrl,
     apiKey: auth?.key,
@@ -137,6 +142,10 @@ export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}
       activeProfile.values.GATEWAY_URL?.trim().replace(/\/+$/, '') ||
       RUNBOOK_DEFAULTS.GATEWAY_URL,
     gatewayOverridden: Boolean(process.env.SUBCONSCIOUS_BASE_URL?.trim()),
+    platformUrl,
+    savedPlatformUrl:
+      activeProfile.values.PLATFORM_URL?.trim().replace(/\/+$/, '') || DEFAULT_PLATFORM_URL,
+    platformOverridden: Boolean(process.env.SUBCONSCIOUS_URL?.trim()),
     modelError: catalog.error?.message || '',
     modelSource: catalog.source,
     agents: agentList().map((agent) => ({

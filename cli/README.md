@@ -34,8 +34,9 @@ subc <agent> uninstall
 
 Running `subc` with no arguments in a terminal opens the native Go TUI. Use
 the arrow keys and Enter to launch agents or manage the active profile, `p` to
-switch profiles, and `q` to quit. The menu includes dedicated **Create profile**,
-**Set default model**, **Set subagent model**, and **Update base URL** actions.
+switch profiles, and `q` to quit. The menu includes dedicated **Usage**,
+**Create profile**, **Set default model**, **Set subagent model**,
+**Update base URL**, and **Update platform URL** actions.
 Model and URL changes are validated and saved to the active profile without
 leaving the TUI.
 `subc help` and `subc --help` continue to print script-friendly command help.
@@ -161,7 +162,7 @@ DeepSeek Harness context and output settings used by the packaged runbook script
 subc config                         # list every profile and its file path
 subc -p staging config create      # create a profile with default settings
 subc -p staging config              # print that path and env file
-subc -p staging config --model subconscious/glm-5.2
+subc -p staging config --model subconscious/glm-5.3-marathon
 subc -p staging config --model UNSET
 subc -p staging config --subagent-model subconscious/deepseek-v4-flash-marathon
 subc -p staging config --subagent-model UNSET
@@ -197,7 +198,7 @@ Named profiles work like AWS CLI profiles:
 subc -p staging config \
   --gateway-url https://staging.example \
   --api-key sk-staging-... \
-  --model subconscious/glm-5.2
+  --model subconscious/glm-5.3-marathon
 
 subc -p staging claude
 subc -p staging cursor install
@@ -216,7 +217,8 @@ that request fails, it falls back to the public `/v1/models` fleet list, then
 to the models packaged with the CLI:
 
 ```text
-subconscious/glm-5.2 (default)
+subconscious/glm-5.3-marathon (default)
+subconscious/glm-5.2
 subconscious/tim-qwen3.6-27b
 subconscious/deepseek-v4-flash-marathon
 ```
@@ -225,10 +227,10 @@ Select a model per run, save it in the current profile, or override it through
 the environment:
 
 ```bash
-subc codex --model subconscious/glm-5.2
+subc codex --model subconscious/glm-5.3-marathon
 subc config --model subconscious/deepseek-v4-flash-marathon
 subc config --subagent-model subconscious/tim-qwen3.6-27b
-export SUBCONSCIOUS_MODEL=subconscious/glm-5.2
+export SUBCONSCIOUS_MODEL=subconscious/glm-5.3-marathon
 ```
 
 Every launch and install fetches the same live catalog without caching. Codex,
@@ -275,6 +277,9 @@ also maintains `~/.subconscious/config.json`.
 subc login
 subc update-key sk-new-key-...
 subc update-url https://api.subconscious.dev
+subc update-platform-url https://platform.subconscious.dev
+subc usage
+subc usage --json
 subc whoami
 subc logout
 ```
@@ -304,6 +309,21 @@ updated automatically as well.
 
 `SUBCONSCIOUS_BASE_URL` continues to take precedence when set. A configured
 `CLAUDE_GATEWAY_URL` remains a Claude-specific override.
+
+`subc update-platform-url <platform-url>` validates the URL and saves
+`PLATFORM_URL` in the active profile. Login, `whoami`, and `usage` call this
+host. Production defaults to `https://platform.subconscious.dev`:
+
+```bash
+subc update-platform-url https://platform.subconscious.dev
+subc config --platform-url http://localhost:3000
+```
+
+`SUBCONSCIOUS_URL` overrides the saved profile value for local development.
+
+`subc usage` fetches billing mode, daily token allowance, credit balance,
+overage, and per-model consumption from `GET /api/v1/usage` on the resolved
+platform host. Pass `--json` for machine-readable output.
 
 `SUBCONSCIOUS_API_KEY` takes precedence over profile and saved config keys,
 which is useful for CI and temporary sessions. `subc logout` clears the
