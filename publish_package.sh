@@ -48,6 +48,11 @@ esac
 
 PKG_PATH="$SCRIPT_DIR/$PKG_DIR"
 VERSION_FILE="$PKG_DIR/package.json"
+DIST_TAG="${SUBCONSCIOUS_NPM_TAG:-latest}"
+if [[ ! "$DIST_TAG" =~ ^[a-z][a-z0-9-]*$ ]]; then
+  fail "Invalid npm dist-tag: $DIST_TAG"
+  exit 1
+fi
 
 if [ ! -d "$PKG_PATH" ]; then
   fail "Directory $PKG_DIR not found at $PKG_PATH"
@@ -123,6 +128,10 @@ fi
 header "Step 3: Version bump check"
 
 LOCAL_VERSION=$(node -p "require('./$VERSION_FILE').version")
+if [[ "$LOCAL_VERSION" == *-* && "$DIST_TAG" == "latest" ]]; then
+  fail "Prerelease versions require an explicit preview tag (for example SUBCONSCIOUS_NPM_TAG=windows)."
+  exit 1
+fi
 
 info "Published: ${BOLD}$PUBLISHED${RESET}  →  Local ($VERSION_FILE): ${BOLD}$LOCAL_VERSION${RESET}"
 
@@ -167,7 +176,7 @@ echo ""
 echo -e "  ${GREEN}All checks passed.${RESET} This script will now:"
 echo ""
 echo -e "    1. A git tag ${BOLD}$NEW_TAG${RESET} will be created at HEAD (${DIM}${LOCAL_SHA:0:10}${RESET})"
-echo -e "    2. ${BOLD}$PKG_NAME@$LOCAL_VERSION${RESET} will be published to npm"
+echo -e "    2. ${BOLD}$PKG_NAME@$LOCAL_VERSION${RESET} will be published to npm under ${BOLD}$DIST_TAG${RESET}"
 echo -e "    3. The tag will be pushed to origin"
 echo ""
 
@@ -193,7 +202,7 @@ header "Step 6: Publishing $PKG_NAME@$LOCAL_VERSION"
 git tag "$NEW_TAG"
 ok "Created local tag $NEW_TAG"
 
-if ! SUBCONSCIOUS_PUBLISH_PACKAGE_SH=1 npm publish "./$PKG_DIR" --access public; then
+if ! SUBCONSCIOUS_PUBLISH_PACKAGE_SH=1 npm publish "./$PKG_DIR" --access public --tag "$DIST_TAG"; then
   git tag -d "$NEW_TAG" >/dev/null
   fail "npm publish failed. Removed the local tag; nothing was pushed to origin."
   exit 1

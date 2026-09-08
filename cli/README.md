@@ -82,15 +82,15 @@ Windows has its own implementation in `cli/bin/windows/`, selected only when
 Node runs on Windows. macOS/Linux continue to use the existing, unchanged shell
 runbooks. WSL continues to use the Linux implementation.
 
-Use Node.js 18+ and Windows PowerShell 5.1+ (included with Windows), from either
+Use Node.js 22 or 24 and Windows PowerShell 5.1+ (included with Windows), from either
 PowerShell or Command Prompt. The Windows CLI integrations do not require Bash,
 `jq`, `curl`, or WSL. The agents themselves must support your Windows version;
 their own dependencies still apply.
 
 ```powershell
-npm install -g subconscious-cli
-subc login
-subc claude
+npm.cmd install -g subconscious-cli@windows
+subc.cmd login
+subc.cmd claude
 subc codex
 subc opencode
 subc dsh
@@ -98,8 +98,10 @@ subc cursor install
 subc copilot install
 subc pi
 subc config edit notepad
-subc upgrade --latest
 ```
+
+This is an opt-in Windows preview; `@latest` remains the stable release. Update
+the preview with `npm.cmd install -g subconscious-cli@windows`.
 
 If PowerShell's execution policy blocks npm-generated `.ps1` entry points, use
 `npm.cmd` and `subc.cmd` or run the same commands in Command Prompt. No policy
@@ -127,10 +129,17 @@ VS Code's secret store and prompts for its key. Its configuration goes under
 `%APPDATA%\Code\User` (or Code - Insiders/VSCodium). Rerun install after moving
 your Node installation, because hooks record the absolute Node executable path.
 
-`subc sc` can launch an installed native `sc.exe`. `subc sc install` requires an
-upstream Windows x64/ARM64 release asset and its SHA-256 checksum; it reports a
-clear error if they have not been published. It never downloads a Unix binary
-as a fallback.
+To install the native x64 `sc.exe` preview:
+
+```powershell
+$env:SC_CODE_VERSION = '0.1.4-windows.0'
+subc.cmd sc install
+subc.cmd sc
+```
+
+The installer requires the selected release's Windows asset and SHA-256
+checksum; it reports a clear error if unavailable and never downloads a Unix
+binary as a fallback. Windows ARM64 binaries are not published in this preview.
 
 Run `npm run test:windows` from `cli/` for the separate Windows suite. The
 Windows CI job also builds/tests the Go TUI. Existing Unix tests and runbooks

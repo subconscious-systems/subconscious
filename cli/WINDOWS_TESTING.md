@@ -39,8 +39,9 @@ were used; temporary mock profiles were removed afterward.
   and help checks do not establish full inference/session compatibility.
 - Cursor/Copilot configuration and hooks are covered by automated tests, not
   interactive IDE testing. ARM64 runtime execution was not tested.
-- Nothing was published or tagged. The Windows-only candidate npm archive is a
-  local test artifact, not the full cross-platform release package.
+- These VM results describe the local candidate before publication. The
+  Windows-only candidate npm archive is a local test artifact, not the full
+  cross-platform release package.
 - A native Windows x64 `sc.exe` candidate was built in the sibling
   `subconscious-code` repository using Rust 1.98.1 and MSVC, with a static CRT.
   PE dependency inspection found Windows system DLLs only, not the VC++ runtime.
@@ -49,7 +50,7 @@ were used; temporary mock profiles were removed afterward.
   The installed `subc sc --version` wrapper and native interactive TUI launch/quit
   passed. A real PowerShell tool call through a local mock streaming gateway
   passed, including tool-result replay, API-key filtering, and USERPROFILE-based
-  global memory without HOME. No Windows release has been published yet.
+  global memory without HOME.
 - The separate shell backend passed its 12 targeted tests on built-in Windows
   PowerShell 5.1, then on PowerShell 7.6.5 with Git Bash 5.3.15 installed as an
   explicit alternative. PowerShell is the Windows default; Git Bash is optional.
