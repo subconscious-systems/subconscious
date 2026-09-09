@@ -22,11 +22,11 @@ const cli = fileURLToPath(new URL('../bin/cli.js', import.meta.url));
 const quiet = () => {};
 const isWindows = process.platform === 'win32';
 
-test('Marathon is canonical, legacy aliases are safe, and Unix keeps its binary', () => {
+test('Marathon is the native binary on every platform and legacy aliases are safe', () => {
   const agent = resolveAgent('marathon');
   assert.equal(agent.id, 'subconscious-code');
   assert.equal(agent.command, 'marathon');
-  assert.equal(agent.bin, isWindows ? 'marathon' : 'sc');
+  assert.equal(agent.bin, 'marathon');
   assert.equal(resolveAgent('sc'), agent);
   assert.equal(resolveAgent('subconscious-code'), agent);
   assert.equal(agentList().find(item => item.id === agent.id).alias, 'marathon');

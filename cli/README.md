@@ -204,8 +204,11 @@ Starting with CLI 4.1.1, `subc marathon` is the native agent command. On Windows
 the installer writes `marathon.exe`, avoiding the system `sc.exe` command.
 `subc sc` remains a compatibility alias but never launches Windows service
 control. Older pinned release binaries are also installed as `marathon.exe`.
-Existing `.sc` settings, sessions, and `SC_*` variables are preserved. Unix
-continues using its existing `sc` binary and shell implementation.
+Starting with CLI 4.1.2 and native agent 0.1.6, macOS and Linux also install
+and launch `marathon`. Existing `.sc` settings, sessions, and `SC_*` variables
+are preserved on every platform. Shell behavior is unchanged. Older Unix
+release archives are installed under the new name; existing `sc` files are
+left untouched. `subc sc` remains a compatibility alias on every platform.
 
 `subc codex` disables Codex apps and plugin tools for that launch by default so
 requests remain below the gateway's 128-tool limit. Core coding tools remain

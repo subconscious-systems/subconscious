@@ -25,8 +25,7 @@
       "tags": ["local", "cli", "agents"],
       "protocol": "openai",
       "homepage": "https://github.com/subconscious-systems/subconscious-code",
-      "bin": "sc",
-      "binByPlatform": { "win32": "marathon" },
+      "bin": "marathon",
       "install": {
         "darwin": "subc marathon install",
         "linux": "subc marathon install",
@@ -42,7 +41,7 @@
         "setupActions": ["install"],
         "setupNeedsAuth": false
       },
-      "launch": "sc",
+      "launch": "marathon",
       "env": {
         "SC_BASE_URL": "{baseUrlV1}",
         "SC_DLR_URL": "{baseUrl}",
