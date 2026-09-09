@@ -19,7 +19,7 @@ export async function windowsLaunch(id, argv, env, { tempRoot = os.tmpdir() } = 
   const { model, base, key } = connection(env, keyName);
   const childEnv = { ...env, SUBCONSCIOUS_API_KEY: key, SUBCONSCIOUS_GATEWAY_URL: base };
   if (id === 'subconscious-code') {
-    return { command: 'sc', args: argv, env: { ...childEnv, SC_API_KEY: key, SC_BASE_URL: `${base}/v1`, SC_DLR_URL: base, SC_DLR_ENABLED: 'true', SC_MODEL: model } };
+    return { command: 'marathon', args: argv, env: { ...childEnv, SC_API_KEY: key, SC_BASE_URL: `${base}/v1`, SC_DLR_URL: base, SC_DLR_ENABLED: 'true', SC_MODEL: model } };
   }
   if (id === 'pi') return { command: 'pi', args: ['--provider', 'subconscious', '--model', model, ...argv], env: childEnv };
   if (id === 'opencode') {

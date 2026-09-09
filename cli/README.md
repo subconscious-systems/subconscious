@@ -7,7 +7,7 @@ Log in to Subconscious, then run coding agents against the Subconscious gateway.
 ```bash
 npm install -g subconscious-cli
 subc login
-subc sc
+subc marathon
 subc claude
 ```
 
@@ -54,7 +54,7 @@ profile; they do not authenticate, install, configure, or launch anything:
 
 ```bash
 subc claude help
-subc sc help
+subc marathon help
 subc codex help
 subc cursor help
 subc config help
@@ -69,7 +69,7 @@ gateway environment applied for that process. Arguments pass through as usual:
 
 ```bash
 subc claude --continue
-subc sc -- -p "fix the tests"
+subc marathon -- -p "fix the tests"
 subc codex exec "write a test"
 subc opencode
 subc pi
@@ -134,8 +134,8 @@ any preview version pin from the current PowerShell session:
 
 ```powershell
 Remove-Item Env:SC_CODE_VERSION -ErrorAction SilentlyContinue
-subc.cmd sc install
-subc.cmd sc
+subc.cmd marathon install
+subc.cmd marathon
 ```
 
 The installer requires the selected release's Windows asset and SHA-256
@@ -152,7 +152,7 @@ The packaged integrations live in `cli/bin/runbook`.
 
 | Command | Behavior |
 | --- | --- |
-| `subc sc` | Launch Subconscious Code with the active gateway, key, model, and DLR transport |
+| `subc marathon` | Launch Subconscious Code with the active gateway, key, model, and DLR transport |
 | `subc claude` | Launch Claude Code with the runbook environment, context limits, subagent limits, and OTEL usage reporting |
 | `subc codex` | Launch Codex with the runbook provider, temporary model catalog, and surgically merged compaction hooks |
 | `subc opencode` | Launch OpenCode with the runbook provider, client header, and context/output limits |
@@ -195,10 +195,17 @@ to install it before launching. Pi refreshes its Subconscious provider on every
 `subc pi` launch while preserving all other providers in `models.json`; its
 executable must already be installed.
 
-`subc sc install` detects the operating system and architecture, then downloads
+`subc marathon install` detects the operating system and architecture, then downloads
 and checksum-verifies the matching precompiled release from
 `subconscious-systems/subconscious-code`. Apple Silicon and Intel macOS plus
-x86_64 and ARM64 Linux are supported; Cargo is not required.
+x86_64 and ARM64 Linux and Windows x64 are supported; Cargo is not required.
+
+Starting with CLI 4.1.1, `subc marathon` is the native agent command. On Windows,
+the installer writes `marathon.exe`, avoiding the system `sc.exe` command.
+`subc sc` remains a compatibility alias but never launches Windows service
+control. Older pinned release binaries are also installed as `marathon.exe`.
+Existing `.sc` settings, sessions, and `SC_*` variables are preserved. Unix
+continues using its existing `sc` binary and shell implementation.
 
 `subc codex` disables Codex apps and plugin tools for that launch by default so
 requests remain below the gateway's 128-tool limit. Core coding tools remain

@@ -16,9 +16,10 @@
   "agents": [
     {
       "id": "subconscious-code",
-      "command": "sc",
-      "name": "Subconscious Code",
+      "command": "marathon",
+      "name": "Marathon",
       "aliases": [
+        "sc",
         "subconscious-code"
       ],
       "description": "Launch the native Subconscious coding agent with the active profile, gateway, and model.",
@@ -33,10 +34,13 @@
       "protocol": "openai",
       "homepage": "https://github.com/subconscious-systems/subconscious-code",
       "bin": "sc",
+      "binByPlatform": {
+        "win32": "marathon"
+      },
       "install": {
-        "darwin": "subc sc install",
-        "linux": "subc sc install",
-        "win32": "subc sc install"
+        "darwin": "subc marathon install",
+        "linux": "subc marathon install",
+        "win32": "subc marathon install"
       },
       "runbook": {
         "mode": "launch",

@@ -16,7 +16,7 @@ function npmInstall(command) {
 export function windowsInstallSpec(id, env = process.env) {
   const install = registry.agents.find(agent => agent.id === id)?.install;
   const command = typeof install === 'object' ? install.win32 : undefined;
-  if (id === 'subconscious-code') return { nativeRelease: true, display: 'subc sc install' };
+  if (id === 'subconscious-code') return { nativeRelease: true, display: 'subc marathon install' };
   if (!command) return null; // Never fall back to a Linux installer.
   if (id === 'claude-code') {
     const primary = powershellCommand("$ErrorActionPreference = 'Stop'; Invoke-RestMethod 'https://claude.ai/install.ps1' | Invoke-Expression; if (-not $?) { exit 1 }", env);
@@ -30,9 +30,11 @@ export function windowsInstallSpec(id, env = process.env) {
 export function windowsReleaseAsset(release, arch = process.arch) {
   const target = { x64: 'x86_64-pc-windows-msvc', arm64: 'aarch64-pc-windows-msvc' }[arch];
   if (!target) throw new Error(`Subconscious Code does not support Windows architecture ${arch}`);
-  const names = [`sc-${target}.zip`, `sc-${target}.exe`];
-  const asset = release.assets?.find(asset => names.includes(asset.name));
-  if (!asset) throw new Error(`Subconscious Code ${release.tag_name || 'latest'} has no published native Windows ${arch} binary. The CLI can launch an installed sc.exe, but the upstream release must include a Windows build before subc sc install can install it.`);
+  // Pinned older releases are installed under the new executable name too.
+  // Never resolve or overwrite Windows' own sc.exe.
+  const names = [`marathon-${target}.zip`, `marathon-${target}.exe`, `sc-${target}.zip`, `sc-${target}.exe`];
+  const asset = names.map(name => release.assets?.find(asset => asset.name === name)).find(Boolean);
+  if (!asset) throw new Error(`Marathon ${release.tag_name || 'latest'} has no published native Windows ${arch} binary for subc marathon install.`);
   const checksum = release.assets.find(candidate => candidate.name === `${asset.name}.sha256`);
   if (!checksum) throw new Error(`The Windows release is missing ${asset.name}.sha256; refusing an unverified installation.`);
   return { asset, checksum };
@@ -52,21 +54,22 @@ export async function installWindowsSC(env, { fetchImpl = fetch, run = runWindow
     if (!response.ok) throw new Error(`Download failed (HTTP ${response.status}): ${asset.name}`);
     return Buffer.from(await response.arrayBuffer());
   };
-  log(`Downloading Subconscious Code ${release.tag_name} for Windows ${arch}...`);
+  log(`Downloading Marathon ${release.tag_name} for Windows ${arch}...`);
   const [binary, checksumText] = await Promise.all([download(asset), download(checksum)]);
   const expected = checksumText.toString('utf8').trim().split(/\s+/)[0];
   if (!/^[a-f0-9]{64}$/i.test(expected) || createHash('sha256').update(binary).digest('hex') !== expected.toLowerCase()) throw new Error('Subconscious Code checksum verification failed');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-install-'));
   const installDir = path.resolve(env.SC_INSTALL_DIR || path.join(home, '.local', 'bin'));
-  const destination = path.join(installDir, 'sc.exe');
-  const staging = path.join(installDir, `sc-${randomUUID()}.tmp`);
+  const destination = path.join(installDir, 'marathon.exe');
+  const staging = path.join(installDir, `marathon-${randomUUID()}.tmp`);
   try {
-    const extracted = path.join(dir, 'sc.exe');
+    const extracted = path.join(dir, 'marathon.exe');
     if (asset.name.endsWith('.zip')) {
       const archive = path.join(dir, 'release.zip');
       await fs.writeFile(archive, binary, { flag: 'wx' });
       // Extract only the exact root executable. No archive-controlled paths.
-      const spec = powershellCommand("$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $z = [IO.Compression.ZipFile]::OpenRead($env:SUBC_ARCHIVE); try { $e = $z.GetEntry('sc.exe'); if ($null -eq $e) { throw 'Archive has no root sc.exe' }; [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $env:SUBC_EXTRACTED, $false) } finally { $z.Dispose() }", { ...env, SUBC_ARCHIVE: archive, SUBC_EXTRACTED: extracted });
+      const executable = asset.name.startsWith('marathon-') ? 'marathon.exe' : 'sc.exe';
+      const spec = powershellCommand("$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $z = [IO.Compression.ZipFile]::OpenRead($env:SUBC_ARCHIVE); try { $e = $z.GetEntry($env:SUBC_EXECUTABLE); if ($null -eq $e) { throw 'Archive has no expected root executable' }; [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $env:SUBC_EXTRACTED, $false) } finally { $z.Dispose() }", { ...env, SUBC_ARCHIVE: archive, SUBC_EXTRACTED: extracted, SUBC_EXECUTABLE: executable });
       if (await run(spec.command, spec.args, { env: spec.env })) throw new Error('Could not extract the Windows release');
     } else await fs.writeFile(extracted, binary, { flag: 'wx' });
     const magic = (await fs.readFile(extracted)).subarray(0, 2).toString('ascii');
@@ -74,7 +77,7 @@ export async function installWindowsSC(env, { fetchImpl = fetch, run = runWindow
     await fs.mkdir(installDir, { recursive: true });
     await fs.copyFile(extracted, staging);
     await fs.rename(staging, destination);
-    log(`Installed ${destination}. Run subc sc to launch it.`);
+    log(`Installed ${destination}. Run subc marathon to launch it.`);
     return 0;
   } finally {
     await fs.rm(staging, { force: true });
