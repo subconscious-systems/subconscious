@@ -21,7 +21,7 @@ export const SESSION_HARNESSES = Object.freeze({
   codex: { name: 'Codex CLI', command: 'codex', portable: true },
   opencode: { name: 'OpenCode', command: 'opencode', portable: true },
   pi: { name: 'Pi', command: 'pi', portable: true },
-  sc: { name: 'Subconscious Code', command: 'sc', portable: false },
+  sc: { name: 'Marathon', command: 'marathon', portable: false },
 });
 
 function cleanText(value) {
@@ -592,7 +592,8 @@ export async function sessionsCommand(argv, options = {}) {
   if (!session) throw new Error(`Session '${key}' was not found. Run subc sessions to refresh the list.`);
   session = await hydrateSession(session);
   const harnessIndex = argv.indexOf('--harness');
-  const targetHarness = harnessIndex >= 0 ? argv[harnessIndex + 1] : session.harness;
+  const requestedHarness = harnessIndex >= 0 ? argv[harnessIndex + 1] : session.harness;
+  const targetHarness = requestedHarness === 'marathon' ? 'sc' : requestedHarness;
   const target = SESSION_HARNESSES[targetHarness];
   if (!target) throw new Error(`Unknown destination harness: ${targetHarness}`);
 

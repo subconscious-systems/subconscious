@@ -94,7 +94,7 @@ const AGENTS = registry.agents
   .filter((agent) => agent.cli !== false)
   .map((agent) => {
     const { command, fallback } = resolveInstall(agent.install);
-    return { ...agent, install: command, installFallback: fallback };
+    return { ...agent, bin: agent.binByPlatform?.[process.platform] || agent.bin, install: command, installFallback: fallback };
   });
 const BY_ALIAS = new Map();
 for (const agent of AGENTS) {
@@ -166,14 +166,14 @@ export function parseAgentAction(agent, argv = []) {
 
 const AGENT_HELP = {
   'subconscious-code': {
-    usage: 'subc [-p NAME] sc [help|install] [Subconscious Code arguments...]',
+    usage: 'subc [-p NAME] marathon [help|install] [Marathon arguments...]',
     behavior:
       'Launches the native Subconscious coding agent with the selected profile gateway, credential, and model.',
     options: [
       ['help', 'Show this help'],
       ['install', process.platform === 'win32' ? 'Install a verified Windows release, when published upstream' : 'Install the latest precompiled Linux or macOS release'],
       ['--model MODEL', 'Override the profile model for this launch'],
-      ['ARGS...', 'Pass arguments directly to Subconscious Code'],
+      ['ARGS...', 'Pass arguments directly to Marathon'],
     ],
   },
   'claude-code': {
