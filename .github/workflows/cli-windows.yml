@@ -2,9 +2,9 @@ name: CLI Windows
 
 on:
   push:
-    paths: ['cli/**', 'agents/registry.json', 'publish_package.sh', '.github/workflows/cli-windows.yml']
+    paths: ['cli/**', 'agents/registry.json', 'scripts/generate-agents.js', 'publish_package.sh', '.github/workflows/cli-windows.yml']
   pull_request:
-    paths: ['cli/**', 'agents/registry.json', 'publish_package.sh', '.github/workflows/cli-windows.yml']
+    paths: ['cli/**', 'agents/registry.json', 'scripts/generate-agents.js', 'publish_package.sh', '.github/workflows/cli-windows.yml']
 
 permissions:
   contents: read

@@ -119,16 +119,16 @@ resp = client.chat.completions.create(
 # resp.choices[0].message.tool_calls -> run them, append role:"tool" results, loop.
 ```
 
-Want **MCP** tools? Connect to the MCP server client-side, convert its tools to OpenAI function tools, and dispatch `tool_calls` back to it — see the [`cli_agent`](examples/cli_agent/) and [Boston notebook](examples/city_of_boston_getting_started/) examples.
+Want **MCP** tools? Connect to the MCP server client-side, convert its tools to OpenAI function tools, and dispatch `tool_calls` back to it.
 
 ## What's in this repo
 
 Developer-facing tooling for building on Subconscious:
 
 - **`cli/`** — `subconscious-cli`: use `subc` to authenticate and run the packaged coding-agent integrations
-- **`examples/`** — runnable example agents and templates
-- **`create-subconscious-app/`** — scaffold a new project from any example
-- **`scripts/`** — repo tooling (example manifest generation)
+- **`agents/registry.json`** — the source of truth for coding-agent metadata
+- **`scripts/`** — tooling that generates the CLI registry data
+- **`publish_package.sh`** — guarded release helper for the npm package
 
 ## CLI
 
@@ -178,53 +178,20 @@ and `whoami` shows your current auth status. Keys are saved to
 `~/.subconscious/config.json` (owner-read-only); `SUBCONSCIOUS_API_KEY` takes
 precedence. See [`cli/README.md`](cli/) for details.
 
-## Examples
+## Development
 
-Runnable example agents and templates, each in its own folder under [`examples/`](examples/).
-
-| Example | Description | Stack |
-|---------|-------------|-------|
-| **[Vercel Agent Runner](examples/vercel-template/)** | Full-stack Next.js app with streaming UI, tool management, and one-click Vercel deploy | Next.js, TypeScript |
-| **[CLI Agent](examples/cli_agent/)** | Clone-and-go terminal agent: client-side ReAct loop over MCP tools | TypeScript, Ink, MCP |
-| **[E2B CLI Agent](examples/e2b_cli/)** | Autonomous CLI agent with E2B cloud sandboxes for code execution and file I/O | TypeScript, E2B |
-| **[Convex Real-time App](examples/convex_app/)** | AI todo assistant with real-time updates backed by Convex | React, Convex, TypeScript |
-| **[Composio Agent](examples/composio_fast_api/)** | 100+ OAuth apps as agent tools via Composio, executed in a client-side loop | Python |
-| **[Local-Hosted Tools](examples/local_hosted_tools/)** | Client-side tool loop with local Python functions; image-editing demo | Python |
-| **[Structured Output (Python)](examples/structured_output_python/)** | Type-safe structured responses via Pydantic + `response_format` | Python, Pydantic |
-| **[Structured Output (TypeScript)](examples/structured_output_typescript/)** | Type-safe structured responses via Zod + `response_format` | TypeScript, Zod |
-| **[Getting Started Notebook](examples/getting_started_notebook/)** | Colab walkthrough — no setup required | Python, Jupyter |
-| **[City of Boston Getting Started](examples/city_of_boston_getting_started/)** | Colab notebook tailored to the City of Boston POC | Python, Jupyter |
-
-## create-subconscious-app
-
-The fastest way to start from an example is to scaffold it with the CLI:
+After changing `agents/registry.json`, regenerate the packaged CLI metadata:
 
 ```bash
-npx create-subconscious-app
+npm run generate
 ```
 
-This launches an interactive prompt that fetches the latest examples from this repo and sets one up for you. You can also skip the prompts:
+Run the CLI and TUI test suites from the repository root:
 
 ```bash
-npx create-subconscious-app my-agent -e e2b_cli    # scaffold a specific example
-npx create-subconscious-app --list                  # list all available examples
+npm test
+npm run test:tui --prefix cli
 ```
-
-### Adding your own example
-
-1. Create a folder under `examples/` with your project code.
-2. Add metadata (`package.json` for JS/TS or `pyproject.toml` for Python) with `name`, `description`, and an optional `setup` array of post-scaffold instructions.
-3. Open a PR. When it merges, a [GitHub Action](.github/workflows/generate-manifest.yml) regenerates `examples/manifest.json` and your example becomes available via `npx create-subconscious-app` immediately.
-
-## Scripts
-
-[`scripts/generate-manifest.js`](scripts/generate-manifest.js) reads each example's metadata and regenerates [`examples/manifest.json`](examples/manifest.json) — the manifest that `create-subconscious-app` and the templates page consume.
-
-```bash
-node scripts/generate-manifest.js
-```
-
-A GitHub Action runs this automatically on push to `main`, and validates the manifest on PRs.
 
 ## Documentation & resources
 

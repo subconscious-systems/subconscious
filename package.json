@@ -3,11 +3,7 @@
   "private": true,
   "scripts": {
     "generate:agents": "node scripts/generate-agents.js",
-    "generate:manifest": "node scripts/generate-manifest.js",
     "generate": "node scripts/generate-agents.js",
     "test": "npm test --prefix cli"
-  },
-  "dependencies": {
-    "subconscious-cli": "^0.3.0"
   }
 }

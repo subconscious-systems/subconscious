@@ -20,31 +20,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # ── Package selection ────────────────────────────────────────────────────
-header "Subconscious Package Release Helper"
+header "Subconscious CLI Release Helper"
 
-echo -e "  Which package are you releasing?"
-echo ""
-echo -e "    1) ${CYAN}subconscious-cli${RESET}        — subc auth + coding-agent launcher"
-echo -e "    2) ${CYAN}create-subconscious-app${RESET} — scaffolder (npx create-subconscious-app)"
-echo ""
-read -rp "  Enter 1 or 2: " choice
-
-case "$choice" in
-  1|cli)
-    PKG_DIR="cli"
-    PKG_NAME="subconscious-cli"
-    TAG_PREFIX="cli-v"
-    ;;
-  2|create-app|create)
-    PKG_DIR="create-subconscious-app"
-    PKG_NAME="create-subconscious-app"
-    TAG_PREFIX="create-app-v"
-    ;;
-  *)
-    fail "Invalid choice. Exiting."
-    exit 1
-    ;;
-esac
+PKG_DIR="cli"
+PKG_NAME="subconscious-cli"
+TAG_PREFIX="cli-v"
 
 PKG_PATH="$SCRIPT_DIR/$PKG_DIR"
 VERSION_FILE="$PKG_DIR/package.json"

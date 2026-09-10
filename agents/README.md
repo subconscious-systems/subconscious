@@ -1,15 +1,9 @@
 # Agent registry — single source of truth
 
 `registry.json` is the **single source of truth** for coding-agent metadata,
-CLI routing, install commands, and generated example setup blocks.
+CLI routing, install commands, and launch environments.
 
-Everything else is **generated** from it:
-
-- The CLI runtime data — `cli/bin/registry.generated.json`
-- Each example's `subconscious.agent` + `setup` blocks in
-  `examples/<dir>/package.json`
-- `examples/manifest.json`
-
+The CLI runtime data — `cli/bin/registry.generated.json` — is generated from it.
 The executable integrations live under `cli/bin/runbook`. Each CLI-enabled
 registry entry points to its script with a `runbook` block.
 
@@ -18,28 +12,24 @@ registry entry points to its script with a `runbook` block.
 Edit `registry.json`, then regenerate:
 
 ```bash
-pnpm generate          # or: node scripts/generate-agents.js
+npm run generate
 ```
 
-Do **not** hand-edit the generated CLI data or the `subconscious.agent` /
-`setup` blocks in the example `package.json` files — your changes will be
-overwritten on the next generate.
-
-Agents without an example omit `exampleDir`. Example-only agents use
-`"cli": false`. `command` selects the primary `subc <command>` spelling while
-`aliases` keeps alternate spellings. `runbook.setupActions` lists which of
-`install`, `status`, and `uninstall` the CLI exposes on that agent.
+Do **not** hand-edit the generated CLI data. `command` selects the primary
+`subc <command>` spelling while `aliases` keeps alternate spellings.
+`runbook.setupActions` lists which of `install`, `status`, and `uninstall` the
+CLI exposes on that agent.
 
 ## Tokens
 
-Values may contain placeholder tokens that consumers substitute:
+Values may contain placeholder tokens that the CLI substitutes at runtime:
 
-| Token          | Resolves to (runtime)                       | Resolves to (examples) |
-| -------------- | ------------------------------------------- | ---------------------- |
-| `{apiKey}`     | your resolved API key                       | `your_key`             |
-| `{model}`      | `--model` / `SUBCONSCIOUS_MODEL` / default  | default model          |
-| `{baseUrl}`    | `SUBCONSCIOUS_BASE_URL` / default           | real URL               |
-| `{baseUrlV1}`  | `${baseUrl}/v1`                             | real URL               |
+| Token         | Resolves to |
+| ------------- | ------------ |
+| `{apiKey}`    | your resolved API key |
+| `{model}`     | `--model` / `SUBCONSCIOUS_MODEL` / default |
+| `{baseUrl}`   | `SUBCONSCIOUS_BASE_URL` / default |
+| `{baseUrlV1}` | `${baseUrl}/v1` |
 
 `defaults.models` is the offline fallback catalog for `subc models` and the
 packaged coding-agent model pickers. At runtime the CLI prefers the selected
@@ -71,11 +61,6 @@ Each auto-installed terminal agent's `install` is an **object keyed by Node's
   agents omit it.
 - For agents whose command is identical across OSes (OpenCode, Codex) all three
   keys are written out explicitly for clarity.
-
-In the generated example `package.json` blocks, `subconscious.agent.install` is
-**flattened to a single string** (the `linux` command) for display — the
-templates page expects a string. The full per-OS object lives only in
-`cli/bin/registry.generated.json`, which the CLI reads.
 
 An env value of shape `{ "$json": { ... } }` means: substitute inside the
 object, then `JSON.stringify` it to a single string.

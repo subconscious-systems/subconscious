@@ -63,7 +63,6 @@
     {
       "id": "claude-code",
       "command": "claude",
-      "exampleDir": "claude_code",
       "name": "Claude Code",
       "aliases": [
         "claude-code",
@@ -130,7 +129,6 @@
     {
       "id": "codex",
       "command": "codex",
-      "exampleDir": "codex",
       "name": "Codex CLI",
       "aliases": [],
       "displayName": "Codex + Subconscious",
@@ -170,7 +168,6 @@
     {
       "id": "opencode",
       "command": "opencode",
-      "exampleDir": "opencode",
       "name": "OpenCode",
       "aliases": [
         "open-code"
