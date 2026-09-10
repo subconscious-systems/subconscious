@@ -2,28 +2,21 @@
 
 ## Repo structure
 
-- `examples/` — SDK example projects, each with its own package.json or pyproject.toml
-- `examples/manifest.json` — auto-generated manifest consumed by the templates page at subconscious.dev/templates
-- `scripts/generate-manifest.js` — reads example metadata → outputs manifest.json
-- `create-subconscious-app/` — `npx create-subconscious-app` CLI scaffolder
-- `cli/` — `subc`: login/logout/whoami, named `.env` profiles, and coding-agent integrations for Claude Code, Codex, OpenCode, Cursor, Copilot, and Pi. `subc login` creates the default profile. Persistent integrations use `subc <agent> install` / `subc <agent> uninstall`.
-- `agents/registry.json` — the single source of truth for coding-agent metadata, CLI routing, and generated example setup blocks. The CLI runtime data (`cli/bin/registry.generated.json`) and each example's `subconscious.agent` + `setup` blocks are GENERATED from it. Executable integrations live under `cli/bin/runbook`. Edit `agents/registry.json`, then run `pnpm generate` (or `node scripts/generate-agents.js`) to regenerate the CLI data, example blocks, and manifest. Do not hand-edit the generated outputs.
+- `cli/` — the `subconscious-cli` npm package. `subc` handles login/logout/whoami, named `.env` profiles, usage, upgrades, and coding-agent integrations for Marathon, Claude Code, Codex, OpenCode, Cursor, Copilot, Pi, and DeepSeek Harness.
+- `agents/registry.json` — the single source of truth for coding-agent metadata and CLI routing.
+- `scripts/generate-agents.js` — generates `cli/bin/registry.generated.json` from the registry.
+- `publish_package.sh` — guarded release helper for `subconscious-cli`.
 
-## Adding examples
+## Generated CLI registry
 
-Use `/add-example` command. It walks through scaffolding a new example with all required manifest metadata.
+Do not hand-edit `cli/bin/registry.generated.json`.
 
-Key rules for setup commands in examples:
-- Every step must be a runnable command or `#` comment — no prose
-- Use `your_key` as the SUBCONSCIOUS_API_KEY placeholder (auto-replaced by the templates page)
-- Use different placeholders for third-party keys (e.g. `your_e2b_key`)
-- Commands get chained with `&&` for one-click copy-paste
+Edit `agents/registry.json`, then regenerate:
 
-## Manifest
-
-Regenerate after any example change:
 ```bash
-node scripts/generate-manifest.js
+npm run generate
 ```
 
-GitHub Action auto-regenerates on push to main. On PRs it validates without committing.
+Executable integrations live under `cli/bin/runbook`. CLI-enabled agents use
+their registry `runbook` blocks; persistent integrations use
+`subc <agent> install` and `subc <agent> uninstall`.

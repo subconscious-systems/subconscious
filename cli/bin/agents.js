@@ -395,7 +395,7 @@ export function extractModel(argv, profile) {
 
 /**
  * Common locations a freshly-installed coding-agent binary lands in but which
- * are often NOT on the current process's PATH (e.g. aider/claude install into
+ * are often NOT on the current process's PATH (e.g. Claude Code installs into
  * `~/.local/bin`; npm globals into the npm prefix bin). Best-effort, deduped.
  */
 function candidateBinDirs() {

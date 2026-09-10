@@ -53,7 +53,6 @@
     {
       "id": "claude-code",
       "command": "claude",
-      "exampleDir": "claude_code",
       "name": "Claude Code",
       "aliases": ["claude-code", "claudecode"],
       "displayName": "Claude Code + Subconscious",
@@ -110,7 +109,6 @@
     {
       "id": "codex",
       "command": "codex",
-      "exampleDir": "codex",
       "name": "Codex CLI",
       "aliases": [],
       "displayName": "Codex + Subconscious",
@@ -142,7 +140,6 @@
     {
       "id": "opencode",
       "command": "opencode",
-      "exampleDir": "opencode",
       "name": "OpenCode",
       "aliases": ["open-code"],
       "displayName": "OpenCode + Subconscious",
@@ -304,32 +301,6 @@
       "runbook": {
         "mode": "launch",
         "script": "deepseek-harness/run.sh"
-      }
-    },
-    {
-      "id": "aider",
-      "cli": false,
-      "exampleDir": "aider",
-      "name": "Aider",
-      "aliases": [],
-      "displayName": "Aider + Subconscious",
-      "description": "Run Aider on your hosted Subconscious model — no code changes, just env vars.",
-      "framework": "Aider",
-      "language": "shell",
-      "category": "coding-agent",
-      "tags": ["local", "cli", "agents"],
-      "protocol": "openai",
-      "homepage": "https://aider.chat",
-      "bin": "aider",
-      "install": {
-        "darwin": "python3 -m pip install aider-install && aider-install",
-        "linux": "python3 -m pip install aider-install && aider-install",
-        "win32": "python -m pip install aider-install && aider-install"
-      },
-      "launch": "aider --model openai/{model}",
-      "env": {
-        "OPENAI_API_BASE": "{baseUrlV1}",
-        "OPENAI_API_KEY": "{apiKey}"
       }
     }
   ]
