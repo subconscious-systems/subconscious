@@ -128,6 +128,7 @@ const (
 	itemUpdateBaseURL
 	itemSessions
 	itemUpdatePlatformURL
+	itemSetApiKey
 )
 
 type menuItem struct {
@@ -152,6 +153,7 @@ const (
 	screenSessions
 	screenSessionHarnesses
 	screenUpdatePlatformURL
+	screenSetApiKey
 )
 
 type model struct {
@@ -167,6 +169,7 @@ type model struct {
 	screen          screen
 	profileInput    string
 	urlInput        string
+	apiKeyInput     string
 	inputError      string
 	notice          string
 	sessionBaseURL  string
@@ -197,7 +200,8 @@ func newModel(state inputState) model {
 		})
 	}
 	items = append(items,
-		menuItem{Section: "Account & configuration", Name: "Sign in", Command: "login", Action: "Authenticate", Description: "Authenticate this profile and securely save its Subconscious API key.", Kind: itemCommand},
+		menuItem{Section: "Account & configuration", Name: "Sign in", Command: "login", Action: "Authenticate", Description: "Open a one-time login link and save this profile's Subconscious API key.", Kind: itemCommand},
+		menuItem{Section: "Account & configuration", Name: "Set API key", Command: "update-key", Action: "Configure", Description: "Paste an API key from the platform dashboard and save it to this profile.", Kind: itemSetApiKey},
 		menuItem{Section: "Account & configuration", Name: "Usage", Command: "usage", Action: "Inspect", Description: "Show billing mode, daily allowance, credits, and per-model token usage.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Available models", Command: "models", Action: "Inspect", Description: "Fetch and display the live model catalog from the selected gateway.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Set default model", Command: "config", Action: "Configure", Description: "Choose and save the default model for the selected profile, or UNSET to follow the live catalog.", Kind: itemSetDefaultModel},
@@ -368,6 +372,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSessionHarnesses(key)
 		case screenUpdatePlatformURL:
 			return m.updatePlatformURL(msg)
+		case screenSetApiKey:
+			return m.updateSetApiKey(msg)
 		default:
 			return m.updateMain(key)
 		}
@@ -431,6 +437,12 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 			}
 			m.inputError = ""
 			m.screen = screenUpdatePlatformURL
+			return m, nil
+		}
+		if item.Kind == itemSetApiKey {
+			m.apiKeyInput = ""
+			m.inputError = ""
+			m.screen = screenSetApiKey
 			return m, nil
 		}
 		m.result.Args = actionArgs(item, m.state.ActiveProfile, m.state.SelectedModel, m.state.SubagentModel)
@@ -626,6 +638,40 @@ func (m model) updateBaseURL(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m model) updateSetApiKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	key := msg.String()
+	switch key {
+	case "esc":
+		m.screen = screenMain
+		m.apiKeyInput = ""
+		m.inputError = ""
+	case "backspace", "ctrl+h":
+		runes := []rune(m.apiKeyInput)
+		if len(runes) > 0 {
+			m.apiKeyInput = string(runes[:len(runes)-1])
+		}
+		m.inputError = ""
+	case "ctrl+u":
+		m.apiKeyInput = ""
+		m.inputError = ""
+	case "enter":
+		value := strings.TrimSpace(m.apiKeyInput)
+		if value == "" {
+			m.inputError = "Paste an API key."
+			return m, nil
+		}
+		m.result.Args = []string{"-p", m.state.ActiveProfile, "update-key", value}
+		return m, tea.Quit
+	default:
+		text := msg.Key().Text
+		if text != "" && utf8.RuneCountInString(m.apiKeyInput+text) <= 256 {
+			m.apiKeyInput += text
+			m.inputError = ""
+		}
+	}
+	return m, nil
+}
+
 func (m model) updatePlatformURL(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
@@ -764,6 +810,8 @@ func (m model) View() tea.View {
 		content = m.renderSessionHarnesses()
 	} else if m.screen == screenUpdatePlatformURL {
 		content = m.renderPlatformURLInput()
+	} else if m.screen == screenSetApiKey {
+		content = m.renderSetApiKey()
 	} else {
 		content = m.renderMain(width)
 	}
@@ -907,6 +955,9 @@ func (m model) renderDetail(width int) string {
 	}
 	if item.Kind == itemUpdatePlatformURL {
 		return m.renderPlatformDetail(width)
+	}
+	if item.Kind == itemSetApiKey {
+		return m.renderSetApiKeyDetail(width)
 	}
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Bold(true).Render(item.Name)
 	action := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(item.Action)
@@ -1183,6 +1234,48 @@ func (m model) renderProfileInput() string {
 		errorLine = "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(wrapText(m.inputError, width-4))
 	}
 	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("type a name   enter create   esc cancel")
+	panel := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(brandOrange)).
+		Padding(1, 2).
+		Width(width).
+		Render(heading + "\n" + copy + "\n\n" + field + errorLine + "\n\n" + footer)
+	return lipgloss.Place(max(width+4, m.width), max(12, m.height), lipgloss.Center, lipgloss.Center, panel)
+}
+
+func (m model) renderSetApiKeyDetail(width int) string {
+	title := lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Bold(true).Render("Set API key")
+	action := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render("Configure")
+	description := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(wrapText("Paste a key from the platform API keys page. The key is saved with subc update-key and is not shown in this preview.", max(24, width-4)))
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color(faintColor)).
+		PaddingLeft(2).
+		Width(width).
+		Render(title + "  " + action + "\n\n" + description)
+}
+
+func (m model) renderSetApiKey() string {
+	width := min(max(50, m.width-8), 78)
+	heading := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Bold(true).Render("✻  Set API key")
+	copy := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(
+		wrapText("Paste the API key for profile "+m.state.ActiveProfile+".", width-8),
+	)
+	masked := strings.Repeat("•", utf8.RuneCountInString(m.apiKeyInput))
+	if masked == "" {
+		masked = lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render("sk-...")
+	}
+	field := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(textColor)).
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		BorderForeground(lipgloss.Color(brandOrange)).
+		Width(width - 12).
+		Render(ellipsize(masked, width-14) + "▌")
+	errorLine := ""
+	if m.inputError != "" {
+		errorLine = "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(wrapText(m.inputError, width-8))
+	}
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("ctrl+u clear   enter save   esc cancel")
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(brandOrange)).

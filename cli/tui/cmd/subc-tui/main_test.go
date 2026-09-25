@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestActionArgsPreserveProfileAndModel(t *testing.T) {
@@ -247,6 +249,41 @@ func TestUpdateProfileValuePreservesOtherSettings(t *testing.T) {
 	// permission assertion while exercising the profile update on Windows.
 	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("profile mode = %o, want 600", info.Mode().Perm())
+	}
+}
+
+func TestSetApiKeyQuitsWithUpdateKey(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "staging",
+		Agents:        []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
+	})
+	for index, item := range m.items {
+		if item.Kind == itemSetApiKey {
+			m.cursor = index
+			break
+		}
+	}
+	detail := m.renderDetail(56)
+	if strings.Contains(detail, "sk-") {
+		t.Fatalf("detail should not preview a key: %q", detail)
+	}
+	updated, _ := m.updateMain("enter")
+	editor := updated.(model)
+	if editor.screen != screenSetApiKey {
+		t.Fatalf("screen = %v, want set api key", editor.screen)
+	}
+	editor.apiKeyInput = "sk-secret-value"
+	if strings.Contains(editor.renderSetApiKey(), "sk-secret-value") {
+		t.Fatal("api key input is shown in cleartext")
+	}
+	finished, cmd := editor.updateSetApiKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter should quit")
+	}
+	got := finished.(model).result.Args
+	want := []string{"-p", "staging", "update-key", "sk-secret-value"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("args = %#v, want %#v", got, want)
 	}
 }
 

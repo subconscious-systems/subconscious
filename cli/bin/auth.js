@@ -1,22 +1,16 @@
 /**
  * Authentication + credential storage for the Subconscious CLI.
  *
- * Login flow (localhost callback pattern, similar to Vercel/Supabase CLIs):
- *  1. CLI generates a random `state` token (CSRF protection) and starts
- *     an ephemeral HTTP server on a random port bound to 127.0.0.1.
- *  2. Opens the browser to {platformUrl}/cli/auth?port=...&state=...
- *  3. The web app authenticates the user, generates an API key, and
- *     delivers it back to the CLI via a cross-origin fetch to
- *     localhost:{port}/callback?token=...&state=...
- *  4. CLI verifies the `state`, saves the key to ~/.subconscious/config.json,
- *     and creates a coding-agent profile under ~/.subconscious/profiles/.
+ * Login flow (device code):
+ *  1. CLI asks the platform for a device code and a short user code.
+ *  2. Opens {platformUrl}/cli/device?code=... in any browser.
+ *  3. Polls the platform until the signed-in browser approves the code.
+ *  4. Saves the key to ~/.subconscious/config.json and a runbook profile.
  *
  * Override SUBCONSCIOUS_URL env var for local development
  * (e.g. http://localhost:3000). Production defaults to platform.subconscious.dev.
  */
 
-import http from 'node:http';
-import crypto from 'node:crypto';
 import { exec } from 'node:child_process';
 import { openWindowsBrowser } from './windows/process.js';
 import fs from 'node:fs/promises';
@@ -26,12 +20,18 @@ import { c } from './colors.js';
 import { clearProfileApiKey, DEFAULT_PROFILE, ensureProfile } from './profiles.js';
 import { printLoginUpgradeWarning } from './upgrade.js';
 
-const CONFIG_OVERRIDE = process.env.SUBC_CONFIG_DIR?.trim();
-const CONFIG_DIR = CONFIG_OVERRIDE || path.join(os.homedir(), '.subconscious');
-const CONFIG_FILE = path.join(CONFIG_DIR, 'config.json');
-const LEGACY_CONFIG_FILE = CONFIG_OVERRIDE
-  ? null
-  : path.join(os.homedir(), '.subcon', 'config.json');
+function configDir() {
+  return process.env.SUBC_CONFIG_DIR?.trim() || path.join(os.homedir(), '.subconscious');
+}
+
+function configFile() {
+  return path.join(configDir(), 'config.json');
+}
+
+function legacyConfigFile() {
+  if (process.env.SUBC_CONFIG_DIR?.trim()) return null;
+  return path.join(os.homedir(), '.subcon', 'config.json');
+}
 // Defaults to the platform host. Developers set SUBCONSCIOUS_URL for local dev.
 export const DEFAULT_PLATFORM_URL = 'https://platform.subconscious.dev';
 
@@ -43,41 +43,16 @@ export function getPlatformUrl(profile) {
   return DEFAULT_PLATFORM_URL;
 }
 
-// Login callback CORS. After the marketing/platform split, /cli/auth lives on
-// platform. www may still 307 there for older CLIs; keep www so a redirected
-// or leftover tab can complete the callback.
-const CALLBACK_ORIGINS = new Set([
-  'https://www.subconscious.dev',
-  'https://platform.subconscious.dev',
-  'https://dev.subconscious.dev',
-  'https://platform-dev.subconscious.dev',
-]);
-
-export function isAllowedCallbackOrigin(origin, platformUrl = getPlatformUrl()) {
-  if (!origin) return false;
-  if (origin === platformUrl || CALLBACK_ORIGINS.has(origin)) return true;
-  try {
-    const { protocol, hostname } = new URL(origin);
-    return protocol === 'http:' && (hostname === 'localhost' || hostname === '127.0.0.1');
-  } catch {
-    return false;
-  }
-}
-
-// ── Config helpers ──────────────────────────────────────────────────────
-
 async function loadConfig() {
   try {
-    const content = await fs.readFile(CONFIG_FILE, 'utf-8');
+    const content = await fs.readFile(configFile(), 'utf-8');
     return JSON.parse(content);
   } catch (error) {
-    if (error.code !== 'ENOENT' || !LEGACY_CONFIG_FILE) return {};
+    if (error.code !== 'ENOENT' || !legacyConfigFile()) return {};
   }
 
-  // One-way compatibility migration. Keep the old file untouched so this is
-  // recoverable, but all future writes go to ~/.subconscious.
   try {
-    const content = await fs.readFile(LEGACY_CONFIG_FILE, 'utf-8');
+    const content = await fs.readFile(legacyConfigFile(), 'utf-8');
     const config = JSON.parse(content);
     await saveConfig(config);
     return config;
@@ -87,16 +62,11 @@ async function loadConfig() {
 }
 
 async function saveConfig(config) {
-  await fs.mkdir(CONFIG_DIR, { recursive: true });
-  await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
-  // 0o600 = owner read/write only — the file contains an API key
-  await fs.chmod(CONFIG_FILE, 0o600);
+  await fs.mkdir(configDir(), { recursive: true });
+  await fs.writeFile(configFile(), JSON.stringify(config, null, 2), 'utf-8');
+  await fs.chmod(configFile(), 0o600);
 }
 
-/**
- * Resolve the active API key. The env var takes precedence over the saved
- * config so CI and per-shell overrides win. Returns null when unauthenticated.
- */
 export async function getApiKey(profile) {
   const envKey = process.env.SUBCONSCIOUS_API_KEY?.trim();
   if (envKey) return { key: envKey, source: 'SUBCONSCIOUS_API_KEY env var' };
@@ -104,8 +74,6 @@ export async function getApiKey(profile) {
   const profileKey = profile?.values?.API_KEY?.trim();
   if (profileKey) return { key: profileKey, source: profile.path };
 
-  // Named profiles are isolated: an empty/missing key must not silently fall
-  // back to the default credential and send traffic to the wrong account.
   if (profile?.name && profile.name !== DEFAULT_PROFILE) return null;
 
   const config = await loadConfig();
@@ -113,24 +81,6 @@ export async function getApiKey(profile) {
     return { key: config.subconscious_api_key, source: '~/.subconscious/config.json' };
   }
   return null;
-}
-
-export async function probeLoginPage(platformUrl = getPlatformUrl(), fetchImpl = fetch) {
-  const url = `${platformUrl.replace(/\/$/, '')}/cli/auth`;
-  try {
-    const res = await fetchImpl(url, {
-      method: 'GET',
-      redirect: 'manual',
-      signal: AbortSignal.timeout(8000),
-    });
-    return res.status;
-  } catch {
-    return null;
-  }
-}
-
-export function isLoginMissing(status) {
-  return status === 404;
 }
 
 // ── Browser opener ──────────────────────────────────────────────────────
@@ -159,159 +109,69 @@ function openBrowser(url) {
   });
 }
 
-// ── Localhost callback server ───────────────────────────────────────────
+const DEVICE_POLL_INTERVAL_MS = 2000;
+const DEVICE_POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
-function startCallbackServer(expectedState) {
-  return new Promise((resolveSetup) => {
-    let resolveToken, rejectToken;
-    const tokenPromise = new Promise((resolve, reject) => {
-      resolveToken = resolve;
-      rejectToken = reject;
-    });
+function terminalLink(url) {
+  return `\u001b]8;;${url}\u0007${url}\u001b]8;;\u0007`;
+}
 
-    const server = http.createServer((req, res) => {
-      // CORS: only allow known web-app origins (or localhost dev).
-      // This prevents arbitrary websites from hitting this callback.
-      const origin = req.headers.origin || '';
-      const allowed = isAllowedCallbackOrigin(origin);
-      res.setHeader(
-        'Access-Control-Allow-Origin',
-        allowed ? origin : getPlatformUrl(),
-      );
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-      res.setHeader('Connection', 'close');
-
-      if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
-      const url = new URL(req.url, 'http://localhost');
-
-      if (url.pathname !== '/callback') {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
-
-      const token = url.searchParams.get('token');
-      const state = url.searchParams.get('state');
-      const error = url.searchParams.get('error');
-
-      // The web app sends `Accept: application/json` via fetch(); direct
-      // browser visits get the HTML fallback page.
-      const wantsJson = (req.headers.accept || '').includes('application/json');
-      const respond = (ok, msg) => {
-        if (wantsJson) {
-          res.writeHead(ok ? 200 : 400, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ ok, error: msg || undefined }));
-        } else {
-          res.writeHead(200, { 'Content-Type': 'text/html' });
-          res.end(resultPage(ok, msg));
-        }
-      };
-
-      if (error) {
-        respond(false, error);
-        server.close();
-        rejectToken(new Error(error));
-        return;
-      }
-
-      // CSRF check: state token must match what the CLI generated
-      if (state !== expectedState) {
-        respond(false, 'State mismatch — possible CSRF attack. Please try again.');
-        server.close();
-        rejectToken(new Error('State mismatch'));
-        return;
-      }
-
-      if (!token) {
-        respond(false, 'No API key received.');
-        server.close();
-        rejectToken(new Error('No API key received'));
-        return;
-      }
-
-      respond(true);
-      server.close();
-      resolveToken({ token });
-    });
-
-    // Port 0 = OS assigns a random available port. Bound to 127.0.0.1 only.
-    server.listen(0, '127.0.0.1', () => {
-      const port = server.address().port;
-
-      const timeout = setTimeout(() => {
-        server.close();
-        rejectToken(new Error('Authentication timed out (5 min). Please try again.'));
-      }, 5 * 60 * 1000);
-
-      tokenPromise.finally(() => clearTimeout(timeout));
-
-      resolveSetup({ port, promise: tokenPromise });
-    });
+export async function registerDeviceLogin(platformUrl, fetchImpl = fetch) {
+  const res = await fetchImpl(`${platformUrl}/api/cli/device/register`, {
+    method: 'POST',
+    signal: AbortSignal.timeout(8000),
   });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.message || 'Could not start CLI login.');
+  }
+  if (!data.device_code || !data.user_code) {
+    throw new Error('CLI login response was missing a device code.');
+  }
+  return data;
 }
 
-function resultPage(success, message) {
-  const title = success ? 'Authenticated' : 'Authentication failed';
-  const subtitle = success
-    ? 'You can close this tab and return to your terminal.'
-    : message || 'Something went wrong.';
-
-  const logoSvg = `<svg viewBox="0 0 205 199" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M-4.33e-06 99.93C-4.96e-06 85.57 11.64 73.93 26 73.93c7.88 0 14.94 3.51 19.71 9.04 5.25 6.09 11.36 12.6 19.37 13.33l3.92.36v-.01c.03.01.06.01.09.01L72 96.93c12.69 0 23.98-10.28 24-22.96-.01-7.36-3.48-13.91-8.87-18.11l-1.08-.76c-6.52-4.6-15.3-3.65-23.19-2.46-7.28 1.1-14.97-.88-20.96-6.08C31.06 37.13 29.91 20.71 39.33 9.87 48.75-.96 65.18-2.11 76.01 7.31c5.99 5.21 9.02 12.55 8.94 19.91-.09 7.97.2 16.8 5.66 22.62l.94 1 .11.1.14.12c.22.19.45.37.68.55l.17.13c.25.18.5.36.75.53.64.42 1.31.8 2.01 1.14.48.23.98.44 1.49.62.21.07.42.14.63.21.32.1.64.19.97.27.4.1.8.18 1.2.25.34.06.69.11 1.03.14.58.06 1.17.09 1.77.09 4.2 0 8.03-1.57 10.95-4.16l.94-1c5.46-5.81 5.75-14.65 5.66-22.62-.08-7.36 2.95-14.71 8.94-19.91C139.82-2.11 156.25-.96 165.67 9.87c9.42 10.84 8.27 27.26-2.56 36.68-5.99 5.21-13.69 7.18-20.96 6.08-7.88-1.19-16.67-2.14-23.19 2.46l-1.08.76c-5.39 4.2-8.86 10.75-8.87 18.11.02 12.69 11.31 22.96 24 22.96l2.91-.26.09-.02v.01l3.93-.36c8.01-.73 14.12-7.23 19.37-13.33 4.77-5.54 11.83-9.04 19.71-9.04C193.36 73.93 205 85.57 205 99.93v.07c0 .01 0 .02 0 .03 0 14.36-11.64 26-26 26-7.88 0-14.94-3.51-19.71-9.04-5.25-6.09-11.36-12.6-19.37-13.33l-3.93-.36v.01c-.03-.01-.06-.01-.09-.01L133 103c-12.69 0-23.98 10.28-24 22.97.01 7.36 3.48 13.91 8.87 18.11l1.08.76c6.52 4.6 15.3 3.65 23.19 2.46 7.28-1.1 14.97.88 20.96 6.08 10.84 9.42 11.98 25.84 2.56 36.68-9.42 10.84-25.84 11.98-36.68 2.56-5.99-5.21-9.02-12.55-8.94-19.91.09-7.97-.2-16.8-5.66-22.62l-.94-1c-2.91-2.59-6.75-4.16-10.95-4.16-.6 0-1.19.03-1.77.09-.35.04-.69.09-1.03.14-.34.07-.69.15-1.03.25-.33.08-.65.17-.97.28-.21.07-.42.14-.62.21-.51.18-1.01.39-1.49.62-.7.33-1.37.71-2.01 1.14-.26.17-.5.35-.75.53l-.17.13a11 11 0 0 0-.68.55l-.14.12-.11.1-.94 1.01c-5.46 5.81-5.75 14.65-5.66 22.62.08 7.36-2.95 14.71-8.94 19.91-10.84 9.42-27.26 8.27-36.68-2.56-9.42-10.84-8.27-27.26 2.56-36.68 5.99-5.21 13.69-7.18 20.96-6.08 7.88 1.19 16.67 2.14 23.19-2.46l1.08-.76c5.39-4.2 8.86-10.75 8.87-18.11-.02-12.69-11.31-22.97-24-22.97l-2.91.27c-.03 0-.06.01-.09.01v-.01l-3.93.36c-8.01.73-14.12 7.23-19.37 13.33C40.94 122.49 33.88 126 26 126 11.64 126 0 114.36 0 100l-4.33e-06-.07Z" fill="#FF5C28"/></svg>`;
-
-  const statusIcon = success
-    ? `<div class="icon success"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>`
-    : `<div class="icon error"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>`;
-
-  return `<!DOCTYPE html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Subconscious CLI</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Manrope',system-ui,sans-serif;min-height:100vh;background:#F6F3EF;color:#111}
-header{display:flex;align-items:center;gap:10px;padding:20px 24px}
-header svg{width:24px;height:24px}
-header span{font-size:15px;font-weight:600;letter-spacing:-.01em}
-main{display:flex;align-items:center;justify-content:center;min-height:calc(100vh - 160px)}
-.wrap{width:100%;max-width:400px;padding:0 24px}
-.label{text-align:center;font-size:11px;font-weight:500;text-transform:uppercase;
-  letter-spacing:.1em;color:#9ca3af;margin-bottom:16px}
-.card{background:#fff;border:1px solid rgba(0,0,0,.08);border-radius:12px;
-  padding:32px;text-align:center}
-.icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;margin:0 auto 16px}
-.icon.success{background:#f0fdf4}
-.icon.error{background:#fef2f2}
-h1{font-size:15px;font-weight:600;margin-bottom:4px;letter-spacing:-.01em}
-.sub{color:#6b7280;font-size:13px;line-height:1.6;max-width:280px;margin:0 auto}
-.footer{text-align:center;margin-top:16px;font-size:11px;color:#9ca3af}
-</style></head><body>
-<header>${logoSvg}<span>Subconscious</span></header>
-<main><div class="wrap">
-  <div class="label">CLI Authentication</div>
-  <div class="card">
-    ${statusIcon}
-    <h1>${title}</h1>
-    <p class="sub">${subtitle}</p>
-  </div>
-  <div class="footer">subconscious.dev</div>
-</div></main>
-</body></html>`;
+export async function pollDeviceLogin(platformUrl, deviceCode, fetchImpl = fetch) {
+  const res = await fetchImpl(`${platformUrl}/api/cli/device/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ device_code: deviceCode }),
+    signal: AbortSignal.timeout(8000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.ok && data.key) return { status: 'approved', key: data.key };
+  if (data.error === 'authorization_pending') return { status: 'pending' };
+  if (data.error === 'expired') return { status: 'expired' };
+  throw new Error(data.message || data.error || 'CLI login failed.');
 }
 
-// ── Commands ────────────────────────────────────────────────────────────
+function printDeviceInstructions(verificationUrl, userCode) {
+  console.log(`  ${c.dim}Opening browser to sign in...${c.reset}`);
+  console.log();
+  console.log(`  ${c.dim}If a window doesn't open, go to:${c.reset}`);
+  console.log(`  ${c.underline}${c.cyan}${terminalLink(verificationUrl)}${c.reset}`);
+  console.log();
+  console.log(`  ${c.dim}Or open ${c.reset}${c.cyan}/cli/device${c.reset}${c.dim} and enter:${c.reset} ${c.bold}${userCode}${c.reset}`);
+  console.log();
+}
+
+function printLoginFallback() {
+  console.error(`  ${c.dim}You can also copy an API key from the dashboard and run${c.reset} ${c.cyan}subc update-key${c.reset}${c.dim}.${c.reset}`);
+}
+
+async function saveLoginKey(profileName, token) {
+  if (profileName === DEFAULT_PROFILE) {
+    const config = await loadConfig();
+    config.subconscious_api_key = token;
+    await saveConfig(config);
+  }
+  return ensureProfile(profileName, token);
+}
 
 export async function loginCommand(_argv = [], options = {}) {
   const profileName = options.profileName || DEFAULT_PROFILE;
   const existing = await getApiKey(options.profile);
+  const fetchImpl = options.fetchImpl || fetch;
 
   if (existing) {
     const profile = await ensureProfile(profileName, existing.key);
@@ -321,40 +181,30 @@ export async function loginCommand(_argv = [], options = {}) {
     console.log(`\n${c.yellow}Already logged in.${c.reset}`);
     console.log(`  Key: ${c.dim}${masked}${c.reset}`);
     console.log(`  Profile: ${c.dim}${profile.path}${c.reset}`);
-    console.log(
-      `\n  Run ${c.cyan}${logout}${c.reset} first to switch accounts.\n`,
-    );
+    console.log(`\n  Run ${c.cyan}${logout}${c.reset} first to switch accounts.\n`);
     return;
   }
 
   console.log();
-  console.log(
-    `  ${c.magenta}${c.bold}Subconscious${c.reset} ${c.dim}— CLI Login${c.reset}`,
-  );
+  console.log(`  ${c.magenta}${c.bold}Subconscious${c.reset} ${c.dim}— CLI Login${c.reset}`);
   console.log();
 
   const platformUrl = getPlatformUrl(options.profile);
-  const loginStatus = await probeLoginPage(platformUrl);
-  if (isLoginMissing(loginStatus)) {
-    printLoginUpgradeWarning();
+  let registered;
+  try {
+    registered = await registerDeviceLogin(platformUrl, fetchImpl);
+  } catch (error) {
+    console.error(`  ${c.red}✗ ${error.message}${c.reset}`);
+    printLoginFallback();
+    console.log();
     process.exitCode = 1;
     return;
   }
 
-  const state = crypto.randomBytes(16).toString('hex');
-  const { port, promise } = await startCallbackServer(state);
+  const verificationUrl = `${platformUrl}/cli/device?code=${encodeURIComponent(registered.user_code)}`;
+  printDeviceInstructions(verificationUrl, registered.user_code);
+  (options.openBrowser || openBrowser)(verificationUrl);
 
-  const authUrl = `${platformUrl}/cli/auth?port=${port}&state=${state}`;
-
-  console.log(`  ${c.dim}Opening browser to sign in...${c.reset}`);
-  console.log();
-  console.log(`  ${c.dim}If it doesn't open, visit:${c.reset}`);
-  console.log(`  ${c.underline}${c.cyan}${authUrl}${c.reset}`);
-  console.log();
-
-  openBrowser(authUrl);
-
-  // Spinner while waiting
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   let i = 0;
   const spinner = setInterval(() => {
@@ -363,39 +213,53 @@ export async function loginCommand(_argv = [], options = {}) {
     );
   }, 80);
 
-  process.on('SIGINT', () => {
+  const started = Date.now();
+  let cancelled = false;
+  const onSigint = () => {
+    cancelled = true;
+  };
+  process.on('SIGINT', onSigint);
+
+  try {
+    while (!cancelled) {
+      if (Date.now() - started > DEVICE_POLL_TIMEOUT_MS) {
+        throw new Error('Authentication timed out (5 min). Please try again.');
+      }
+      const polled = await pollDeviceLogin(platformUrl, registered.device_code, fetchImpl);
+      if (polled.status === 'approved') {
+        clearInterval(spinner);
+        process.stdout.write('\r' + ' '.repeat(50) + '\r');
+        const profile = await saveLoginKey(profileName, polled.key);
+        const masked = polled.key.slice(0, 8) + '...' + polled.key.slice(-4);
+        console.log(`  ${c.green}${c.bold}✓ Logged in successfully!${c.reset}`);
+        console.log(`  ${c.dim}Key: ${masked}${c.reset}`);
+        if (profileName === DEFAULT_PROFILE) {
+          console.log(`  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`);
+        }
+        console.log(`  ${c.dim}Runbook profile: ${profile.path}${c.reset}`);
+        console.log(`  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or install editor hooks with ${c.reset}${c.cyan}subc cursor install${c.reset}${c.dim}.${c.reset}`);
+        console.log(`  ${c.dim}Pi needs ${c.reset}${c.cyan}subc pi install${c.reset}${c.dim} first. List profiles with ${c.reset}${c.cyan}subc config${c.reset}${c.dim}.${c.reset}`);
+        console.log();
+        return;
+      }
+      if (polled.status === 'expired') {
+        throw new Error('Login code expired. Please try again.');
+      }
+      await new Promise((resolve) => setTimeout(resolve, DEVICE_POLL_INTERVAL_MS));
+    }
     clearInterval(spinner);
     process.stdout.write('\r' + ' '.repeat(50) + '\r');
     console.log(`\n  ${c.dim}Login cancelled.${c.reset}\n`);
-    process.exit(0);
-  });
-  try {
-    const result = await promise;
-    clearInterval(spinner);
-    process.stdout.write('\r' + ' '.repeat(50) + '\r');
-
-    if (profileName === DEFAULT_PROFILE) {
-      const config = await loadConfig();
-      config.subconscious_api_key = result.token;
-      await saveConfig(config);
-    }
-    const profile = await ensureProfile(profileName, result.token);
-
-    const masked = result.token.slice(0, 8) + '...' + result.token.slice(-4);
-    console.log(`  ${c.green}${c.bold}✓ Logged in successfully!${c.reset}`);
-    console.log(`  ${c.dim}Key: ${masked}${c.reset}`);
-    if (profileName === DEFAULT_PROFILE) {
-      console.log(`  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`);
-    }
-    console.log(`  ${c.dim}Runbook profile: ${profile.path}${c.reset}`);
-    console.log(`  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or install editor hooks with ${c.reset}${c.cyan}subc cursor install${c.reset}${c.dim}.${c.reset}`);
-    console.log(`  ${c.dim}Pi needs ${c.reset}${c.cyan}subc pi install${c.reset}${c.dim} first. List profiles with ${c.reset}${c.cyan}subc config${c.reset}${c.dim}.${c.reset}`);
-    console.log();
+    process.exitCode = 1;
   } catch (error) {
     clearInterval(spinner);
     process.stdout.write('\r' + ' '.repeat(50) + '\r');
-    console.error(`  ${c.red}✗ ${error.message}${c.reset}\n`);
-    process.exit(1);
+    console.error(`  ${c.red}✗ ${error.message}${c.reset}`);
+    printLoginFallback();
+    console.log();
+    process.exitCode = 1;
+  } finally {
+    process.off('SIGINT', onSigint);
   }
 }
 
