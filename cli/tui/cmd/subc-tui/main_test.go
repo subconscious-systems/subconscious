@@ -308,6 +308,42 @@ func TestUpdateBaseURLUsesInlineDetail(t *testing.T) {
 	}
 }
 
+func TestUpdateBaseURLArrowKeysEditInsideDefault(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile:   "default",
+		SavedGatewayURL: "https://gateway.example",
+		GatewayURL:      "https://gateway.example",
+	})
+	for index, item := range m.items {
+		if item.Kind == itemUpdateBaseURL {
+			m.cursor = index
+			break
+		}
+	}
+	opened, _ := m.updateMain("enter")
+	editor := opened.(model)
+	if editor.urlInput != "https://gateway.example" {
+		t.Fatalf("prefill = %q", editor.urlInput)
+	}
+	if editor.urlCursor != len([]rune(editor.urlInput)) {
+		t.Fatalf("cursor = %d, want end", editor.urlCursor)
+	}
+
+	for range len("example") {
+		next, _ := editor.updateBaseURL(tea.KeyPressMsg{Code: tea.KeyLeft})
+		editor = next.(model)
+	}
+	typed, _ := editor.updateBaseURL(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	editor = typed.(model)
+	if editor.urlInput != "https://gateway.xexample" {
+		t.Fatalf("edited url = %q", editor.urlInput)
+	}
+	rendered := editor.renderGatewayURLInput()
+	if !strings.Contains(rendered, "gateway.x▌example") {
+		t.Fatalf("caret should sit after the inserted character: %q", rendered)
+	}
+}
+
 func TestMenuActionsUseOneFixedColumn(t *testing.T) {
 	launch := menuRowText("Claude Code", "Launch", 24, 12, false)
 	configure := menuRowText("Cursor", "Configure", 24, 12, false)

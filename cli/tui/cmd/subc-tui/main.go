@@ -169,6 +169,7 @@ type model struct {
 	screen          screen
 	profileInput    string
 	urlInput        string
+	urlCursor       int
 	apiKeyInput     string
 	inputError      string
 	notice          string
@@ -426,6 +427,7 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 			if m.urlInput == "" {
 				m.urlInput = m.state.GatewayURL
 			}
+			m.urlCursor = utf8.RuneCountInString(m.urlInput)
 			m.inputError = ""
 			m.screen = screenUpdateBaseURL
 			return m, nil
@@ -435,6 +437,7 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 			if m.urlInput == "" {
 				m.urlInput = m.state.PlatformURL
 			}
+			m.urlCursor = utf8.RuneCountInString(m.urlInput)
 			m.inputError = ""
 			m.screen = screenUpdatePlatformURL
 			return m, nil
@@ -595,46 +598,27 @@ func (m model) updateCreateProfile(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateBaseURL(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	switch key {
-	case "esc":
-		m.screen = screenMain
-		m.inputError = ""
-	case "backspace", "ctrl+h":
-		runes := []rune(m.urlInput)
-		if len(runes) > 0 {
-			m.urlInput = string(runes[:len(runes)-1])
-		}
-		m.inputError = ""
-	case "ctrl+u":
-		m.urlInput = ""
-		m.inputError = ""
-	case "enter":
-		normalized, err := normalizeBaseURL(m.urlInput)
-		if err != nil {
-			m.inputError = err.Error()
-			return m, nil
-		}
-		if err := updateProfileValue(m.state.ProfilePath, "GATEWAY_URL", normalized); err != nil {
-			m.inputError = "Could not save the profile: " + err.Error()
-			return m, nil
-		}
-		m.state.SavedGatewayURL = normalized
-		m.state.GatewayURL = normalized
-		m.sessionBaseURL = normalized
-		m.notice = "Base URL saved to profile " + m.state.ActiveProfile + "."
-		if m.state.GatewayOverridden {
-			m.notice += " Your shell override still applies on the next run."
-		}
-		m.screen = screenMain
-		m.inputError = ""
-	default:
-		text := msg.Key().Text
-		if text != "" && utf8.RuneCountInString(m.urlInput+text) <= 512 {
-			m.urlInput += text
-			m.inputError = ""
-		}
+	if handled, next := m.editURLInput(msg); handled {
+		return next, nil
 	}
+	normalized, err := normalizeBaseURL(m.urlInput)
+	if err != nil {
+		m.inputError = err.Error()
+		return m, nil
+	}
+	if err := updateProfileValue(m.state.ProfilePath, "GATEWAY_URL", normalized); err != nil {
+		m.inputError = "Could not save the profile: " + err.Error()
+		return m, nil
+	}
+	m.state.SavedGatewayURL = normalized
+	m.state.GatewayURL = normalized
+	m.sessionBaseURL = normalized
+	m.notice = "Base URL saved to profile " + m.state.ActiveProfile + "."
+	if m.state.GatewayOverridden {
+		m.notice += " Your shell override still applies on the next run."
+	}
+	m.screen = screenMain
+	m.inputError = ""
 	return m, nil
 }
 
@@ -673,46 +657,118 @@ func (m model) updateSetApiKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updatePlatformURL(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	switch key {
+	if handled, next := m.editURLInput(msg); handled {
+		return next, nil
+	}
+	normalized, err := normalizeBaseURL(m.urlInput)
+	if err != nil {
+		m.inputError = err.Error()
+		return m, nil
+	}
+	if err := updateProfileValue(m.state.ProfilePath, "PLATFORM_URL", normalized); err != nil {
+		m.inputError = "Could not save the profile: " + err.Error()
+		return m, nil
+	}
+	m.state.SavedPlatformURL = normalized
+	m.state.PlatformURL = normalized
+	m.notice = "Platform URL saved to profile " + m.state.ActiveProfile + "."
+	if m.state.PlatformOverridden {
+		m.notice += " Your shell override still applies on the next run."
+	}
+	m.screen = screenMain
+	m.inputError = ""
+	return m, nil
+}
+
+// editURLInput handles every URL-field key except enter. The bool is false only when the caller should save.
+func (m model) editURLInput(msg tea.KeyPressMsg) (bool, model) {
+	switch msg.String() {
 	case "esc":
 		m.screen = screenMain
 		m.inputError = ""
-	case "backspace", "ctrl+h":
-		runes := []rune(m.urlInput)
-		if len(runes) > 0 {
-			m.urlInput = string(runes[:len(runes)-1])
+		return true, m
+	case "left", "ctrl+b":
+		if m.urlCursor > 0 {
+			m.urlCursor--
 		}
+		return true, m
+	case "right", "ctrl+f":
+		if m.urlCursor < utf8.RuneCountInString(m.urlInput) {
+			m.urlCursor++
+		}
+		return true, m
+	case "home", "ctrl+a":
+		m.urlCursor = 0
+		return true, m
+	case "end", "ctrl+e":
+		m.urlCursor = utf8.RuneCountInString(m.urlInput)
+		return true, m
+	case "backspace", "ctrl+h":
+		m.urlInput, m.urlCursor = deleteBeforeCursor(m.urlInput, m.urlCursor)
 		m.inputError = ""
+		return true, m
+	case "delete":
+		m.urlInput, m.urlCursor = deleteAtCursor(m.urlInput, m.urlCursor)
+		m.inputError = ""
+		return true, m
 	case "ctrl+u":
 		m.urlInput = ""
+		m.urlCursor = 0
 		m.inputError = ""
+		return true, m
 	case "enter":
-		normalized, err := normalizeBaseURL(m.urlInput)
-		if err != nil {
-			m.inputError = err.Error()
-			return m, nil
-		}
-		if err := updateProfileValue(m.state.ProfilePath, "PLATFORM_URL", normalized); err != nil {
-			m.inputError = "Could not save the profile: " + err.Error()
-			return m, nil
-		}
-		m.state.SavedPlatformURL = normalized
-		m.state.PlatformURL = normalized
-		m.notice = "Platform URL saved to profile " + m.state.ActiveProfile + "."
-		if m.state.PlatformOverridden {
-			m.notice += " Your shell override still applies on the next run."
-		}
-		m.screen = screenMain
-		m.inputError = ""
+		return false, m
 	default:
 		text := msg.Key().Text
-		if text != "" && utf8.RuneCountInString(m.urlInput+text) <= 512 {
-			m.urlInput += text
+		if text != "" {
+			m.urlInput, m.urlCursor = insertAtCursor(m.urlInput, m.urlCursor, text, 512)
 			m.inputError = ""
 		}
+		return true, m
 	}
-	return m, nil
+}
+
+func insertAtCursor(value string, cursor int, text string, limit int) (string, int) {
+	runes := []rune(value)
+	cursor = clampCursor(cursor, len(runes)+1)
+	if cursor > len(runes) {
+		cursor = len(runes)
+	}
+	insert := []rune(text)
+	if len(runes)+len(insert) > limit {
+		return value, cursor
+	}
+	next := make([]rune, 0, len(runes)+len(insert))
+	next = append(next, runes[:cursor]...)
+	next = append(next, insert...)
+	next = append(next, runes[cursor:]...)
+	return string(next), cursor + len(insert)
+}
+
+func deleteBeforeCursor(value string, cursor int) (string, int) {
+	runes := []rune(value)
+	if cursor > len(runes) {
+		cursor = len(runes)
+	}
+	if cursor <= 0 || len(runes) == 0 {
+		return value, 0
+	}
+	next := append([]rune{}, runes[:cursor-1]...)
+	next = append(next, runes[cursor:]...)
+	return string(next), cursor - 1
+}
+
+func deleteAtCursor(value string, cursor int) (string, int) {
+	runes := []rune(value)
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(runes) {
+		return value, len(runes)
+	}
+	next := append([]rune{}, runes[:cursor]...)
+	next = append(next, runes[cursor+1:]...)
+	return string(next), cursor
 }
 
 func normalizeBaseURL(raw string) (string, error) {
@@ -1291,21 +1347,18 @@ func (m model) renderGatewayURLInput() string {
 	copy := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(
 		wrapText("Save the gateway URL directly to profile "+m.state.ActiveProfile+".", width-8),
 	)
-	value := m.urlInput
-	if value == "" {
-		value = lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render("https://api.subconscious.dev")
-	}
+	value := renderEditableValue(m.urlInput, m.urlCursor, width-14, "https://api.subconscious.dev")
 	field := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(textColor)).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(lipgloss.Color(brandOrange)).
 		Width(width - 12).
-		Render(ellipsize(value, width-14) + "▌")
+		Render(value)
 	errorLine := ""
 	if m.inputError != "" {
 		errorLine = "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(wrapText(m.inputError, width-8))
 	}
-	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("ctrl+u clear   enter save   esc cancel")
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("←/→ move   ctrl+u clear   enter save   esc cancel")
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(brandOrange)).
@@ -1321,21 +1374,18 @@ func (m model) renderPlatformURLInput() string {
 	copy := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(
 		wrapText("Save the platform URL directly to profile "+m.state.ActiveProfile+".", width-8),
 	)
-	value := m.urlInput
-	if value == "" {
-		value = lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render("https://platform.subconscious.dev")
-	}
+	value := renderEditableValue(m.urlInput, m.urlCursor, width-14, "https://platform.subconscious.dev")
 	field := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(textColor)).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(lipgloss.Color(brandOrange)).
 		Width(width - 12).
-		Render(ellipsize(value, width-14) + "▌")
+		Render(value)
 	errorLine := ""
 	if m.inputError != "" {
 		errorLine = "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(wrapText(m.inputError, width-8))
 	}
-	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("ctrl+u clear   enter save   esc cancel")
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("←/→ move   ctrl+u clear   enter save   esc cancel")
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(brandOrange)).
@@ -1343,6 +1393,41 @@ func (m model) renderPlatformURLInput() string {
 		Width(width).
 		Render(heading + "\n" + copy + "\n\n" + field + errorLine + "\n\n" + footer)
 	return lipgloss.Place(max(width+4, m.width), max(12, m.height), lipgloss.Center, lipgloss.Center, panel)
+}
+
+func renderEditableValue(value string, cursor int, width int, placeholder string) string {
+	if value == "" {
+		hint := lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render(ellipsize(placeholder, max(1, width-1)))
+		return "▌" + hint
+	}
+	runes := []rune(value)
+	cursor = clampCursor(cursor, len(runes)+1)
+	if width <= 1 {
+		return "▌"
+	}
+	visible := width - 1
+	start := 0
+	if len(runes) > visible {
+		after := visible / 3
+		start = cursor - (visible - after)
+		if start < 0 {
+			start = 0
+		}
+		if start > len(runes)-visible {
+			start = len(runes) - visible
+		}
+	}
+	end := start + visible
+	if end > len(runes) {
+		end = len(runes)
+	}
+	if cursor < start {
+		cursor = start
+	}
+	if cursor > end {
+		cursor = end
+	}
+	return string(runes[start:cursor]) + "▌" + string(runes[cursor:end])
 }
 
 func currentProfile(state inputState) profileState {
