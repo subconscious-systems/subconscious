@@ -2,16 +2,22 @@
  * Shared registry loading + token substitution.
  *
  * The single source of truth lives in `agents/registry.json`. Tokens like
- * `{apiKey}`, `{model}`, `{baseUrl}`, `{baseUrlV1}` are placeholders that each
- * consumer (the CLI at runtime, the generators at build time) substitutes with
- * real values. The literal `{env:...}` token is OpenCode's OWN templating and
- * must NEVER be touched here.
+ * `{apiKey}`, `{model}`, `{baseUrl}`, `{baseUrlV1}` are placeholders that the
+ * CLI substitutes at runtime. The literal `{env:...}` token is OpenCode's own
+ * templating and must never be touched here.
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REGISTRY_PATH = path.join(__dirname, '..', '..', 'agents', 'registry.json');
+const REGISTRY_PATH = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'agents',
+  'registry.json',
+);
 
 /** Parse and return the canonical registry. */
 function loadRegistry() {
@@ -32,7 +38,7 @@ function substituteString(str, ctx) {
 }
 
 /**
- * Deep-walk any JSON value, substituting tokens in strings AND object keys.
+ * Deep-walk any JSON value, substituting tokens in strings and object keys.
  * A value of shape `{ "$json": <obj> }` is substituted then JSON.stringify'd
  * to a string. Returns a brand-new structure; never mutates the input.
  */
@@ -58,4 +64,4 @@ function substitute(value, ctx) {
   return value;
 }
 
-module.exports = { loadRegistry, substitute, REGISTRY_PATH };
+export { loadRegistry, substitute, REGISTRY_PATH };
