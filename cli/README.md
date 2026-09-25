@@ -32,7 +32,7 @@ subc pi
 subc <agent> uninstall
 ```
 
-Running `subc` with no arguments in a terminal opens the native Go TUI. Use
+Running `subc` with no arguments in a terminal opens the native Go TUI immediately. The npm update check runs in the background. If a newer release is found, `subc` leaves the menu and shows the same update prompt as any other command. Skip for now returns to the menu. Use
 the arrow keys and Enter to launch agents or manage the active profile, `p` to
 switch profiles, and `q` to quit. The menu includes dedicated **Usage**,
 **Create profile**, **Coding sessions**, **Set default model**, **Set subagent model**,
@@ -378,9 +378,9 @@ passed through the same way and override Subconscious-injected defaults.
 
 ## Authentication
 
-`subc login` opens a browser, completes sign-in, and saves the generated API
-key to the selected runbook profile with mode `600`. For the default profile it
-also maintains `~/.subconscious/config.json`.
+`subc login` opens a browser to a one-time login link, waits for you to sign in, and saves the API key to the selected runbook profile with mode `600`. For the default profile it also maintains `~/.subconscious/config.json`. The same flow works on a laptop, over SSH, and inside a VM: the browser does not need to be on the machine running the CLI.
+
+If a window does not open, open the login URL printed in the terminal. That URL includes your code. You can also open the printed `/cli/device` link and type the code. To skip the browser, copy an API key from the dashboard and run `subc update-key`.
 
 ```bash
 subc login

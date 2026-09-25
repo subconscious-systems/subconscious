@@ -122,6 +122,8 @@ Usage:
   subc login help
 
 Authenticate and save an API key to the selected profile.
+Opens a browser to a one-time login link. If the browser does not open, use the URL printed in the terminal.
+To sign in without a browser, copy an API key from the dashboard and run subc update-key <your-api-key>.
 `,
   logout: `
 Usage:
@@ -297,22 +299,35 @@ async function main() {
     process.stdout.isTTY === true &&
     process.env.TERM !== 'dumb';
 
-  // The TUI opens immediately and surfaces catalog, session, and upgrade
-  // status itself. Keep the blocking npm prompt for explicit commands.
+  // Explicit commands can wait on npm. The TUI opens immediately and prompts
+  // only after a newer version is found.
   if (!launchTui) {
     const update = await showUpdateNotice();
     if (update?.action === 'updated' || update?.action === 'cancel') return;
   }
 
   if (launchTui) {
-    const selection = await runTui({ profileName });
-    if (!selection?.args?.length) return;
-    if (selection.baseUrl?.trim()) {
-      process.env.SUBCONSCIOUS_BASE_URL = selection.baseUrl.trim();
+    let disableUpdateCheck = false;
+    for (;;) {
+      const selection = await runTui({ profileName, disableUpdateCheck });
+      if (selection?.updatePrompt) {
+        const update = await showUpdateNotice({
+          currentVersion: selection.installedVersion,
+          latestVersion: selection.latestVersion,
+        });
+        if (update?.action === 'updated' || update?.action === 'cancel') return;
+        disableUpdateCheck = true;
+        continue;
+      }
+      if (!selection?.args?.length) return;
+      if (selection.baseUrl?.trim()) {
+        process.env.SUBCONSCIOUS_BASE_URL = selection.baseUrl.trim();
+      }
+      parsed = extractProfile(selection.args);
+      ({ args, profileName, profileExplicit } = parsed);
+      command = args[0];
+      break;
     }
-    parsed = extractProfile(selection.args);
-    ({ args, profileName, profileExplicit } = parsed);
-    command = args[0];
   }
 
   if (!command || command === '--help' || command === '-h' || (command === 'help' && !args[1])) {

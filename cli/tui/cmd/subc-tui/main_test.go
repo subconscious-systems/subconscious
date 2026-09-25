@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestActionArgsPreserveProfileAndModel(t *testing.T) {
@@ -250,6 +252,41 @@ func TestUpdateProfileValuePreservesOtherSettings(t *testing.T) {
 	}
 }
 
+func TestSetApiKeyQuitsWithUpdateKey(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "staging",
+		Agents:        []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
+	})
+	for index, item := range m.items {
+		if item.Kind == itemSetApiKey {
+			m.cursor = index
+			break
+		}
+	}
+	detail := m.renderDetail(56)
+	if strings.Contains(detail, "sk-") {
+		t.Fatalf("detail should not preview a key: %q", detail)
+	}
+	updated, _ := m.updateMain("enter")
+	editor := updated.(model)
+	if editor.screen != screenSetApiKey {
+		t.Fatalf("screen = %v, want set api key", editor.screen)
+	}
+	editor.apiKeyInput = "sk-secret-value"
+	if strings.Contains(editor.renderSetApiKey(), "sk-secret-value") {
+		t.Fatal("api key input is shown in cleartext")
+	}
+	finished, cmd := editor.updateSetApiKey(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter should quit")
+	}
+	got := finished.(model).result.Args
+	want := []string{"-p", "staging", "update-key", "sk-secret-value"}
+	if strings.Join(got, " ") != strings.Join(want, " ") {
+		t.Fatalf("args = %#v, want %#v", got, want)
+	}
+}
+
 func TestUpdateBaseURLUsesInlineDetail(t *testing.T) {
 	m := newModel(inputState{
 		ActiveProfile: "default",
@@ -268,6 +305,42 @@ func TestUpdateBaseURLUsesInlineDetail(t *testing.T) {
 	}
 	if strings.Contains(detail, "$ subc") {
 		t.Fatalf("gateway editor should not show a command preview: %q", detail)
+	}
+}
+
+func TestUpdateBaseURLArrowKeysEditInsideDefault(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile:   "default",
+		SavedGatewayURL: "https://gateway.example",
+		GatewayURL:      "https://gateway.example",
+	})
+	for index, item := range m.items {
+		if item.Kind == itemUpdateBaseURL {
+			m.cursor = index
+			break
+		}
+	}
+	opened, _ := m.updateMain("enter")
+	editor := opened.(model)
+	if editor.urlInput != "https://gateway.example" {
+		t.Fatalf("prefill = %q", editor.urlInput)
+	}
+	if editor.urlCursor != len([]rune(editor.urlInput)) {
+		t.Fatalf("cursor = %d, want end", editor.urlCursor)
+	}
+
+	for range len("example") {
+		next, _ := editor.updateBaseURL(tea.KeyPressMsg{Code: tea.KeyLeft})
+		editor = next.(model)
+	}
+	typed, _ := editor.updateBaseURL(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	editor = typed.(model)
+	if editor.urlInput != "https://gateway.xexample" {
+		t.Fatalf("edited url = %q", editor.urlInput)
+	}
+	rendered := editor.renderGatewayURLInput()
+	if !strings.Contains(rendered, "gateway.x▌example") {
+		t.Fatalf("caret should sit after the inserted character: %q", rendered)
 	}
 }
 
@@ -478,6 +551,30 @@ func TestLoadingViewsShowInFlightCopy(t *testing.T) {
 	footer := m.loadingFooter()
 	if !strings.Contains(footer, "Fetching catalog...") || !strings.Contains(footer, "Scanning sessions...") {
 		t.Fatalf("loading footer = %q", footer)
+	}
+}
+
+func TestUpdateOfferHandsOffToCommandPrompt(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "default",
+		Version:       "4.0.1",
+		Agents:        []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
+	})
+	available := true
+	latest := "5.0.0"
+	m = applyStatePatch(m, statePatch{UpdateAvailable: &available, LatestVersion: &latest})
+	offered, cmd := m.offerUpdate()
+	if cmd == nil {
+		t.Fatal("an available update should leave the TUI for the shared prompt")
+	}
+	if !offered.result.UpdatePrompt || offered.result.InstalledVersion != "4.0.1" || offered.result.LatestVersion != "5.0.0" {
+		t.Fatalf("prompt result = %#v", offered.result)
+	}
+	editing := m
+	editing.screen = screenUpdateBaseURL
+	stayed, stayCmd := editing.offerUpdate()
+	if stayCmd != nil || stayed.screen != screenUpdateBaseURL {
+		t.Fatal("update prompt interrupted an open editor")
 	}
 }
 
