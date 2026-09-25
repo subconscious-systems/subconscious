@@ -105,9 +105,3 @@ npm publish uses [trusted publishing](https://docs.npmjs.com/trusted-publishers)
 - Allowed actions: allow direct `npm publish`
 
 After a publish succeeds, set the package's publishing access to require two-factor authentication and disallow tokens.
-
-`create-subconscious-app` is no longer published from this repo. Deprecate it on npm. Do not unpublish it:
-
-```bash
-npm deprecate create-subconscious-app "No longer maintained. Use the subc CLI: npm install -g subconscious-cli"
-```
