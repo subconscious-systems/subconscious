@@ -522,6 +522,12 @@ test('managed agent binaries take precedence over older PATH installations', () 
     [path.join('/home/test', '.local', 'bin')],
   );
   assert.deepEqual(agents.preferredBinDirsForAgent(agents.resolveAgent('codex')), []);
+  // OpenCode's curl installer always uses ~/.opencode/bin and only adds it to
+  // PATH through shell rc files, so it must be probed directly (#71).
+  assert.deepEqual(
+    agents.preferredBinDirsForAgent(agents.resolveAgent('opencode'), {}, '/home/test'),
+    [path.resolve('/home/test', '.opencode', 'bin')],
+  );
 
   const augmented = agents.augmentPath(
     [managed],

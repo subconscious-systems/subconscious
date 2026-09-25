@@ -203,6 +203,7 @@
         "mode": "launch",
         "script": "opencode/run.sh",
         "setupScript": "opencode/install.sh",
+        "installDir": ".opencode/bin",
         "setupActions": [
           "status",
           "uninstall"
