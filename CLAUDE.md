@@ -1,33 +1,10 @@
 # CLAUDE.md
 
-## Repo structure
+This repository is the `subc` CLI, published to npm as `subconscious-cli`.
 
-- `examples/` — SDK example projects, each with its own package.json or pyproject.toml
-- `examples/manifest.json` — auto-generated manifest consumed by the templates page at subconscious.dev/templates
-- `scripts/generate-manifest.js` — reads example metadata → outputs manifest.json
-- `create-subconscious-app/` — `npx create-subconscious-app` CLI scaffolder
-- `cli/` — `subc`: login/logout/whoami, named `.env` profiles, and coding-agent integrations for Claude Code, Codex, OpenCode, Cursor, Copilot, and Pi. `subc login` creates the default profile. Persistent integrations use `subc <agent> install` / `subc <agent> uninstall`.
-- `agents/registry.json` — the single source of truth for coding-agent metadata, CLI routing, and generated example setup blocks. The CLI runtime data (`cli/bin/registry.generated.json`) and each example's `subconscious.agent` + `setup` blocks are GENERATED from it. Executable integrations live under `cli/bin/runbook`. Edit `agents/registry.json`, then run `pnpm generate` (or `node scripts/generate-agents.js`) to regenerate the CLI data, example blocks, and manifest. Do not hand-edit the generated outputs.
+- `bin/` — the `subc` entry point, profiles, and coding-agent integrations. `subc login` creates the default profile. Persistent integrations use `subc <agent> install` / `subc <agent> uninstall`.
+- `agents/registry.json` — the single source of truth for coding-agent metadata and CLI routing. `bin/registry.generated.json` and `bin/runbook/model-capabilities.generated.sh` are generated from it. Executable integrations live under `bin/runbook`. Edit `agents/registry.json`, then run `node scripts/generate-agents.js`. Do not hand-edit the generated outputs.
+- `tui/` — the native menu opened when `subc` runs with no arguments.
+- Releases are owned by Release Please. Do not hand-edit `package.json` `version` or `CHANGELOG.md`. Commit subjects must be conventional (`feat:`, `fix:`, `perf:`, and the other prefixes in `CONTRIBUTING.md`).
 
-The registry's `modelCapabilities` also generates
-`cli/bin/runbook/model-capabilities.generated.sh`. Do not hand-edit this helper;
-run `npm run generate` after changing model capabilities.
-
-## Adding examples
-
-Use `/add-example` command. It walks through scaffolding a new example with all required manifest metadata.
-
-Key rules for setup commands in examples:
-- Every step must be a runnable command or `#` comment — no prose
-- Use `your_key` as the SUBCONSCIOUS_API_KEY placeholder (auto-replaced by the templates page)
-- Use different placeholders for third-party keys (e.g. `your_e2b_key`)
-- Commands get chained with `&&` for one-click copy-paste
-
-## Manifest
-
-Regenerate after any example change:
-```bash
-node scripts/generate-manifest.js
-```
-
-GitHub Action auto-regenerates on push to main. On PRs it validates without committing.
+The registry's `modelCapabilities` generates `bin/runbook/model-capabilities.generated.sh`. Do not hand-edit this helper; run `node scripts/generate-agents.js` after changing model capabilities.

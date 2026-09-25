@@ -1,13 +1,58 @@
 {
-  "name": "subconscious-repo",
-  "private": true,
-  "scripts": {
-    "generate:agents": "node scripts/generate-agents.js",
-    "generate:manifest": "node scripts/generate-manifest.js",
-    "generate": "node scripts/generate-agents.js",
-    "test": "npm test --prefix cli"
+  "name": "subconscious-cli",
+  "version": "5.0.3",
+  "description": "CLI for Subconscious — run Subconscious Code, Claude Code, Codex, OpenCode, DeepSeek Harness, Cursor, Copilot, and Pi",
+  "bin": {
+    "subc": "bin/cli.js"
   },
-  "dependencies": {
-    "subconscious-cli": "^0.3.0"
+  "scripts": {
+    "build:tui": "node scripts/build-tui.js",
+    "build:tui:host": "node scripts/build-tui.js --host",
+    "test": "node --test",
+    "test:windows": "node --test test/windows.test.js test/models.test.js test/model-capabilities.test.js test/auth.test.js test/tui.test.js test/update-check.test.js test/sessions.test.js test/branding.test.js test/claude-version.test.js test/usage.test.js test/feedback.test.js test/release.test.js",
+    "test:tui": "go -C tui test ./...",
+    "generate": "node scripts/generate-agents.js",
+    "prepare": "node scripts/install-git-hooks.js",
+    "prepack": "npm run build:tui",
+    "prepublishOnly": "node scripts/require-publish-script.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/subconscious-systems/subconscious.git"
+  },
+  "keywords": [
+    "subconscious",
+    "ai",
+    "cli",
+    "api-key",
+    "authentication",
+    "profiles",
+    "coding-agent",
+    "subconscious-code",
+    "claude-code",
+    "opencode",
+    "codex",
+    "cursor",
+    "copilot",
+    "pi",
+    "deepseek-harness",
+    "launcher"
+  ],
+  "author": "Subconscious Systems",
+  "license": "MIT",
+  "simple-git-hooks": {
+    "commit-msg": "npx --no-install commitlint --edit $1"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
+    "simple-git-hooks": "^2.14.0"
   }
 }
