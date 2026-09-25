@@ -257,6 +257,18 @@ async function raceAbort(signal, promise) {
 export async function loadRemoteTuiUpdates(state, options = {}) {
   const signal = options.signal;
   const writePatch = options.writePatch || (async () => {});
+  // Catalog and session writes finish together. A later patch must not start
+  // until the earlier file replace has finished, or the slower write lands
+  // last and drops the other fields. Windows CI hits that race.
+  let writeQueue = Promise.resolve();
+  const enqueuePatch = (partial) => {
+    const run = writeQueue.then(() => writePatch(partial));
+    writeQueue = run.then(
+      () => {},
+      () => {},
+    );
+    return run;
+  };
   const resolveCatalog = options.resolveCatalog || resolveModelCatalog;
   const discover = options.discoverSessions || discoverSessions;
   const fetchLatest = options.fetchLatestVersion || fetchLatestVersion;
@@ -280,7 +292,7 @@ export async function loadRemoteTuiUpdates(state, options = {}) {
         signal,
       });
       if (signal?.aborted) return;
-      await writePatch({
+      await enqueuePatch({
         models: catalog.models,
         modelError: catalog.error?.message || '',
         modelSource: catalog.source,
@@ -300,7 +312,7 @@ export async function loadRemoteTuiUpdates(state, options = {}) {
         }),
       );
       if (signal?.aborted) return;
-      await writePatch({
+      await enqueuePatch({
         sessions: serializeSessions(sessions),
         sessionsLoading: false,
       });
@@ -318,7 +330,7 @@ export async function loadRemoteTuiUpdates(state, options = {}) {
           });
           if (signal?.aborted || !latest) return;
           if (compareVersions(latest, state.version) > 0) {
-            await writePatch({ updateAvailable: true, latestVersion: latest });
+            await enqueuePatch({ updateAvailable: true, latestVersion: latest });
           }
         } catch (error) {
           if (isAbortError(error) || signal?.aborted) return;

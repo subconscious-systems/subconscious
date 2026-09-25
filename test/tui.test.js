@@ -8,6 +8,7 @@ import * as profiles from '../bin/profiles.js';
 import {
   createLocalTuiState,
   createTuiState,
+  loadRemoteTuiUpdates,
   isTuiResult,
   nativeTargetName,
   resolveTuiExecutable,
@@ -135,6 +136,59 @@ test('createLocalTuiState stays on disk and marks remote data as loading', async
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('remote TUI patches do not overlap', async () => {
+  await profiles.ensureProfile('patch-order', 'secret-key');
+  const state = await createLocalTuiState('patch-order');
+  let entered = 0;
+  let releaseFirst;
+  const holdFirst = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let firstStarted;
+  const firstEntered = new Promise((resolve) => {
+    firstStarted = resolve;
+  });
+  const merged = {};
+  const done = loadRemoteTuiUpdates(state, {
+    disableUpdateCheck: true,
+    resolveCatalog: async () => ({
+      models: ['subconscious/live'],
+      source: 'available',
+      error: null,
+    }),
+    discoverSessions: async () => [
+      {
+        key: 'claude:session-1',
+        harness: 'claude',
+        harnessName: 'Claude Code',
+        title: 'Repair auth',
+        cwd: '/work',
+        updatedAt: '2026-09-03T10:00:00Z',
+        model: 'subconscious/live',
+        portable: true,
+      },
+    ],
+    writePatch: async (partial) => {
+      entered += 1;
+      if (entered === 1) {
+        firstStarted();
+        await holdFirst;
+      }
+      Object.assign(merged, partial);
+    },
+  });
+
+  await firstEntered;
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(entered, 1);
+  releaseFirst();
+  await done;
+  assert.equal(merged.modelsLoading, false);
+  assert.equal(merged.sessionsLoading, false);
+  assert.deepEqual(merged.models, ['subconscious/live']);
+  assert.equal(merged.sessions[0].key, 'claude:session-1');
 });
 
 test('runTui streams catalog and session patches after the TUI starts', async () => {
