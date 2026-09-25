@@ -119,6 +119,8 @@ Usage:
   subc login help
 
 Authenticate and save an API key to the selected profile.
+Opens a browser to a one-time login link. If the browser does not open, use the URL printed in the terminal.
+To sign in without a browser, copy an API key from the dashboard and run subc update-key <your-api-key>.
 `,
   logout: `
 Usage:

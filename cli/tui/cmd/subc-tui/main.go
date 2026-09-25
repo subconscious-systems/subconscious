@@ -128,6 +128,7 @@ const (
 	itemUpdateBaseURL
 	itemSessions
 	itemUpdatePlatformURL
+	itemSetApiKey
 )
 
 type menuItem struct {
@@ -152,6 +153,7 @@ const (
 	screenSessions
 	screenSessionHarnesses
 	screenUpdatePlatformURL
+	screenSetApiKey
 )
 
 type model struct {
@@ -167,6 +169,8 @@ type model struct {
 	screen          screen
 	profileInput    string
 	urlInput        string
+	urlCursor       int
+	apiKeyInput     string
 	inputError      string
 	notice          string
 	sessionBaseURL  string
@@ -197,16 +201,17 @@ func newModel(state inputState) model {
 		})
 	}
 	items = append(items,
-		menuItem{Section: "Account & configuration", Name: "Sign in", Command: "login", Action: "Authenticate", Description: "Authenticate this profile and securely save its Subconscious API key.", Kind: itemCommand},
+		menuItem{Section: "Account & configuration", Name: "Sign in", Command: "login", Action: "Authenticate", Description: "Open a one-time login link and save this profile's Subconscious API key.", Kind: itemCommand},
+		menuItem{Section: "Account & configuration", Name: "Set API key", Command: "update-key", Action: "Configure", Description: "Paste an API key from the platform dashboard and save it to this profile.", Kind: itemSetApiKey},
 		menuItem{Section: "Account & configuration", Name: "Usage", Command: "usage", Action: "Inspect", Description: "Show billing mode, daily allowance, credits, and per-model token usage.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Available models", Command: "models", Action: "Inspect", Description: "Fetch and display the live model catalog from the selected gateway.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Set default model", Command: "config", Action: "Configure", Description: "Choose and save the default model for the selected profile, or UNSET to follow the live catalog.", Kind: itemSetDefaultModel},
 		menuItem{Section: "Account & configuration", Name: "Set subagent model", Command: "config", Action: "Configure", Description: "Choose the model Claude Code uses for subagents, or UNSET to follow the default model.", Kind: itemSetSubagentModel},
-		menuItem{Section: "Account & configuration", Name: "Update base URL", Command: "update-url", Action: "Configure", Description: "Validate and save a new gateway base URL without leaving the TUI.", Kind: itemUpdateBaseURL},
-		menuItem{Section: "Account & configuration", Name: "Update platform URL", Command: "update-platform-url", Action: "Configure", Description: "Validate and save the platform URL used for login, whoami, and usage.", Kind: itemUpdatePlatformURL},
 		menuItem{Section: "Account & configuration", Name: "Create profile", Command: "config", Action: "Create", Description: "Create an isolated profile with its own gateway, model, and agent settings.", Kind: itemCreateProfile},
 		menuItem{Section: "Account & configuration", Name: "Profile settings", Command: "config", Action: "Configure", Description: "View the selected profile, gateway URL, model, and agent settings.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Upgrade CLI", Command: "upgrade", Action: "Update", Description: "Check npm and install the latest published Subconscious CLI.", Kind: itemCommand},
+		menuItem{Section: "Account & configuration", Name: "Update base URL", Command: "update-url", Action: "Configure", Description: "Validate and save a new gateway base URL without leaving the TUI.", Kind: itemUpdateBaseURL},
+		menuItem{Section: "Account & configuration", Name: "Update platform URL", Command: "update-platform-url", Action: "Configure", Description: "Validate and save the platform URL used for login, whoami, and usage.", Kind: itemUpdatePlatformURL},
 	)
 
 	profileCursor := indexProfile(state.Profiles, state.ActiveProfile)
@@ -368,6 +373,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateSessionHarnesses(key)
 		case screenUpdatePlatformURL:
 			return m.updatePlatformURL(msg)
+		case screenSetApiKey:
+			return m.updateSetApiKey(msg)
 		default:
 			return m.updateMain(key)
 		}
@@ -420,6 +427,7 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 			if m.urlInput == "" {
 				m.urlInput = m.state.GatewayURL
 			}
+			m.urlCursor = utf8.RuneCountInString(m.urlInput)
 			m.inputError = ""
 			m.screen = screenUpdateBaseURL
 			return m, nil
@@ -429,8 +437,15 @@ func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
 			if m.urlInput == "" {
 				m.urlInput = m.state.PlatformURL
 			}
+			m.urlCursor = utf8.RuneCountInString(m.urlInput)
 			m.inputError = ""
 			m.screen = screenUpdatePlatformURL
+			return m, nil
+		}
+		if item.Kind == itemSetApiKey {
+			m.apiKeyInput = ""
+			m.inputError = ""
+			m.screen = screenSetApiKey
 			return m, nil
 		}
 		m.result.Args = actionArgs(item, m.state.ActiveProfile, m.state.SelectedModel, m.state.SubagentModel)
@@ -583,43 +598,58 @@ func (m model) updateCreateProfile(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updateBaseURL(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if handled, next := m.editURLInput(msg); handled {
+		return next, nil
+	}
+	normalized, err := normalizeBaseURL(m.urlInput)
+	if err != nil {
+		m.inputError = err.Error()
+		return m, nil
+	}
+	if err := updateProfileValue(m.state.ProfilePath, "GATEWAY_URL", normalized); err != nil {
+		m.inputError = "Could not save the profile: " + err.Error()
+		return m, nil
+	}
+	m.state.SavedGatewayURL = normalized
+	m.state.GatewayURL = normalized
+	m.sessionBaseURL = normalized
+	m.notice = "Base URL saved to profile " + m.state.ActiveProfile + "."
+	if m.state.GatewayOverridden {
+		m.notice += " Your shell override still applies on the next run."
+	}
+	m.screen = screenMain
+	m.inputError = ""
+	return m, nil
+}
+
+func (m model) updateSetApiKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 	switch key {
 	case "esc":
 		m.screen = screenMain
+		m.apiKeyInput = ""
 		m.inputError = ""
 	case "backspace", "ctrl+h":
-		runes := []rune(m.urlInput)
+		runes := []rune(m.apiKeyInput)
 		if len(runes) > 0 {
-			m.urlInput = string(runes[:len(runes)-1])
+			m.apiKeyInput = string(runes[:len(runes)-1])
 		}
 		m.inputError = ""
 	case "ctrl+u":
-		m.urlInput = ""
+		m.apiKeyInput = ""
 		m.inputError = ""
 	case "enter":
-		normalized, err := normalizeBaseURL(m.urlInput)
-		if err != nil {
-			m.inputError = err.Error()
+		value := strings.TrimSpace(m.apiKeyInput)
+		if value == "" {
+			m.inputError = "Paste an API key."
 			return m, nil
 		}
-		if err := updateProfileValue(m.state.ProfilePath, "GATEWAY_URL", normalized); err != nil {
-			m.inputError = "Could not save the profile: " + err.Error()
-			return m, nil
-		}
-		m.state.SavedGatewayURL = normalized
-		m.state.GatewayURL = normalized
-		m.sessionBaseURL = normalized
-		m.notice = "Base URL saved to profile " + m.state.ActiveProfile + "."
-		if m.state.GatewayOverridden {
-			m.notice += " Your shell override still applies on the next run."
-		}
-		m.screen = screenMain
-		m.inputError = ""
+		m.result.Args = []string{"-p", m.state.ActiveProfile, "update-key", value}
+		return m, tea.Quit
 	default:
 		text := msg.Key().Text
-		if text != "" && utf8.RuneCountInString(m.urlInput+text) <= 512 {
-			m.urlInput += text
+		if text != "" && utf8.RuneCountInString(m.apiKeyInput+text) <= 256 {
+			m.apiKeyInput += text
 			m.inputError = ""
 		}
 	}
@@ -627,46 +657,118 @@ func (m model) updateBaseURL(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) updatePlatformURL(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
-	switch key {
+	if handled, next := m.editURLInput(msg); handled {
+		return next, nil
+	}
+	normalized, err := normalizeBaseURL(m.urlInput)
+	if err != nil {
+		m.inputError = err.Error()
+		return m, nil
+	}
+	if err := updateProfileValue(m.state.ProfilePath, "PLATFORM_URL", normalized); err != nil {
+		m.inputError = "Could not save the profile: " + err.Error()
+		return m, nil
+	}
+	m.state.SavedPlatformURL = normalized
+	m.state.PlatformURL = normalized
+	m.notice = "Platform URL saved to profile " + m.state.ActiveProfile + "."
+	if m.state.PlatformOverridden {
+		m.notice += " Your shell override still applies on the next run."
+	}
+	m.screen = screenMain
+	m.inputError = ""
+	return m, nil
+}
+
+// editURLInput handles every URL-field key except enter. The bool is false only when the caller should save.
+func (m model) editURLInput(msg tea.KeyPressMsg) (bool, model) {
+	switch msg.String() {
 	case "esc":
 		m.screen = screenMain
 		m.inputError = ""
-	case "backspace", "ctrl+h":
-		runes := []rune(m.urlInput)
-		if len(runes) > 0 {
-			m.urlInput = string(runes[:len(runes)-1])
+		return true, m
+	case "left", "ctrl+b":
+		if m.urlCursor > 0 {
+			m.urlCursor--
 		}
+		return true, m
+	case "right", "ctrl+f":
+		if m.urlCursor < utf8.RuneCountInString(m.urlInput) {
+			m.urlCursor++
+		}
+		return true, m
+	case "home", "ctrl+a":
+		m.urlCursor = 0
+		return true, m
+	case "end", "ctrl+e":
+		m.urlCursor = utf8.RuneCountInString(m.urlInput)
+		return true, m
+	case "backspace", "ctrl+h":
+		m.urlInput, m.urlCursor = deleteBeforeCursor(m.urlInput, m.urlCursor)
 		m.inputError = ""
+		return true, m
+	case "delete":
+		m.urlInput, m.urlCursor = deleteAtCursor(m.urlInput, m.urlCursor)
+		m.inputError = ""
+		return true, m
 	case "ctrl+u":
 		m.urlInput = ""
+		m.urlCursor = 0
 		m.inputError = ""
+		return true, m
 	case "enter":
-		normalized, err := normalizeBaseURL(m.urlInput)
-		if err != nil {
-			m.inputError = err.Error()
-			return m, nil
-		}
-		if err := updateProfileValue(m.state.ProfilePath, "PLATFORM_URL", normalized); err != nil {
-			m.inputError = "Could not save the profile: " + err.Error()
-			return m, nil
-		}
-		m.state.SavedPlatformURL = normalized
-		m.state.PlatformURL = normalized
-		m.notice = "Platform URL saved to profile " + m.state.ActiveProfile + "."
-		if m.state.PlatformOverridden {
-			m.notice += " Your shell override still applies on the next run."
-		}
-		m.screen = screenMain
-		m.inputError = ""
+		return false, m
 	default:
 		text := msg.Key().Text
-		if text != "" && utf8.RuneCountInString(m.urlInput+text) <= 512 {
-			m.urlInput += text
+		if text != "" {
+			m.urlInput, m.urlCursor = insertAtCursor(m.urlInput, m.urlCursor, text, 512)
 			m.inputError = ""
 		}
+		return true, m
 	}
-	return m, nil
+}
+
+func insertAtCursor(value string, cursor int, text string, limit int) (string, int) {
+	runes := []rune(value)
+	cursor = clampCursor(cursor, len(runes)+1)
+	if cursor > len(runes) {
+		cursor = len(runes)
+	}
+	insert := []rune(text)
+	if len(runes)+len(insert) > limit {
+		return value, cursor
+	}
+	next := make([]rune, 0, len(runes)+len(insert))
+	next = append(next, runes[:cursor]...)
+	next = append(next, insert...)
+	next = append(next, runes[cursor:]...)
+	return string(next), cursor + len(insert)
+}
+
+func deleteBeforeCursor(value string, cursor int) (string, int) {
+	runes := []rune(value)
+	if cursor > len(runes) {
+		cursor = len(runes)
+	}
+	if cursor <= 0 || len(runes) == 0 {
+		return value, 0
+	}
+	next := append([]rune{}, runes[:cursor-1]...)
+	next = append(next, runes[cursor:]...)
+	return string(next), cursor - 1
+}
+
+func deleteAtCursor(value string, cursor int) (string, int) {
+	runes := []rune(value)
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= len(runes) {
+		return value, len(runes)
+	}
+	next := append([]rune{}, runes[:cursor]...)
+	next = append(next, runes[cursor+1:]...)
+	return string(next), cursor
 }
 
 func normalizeBaseURL(raw string) (string, error) {
@@ -764,6 +866,8 @@ func (m model) View() tea.View {
 		content = m.renderSessionHarnesses()
 	} else if m.screen == screenUpdatePlatformURL {
 		content = m.renderPlatformURLInput()
+	} else if m.screen == screenSetApiKey {
+		content = m.renderSetApiKey()
 	} else {
 		content = m.renderMain(width)
 	}
@@ -907,6 +1011,9 @@ func (m model) renderDetail(width int) string {
 	}
 	if item.Kind == itemUpdatePlatformURL {
 		return m.renderPlatformDetail(width)
+	}
+	if item.Kind == itemSetApiKey {
+		return m.renderSetApiKeyDetail(width)
 	}
 	title := lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Bold(true).Render(item.Name)
 	action := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(item.Action)
@@ -1192,27 +1299,66 @@ func (m model) renderProfileInput() string {
 	return lipgloss.Place(max(width+4, m.width), max(12, m.height), lipgloss.Center, lipgloss.Center, panel)
 }
 
-func (m model) renderGatewayURLInput() string {
+func (m model) renderSetApiKeyDetail(width int) string {
+	title := lipgloss.NewStyle().Foreground(lipgloss.Color(textColor)).Bold(true).Render("Set API key")
+	action := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render("Configure")
+	description := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(wrapText("Paste a key from the platform API keys page. The key is saved with subc update-key and is not shown in this preview.", max(24, width-4)))
+	return lipgloss.NewStyle().
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(lipgloss.Color(faintColor)).
+		PaddingLeft(2).
+		Width(width).
+		Render(title + "  " + action + "\n\n" + description)
+}
+
+func (m model) renderSetApiKey() string {
 	width := min(max(50, m.width-8), 78)
-	heading := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Bold(true).Render("✻  Update base URL")
+	heading := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Bold(true).Render("✻  Set API key")
 	copy := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(
-		wrapText("Save the gateway URL directly to profile "+m.state.ActiveProfile+".", width-8),
+		wrapText("Paste the API key for profile "+m.state.ActiveProfile+".", width-8),
 	)
-	value := m.urlInput
-	if value == "" {
-		value = lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render("https://api.subconscious.dev")
+	masked := strings.Repeat("•", utf8.RuneCountInString(m.apiKeyInput))
+	if masked == "" {
+		masked = lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render("sk-...")
 	}
 	field := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(textColor)).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(lipgloss.Color(brandOrange)).
 		Width(width - 12).
-		Render(ellipsize(value, width-14) + "▌")
+		Render(ellipsize(masked, width-14) + "▌")
 	errorLine := ""
 	if m.inputError != "" {
 		errorLine = "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(wrapText(m.inputError, width-8))
 	}
 	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("ctrl+u clear   enter save   esc cancel")
+	panel := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color(brandOrange)).
+		Padding(1, 2).
+		Width(width).
+		Render(heading + "\n" + copy + "\n\n" + field + errorLine + "\n\n" + footer)
+	return lipgloss.Place(max(width+4, m.width), max(12, m.height), lipgloss.Center, lipgloss.Center, panel)
+}
+
+func (m model) renderGatewayURLInput() string {
+	width := min(max(50, m.width-8), 78)
+	heading := lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Bold(true).Render("✻  Update base URL")
+	copy := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(
+		wrapText("Save the gateway URL directly to profile "+m.state.ActiveProfile+".", width-8),
+	)
+	value := renderEditableValue(m.urlInput, m.urlCursor, width-14, "https://api.subconscious.dev")
+	field := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(textColor)).
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		BorderForeground(lipgloss.Color(brandOrange)).
+		Width(width - 12).
+		Render(value)
+	errorLine := ""
+	if m.inputError != "" {
+		errorLine = "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(wrapText(m.inputError, width-8))
+	}
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("←/→ move   ctrl+u clear   enter save   esc cancel")
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(brandOrange)).
@@ -1228,21 +1374,18 @@ func (m model) renderPlatformURLInput() string {
 	copy := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render(
 		wrapText("Save the platform URL directly to profile "+m.state.ActiveProfile+".", width-8),
 	)
-	value := m.urlInput
-	if value == "" {
-		value = lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render("https://platform.subconscious.dev")
-	}
+	value := renderEditableValue(m.urlInput, m.urlCursor, width-14, "https://platform.subconscious.dev")
 	field := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(textColor)).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(lipgloss.Color(brandOrange)).
 		Width(width - 12).
-		Render(ellipsize(value, width-14) + "▌")
+		Render(value)
 	errorLine := ""
 	if m.inputError != "" {
 		errorLine = "\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(brandOrange)).Render(wrapText(m.inputError, width-8))
 	}
-	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("ctrl+u clear   enter save   esc cancel")
+	footer := lipgloss.NewStyle().Foreground(lipgloss.Color(mutedColor)).Render("←/→ move   ctrl+u clear   enter save   esc cancel")
 	panel := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color(brandOrange)).
@@ -1250,6 +1393,41 @@ func (m model) renderPlatformURLInput() string {
 		Width(width).
 		Render(heading + "\n" + copy + "\n\n" + field + errorLine + "\n\n" + footer)
 	return lipgloss.Place(max(width+4, m.width), max(12, m.height), lipgloss.Center, lipgloss.Center, panel)
+}
+
+func renderEditableValue(value string, cursor int, width int, placeholder string) string {
+	if value == "" {
+		hint := lipgloss.NewStyle().Foreground(lipgloss.Color(faintColor)).Render(ellipsize(placeholder, max(1, width-1)))
+		return "▌" + hint
+	}
+	runes := []rune(value)
+	cursor = clampCursor(cursor, len(runes)+1)
+	if width <= 1 {
+		return "▌"
+	}
+	visible := width - 1
+	start := 0
+	if len(runes) > visible {
+		after := visible / 3
+		start = cursor - (visible - after)
+		if start < 0 {
+			start = 0
+		}
+		if start > len(runes)-visible {
+			start = len(runes) - visible
+		}
+	}
+	end := start + visible
+	if end > len(runes) {
+		end = len(runes)
+	}
+	if cursor < start {
+		cursor = start
+	}
+	if cursor > end {
+		cursor = end
+	}
+	return string(runes[start:cursor]) + "▌" + string(runes[cursor:end])
 }
 
 func currentProfile(state inputState) profileState {
