@@ -1,9 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
 import {
   buildFeedbackPayload,
   FEEDBACK_API_PATH,
+  loadFeedbackImages,
   parseFeedbackArgs,
   submitFeedback,
 } from '../bin/feedback.js';
@@ -12,18 +17,20 @@ test('parseFeedbackArgs reads short and long flags', () => {
   assert.deepEqual(parseFeedbackArgs(['-s', 'Bug', '-m', 'Playground stuck']), {
     subject: 'Bug',
     message: 'Playground stuck',
+    images: [],
   });
   assert.deepEqual(
-    parseFeedbackArgs(['--subject=Bug', '--message=Playground stuck']),
-    { subject: 'Bug', message: 'Playground stuck' },
+    parseFeedbackArgs(['--subject=Bug', '--message=Playground stuck', '--image=shot.png']),
+    { subject: 'Bug', message: 'Playground stuck', images: ['shot.png'] },
   );
 });
 
 test('parseFeedbackArgs trims and tolerates empty input', () => {
-  assert.deepEqual(parseFeedbackArgs([]), { subject: '', message: '' });
+  assert.deepEqual(parseFeedbackArgs([]), { subject: '', message: '', images: [] });
   assert.deepEqual(parseFeedbackArgs(['-s', '  ', '-m', ' hi ']), {
     subject: '',
     message: 'hi',
+    images: [],
   });
 });
 
@@ -40,6 +47,25 @@ test('buildFeedbackPayload defaults the subject and drops empty context', () => 
     }),
     { subject: 'CLI feedback', message: 'hello', context: { 'CLI version': '1.2.3' } },
   );
+});
+
+test('loadFeedbackImages includes a JPEG and omits images when none were given', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-feedback-'));
+  const file = path.join(dir, 'shot.jpg');
+  await fs.writeFile(file, Buffer.from([0xff, 0xd8, 0xff, 0x00]));
+  const attachments = await loadFeedbackImages([file]);
+  assert.equal(attachments.length, 1);
+  assert.equal(attachments[0].contentType, 'image/jpeg');
+  const withImages = buildFeedbackPayload({
+    subject: 'Bug',
+    message: 'hello',
+    context: {},
+    attachments,
+  });
+  assert.equal(withImages.attachments[0].contentType, 'image/jpeg');
+  const without = buildFeedbackPayload({ subject: 'Bug', message: 'hello', context: {} });
+  assert.equal(without.attachments, undefined);
+  await fs.rm(dir, { recursive: true, force: true });
 });
 
 test('submitFeedback posts JSON with the bearer key', async () => {

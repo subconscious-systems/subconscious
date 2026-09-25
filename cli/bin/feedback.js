@@ -7,9 +7,11 @@
 
 import fs from 'node:fs/promises';
 import os from 'node:os';
-import readline from 'node:readline/promises';
+import readline from 'node:readline';
+import { createInterface } from 'node:readline/promises';
 import { c } from './colors.js';
 import { getApiKey, getPlatformUrl } from './auth.js';
+import { imageContentType, readClipboardImage } from './clipboard-image.js';
 import { DEFAULT_PROFILE } from './profiles.js';
 
 export const FEEDBACK_API_PATH = '/api/cli/feedback';
@@ -20,10 +22,12 @@ export const SUPPORT_EMAIL = 'support@subconscious.dev';
  *
  *   -s, --subject <text>    One-line summary (default: "CLI feedback")
  *   -m, --message <text>    The message body (prompts when omitted on a TTY)
+ *   --image <path>          JPEG or PNG to attach (repeatable)
  */
 export function parseFeedbackArgs(argv = []) {
   let subject = '';
   let message = '';
+  const images = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '-s' || arg === '--subject') {
@@ -34,11 +38,15 @@ export function parseFeedbackArgs(argv = []) {
       message = argv[++i] ?? '';
     } else if (arg.startsWith('--message=')) {
       message = arg.slice('--message='.length);
+    } else if (arg === '--image') {
+      images.push(argv[++i] ?? '');
+    } else if (arg.startsWith('--image=')) {
+      images.push(arg.slice('--image='.length));
     } else if (arg !== '') {
       throw new Error(`Unknown option: ${arg}`);
     }
   }
-  return { subject: subject.trim(), message: message.trim() };
+  return { subject: subject.trim(), message: message.trim(), images };
 }
 
 /** Triage context sent alongside the message. Never includes the API key. */
@@ -56,14 +64,28 @@ export async function collectFeedbackContext(options = {}) {
   };
 }
 
-export function buildFeedbackPayload({ subject, message, context }) {
-  return {
+export function buildFeedbackPayload({ subject, message, context, attachments }) {
+  const payload = {
     subject: subject || 'CLI feedback',
     message,
     context: Object.fromEntries(
       Object.entries(context ?? {}).filter(([, value]) => Boolean(String(value).trim())),
     ),
   };
+  if (attachments?.length) payload.attachments = attachments;
+  return payload;
+}
+
+export async function loadFeedbackImages(paths) {
+  const attachments = [];
+  for (const filePath of paths) {
+    if (!filePath?.trim()) throw new Error('An image path is required after --image');
+    const buffer = await fs.readFile(filePath);
+    const contentType = imageContentType(buffer);
+    if (!contentType) throw new Error(`${filePath} is not a JPEG or PNG`);
+    attachments.push({ contentType, data: buffer.toString('base64') });
+  }
+  return attachments;
 }
 
 export async function submitFeedback(apiKey, platformUrl, payload, fetchImpl = fetch) {
@@ -76,14 +98,90 @@ export async function submitFeedback(apiKey, platformUrl, payload, fetchImpl = f
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(payload.attachments?.length ? 30000 : 8000),
     },
   );
   return res;
 }
 
+const MAX_FEEDBACK_IMAGES = 3;
+
+function readAttachmentLine(onPaste) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: '  Attachments: ',
+    });
+    readline.emitKeypressEvents(process.stdin, rl);
+    if (process.stdin.isTTY) process.stdin.setRawMode(true);
+    rl.prompt();
+    let line = '';
+    const finish = (value) => {
+      process.stdin.off('keypress', onKey);
+      if (process.stdin.isTTY) process.stdin.setRawMode(false);
+      rl.close();
+      resolve(value);
+    };
+    const onKey = (str, key) => {
+      if (!key) return;
+      if (key.ctrl && key.name === 'c') {
+        finish(null);
+        return;
+      }
+      if (key.ctrl && key.name === 'v') {
+        void onPaste();
+        return;
+      }
+      if (key.name === 'return') {
+        process.stdout.write('\n');
+        finish(line);
+        return;
+      }
+      if (key.name === 'backspace') {
+        if (!line.length) return;
+        line = line.slice(0, -1);
+        process.stdout.write('\b \b');
+        return;
+      }
+      if (str && !key.ctrl && !key.meta) {
+        line += str;
+        process.stdout.write(str);
+      }
+    };
+    process.stdin.on('keypress', onKey);
+  });
+}
+
+async function promptForAttachments(already = 0) {
+  if (process.stdin.isTTY !== true || already >= MAX_FEEDBACK_IMAGES) return [];
+  const attachments = [];
+  console.log(`\n  Attachments (optional). Ctrl+V pastes a screenshot, or type a file path.`);
+  console.log(`  ${c.dim}Press Enter on an empty line when you are done.${c.reset}`);
+  while (already + attachments.length < MAX_FEEDBACK_IMAGES) {
+    const line = await readAttachmentLine(async () => {
+      if (already + attachments.length >= MAX_FEEDBACK_IMAGES) return;
+      const buffer = await readClipboardImage();
+      const contentType = buffer ? imageContentType(buffer) : null;
+      if (!contentType || !buffer) {
+        console.log(`\n  ${c.yellow}No JPEG or PNG image on the clipboard.${c.reset}`);
+        return;
+      }
+      attachments.push({ contentType, data: buffer.toString('base64') });
+      console.log(`  ${c.green}Added screenshot ${already + attachments.length}.${c.reset}`);
+    });
+    if (line == null || !line.trim()) break;
+    const buffer = await fs.readFile(line.trim());
+    const contentType = imageContentType(buffer);
+    if (!contentType) throw new Error(`${line.trim()} is not a JPEG or PNG`);
+    attachments.push({ contentType, data: buffer.toString('base64') });
+    console.log(`  ${c.green}Added ${line.trim()}.${c.reset}`);
+  }
+  return attachments;
+}
+
 async function promptForFeedback(argv) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     const subject = argv.subject || (await rl.question(`\n  Subject (optional): `)).trim();
     let message = '';
@@ -122,11 +220,14 @@ export async function feedbackCommand(argv = [], options = {}) {
     feedback = await promptForFeedback(parsed);
   }
 
+  const fromFlags = await loadFeedbackImages(parsed.images);
+  const fromPrompt = feedback.message && parsed.message ? [] : await promptForAttachments(fromFlags.length);
   const platformUrl = getPlatformUrl(options.profile);
   const payload = buildFeedbackPayload({
     subject: feedback.subject,
     message: feedback.message,
     context: await collectFeedbackContext(options),
+    attachments: [...fromFlags, ...fromPrompt],
   });
 
   try {
@@ -179,6 +280,7 @@ export function printFeedbackHelp() {
 Usage:
   subc feedback
   subc feedback --subject "..." --message "..."
+  subc feedback --image ./screenshot.png
   subc -p NAME feedback
   subc feedback help
 
@@ -188,5 +290,6 @@ triage without a back-and-forth.
 
   -s, --subject <text>   One-line summary (prompted when omitted on a TTY)
   -m, --message <text>   The message body (prompted when omitted on a TTY)
+  --image <path>         JPEG or PNG to attach (repeatable). With -m, skips the paste prompt.
 `);
 }
