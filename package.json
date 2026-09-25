@@ -12,7 +12,7 @@
     "test:windows": "node --test test/windows.test.js test/models.test.js test/model-capabilities.test.js test/auth.test.js test/tui.test.js test/update-check.test.js test/sessions.test.js test/branding.test.js test/claude-version.test.js test/usage.test.js test/feedback.test.js test/release.test.js",
     "test:tui": "go -C tui test ./...",
     "generate": "node scripts/generate-agents.js",
-    "prepare": "simple-git-hooks",
+    "prepare": "node scripts/install-git-hooks.js",
     "prepack": "npm run build:tui",
     "prepublishOnly": "node scripts/require-publish-script.js"
   },
