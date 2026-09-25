@@ -42,10 +42,51 @@ test('the CLI package only publishes from the Release Please workflow', async ()
     new URL('../.github/workflows/release-please.yaml', import.meta.url),
     'utf8',
   );
+  assert.equal(pkg.dependencies, undefined);
+
   assert.match(workflow, /SUBCONSCIOUS_RELEASE_PLEASE: "1"/);
   assert.match(workflow, /npm publish --access public/);
   assert.match(workflow, /id-token: write/);
+  assert.match(workflow, /name: sbom-buildinfo/);
+  assert.match(workflow, /go version -m/);
   assert.doesNotMatch(workflow, /NPM_TOKEN/);
+});
+
+test('supply-chain CI audits npm, Go, and uploads the SBOM', async () => {
+  const workflow = await fs.readFile(
+    new URL('../.github/workflows/cli-windows.yml', import.meta.url),
+    'utf8',
+  );
+  assert.match(workflow, /name: supply-chain/);
+  assert.match(workflow, /npm audit --omit=dev/);
+  assert.match(workflow, /govulncheck@v1\.8\.0/);
+  assert.match(workflow, /cyclonedx-gomod@v1\.12\.0/);
+  assert.match(workflow, /name: sbom-go/);
+  assert.match(workflow, /actions\/upload-artifact@/);
+});
+
+test('GitHub actions are pinned to commit SHAs', async () => {
+  const workflowDir = fileURLToPath(
+    new URL('../.github/workflows/', import.meta.url),
+  );
+  const files = (await fs.readdir(workflowDir)).filter(
+    (name) => name.endsWith('.yml') || name.endsWith('.yaml'),
+  );
+  assert.ok(files.length > 0);
+  for (const file of files) {
+    const text = await fs.readFile(path.join(workflowDir, file), 'utf8');
+    const uses = [...text.matchAll(/^\s*(?:-\s*)?uses:\s+(\S+)/gm)].map(
+      (match) => match[1],
+    );
+    for (const ref of uses) {
+      if (!ref.startsWith('actions/')) continue;
+      assert.match(
+        ref,
+        /^actions\/[A-Za-z0-9_.-]+@[0-9a-f]{40}$/,
+        `${file} pins ${ref} to a commit SHA`,
+      );
+    }
+  }
 });
 
 test('prepare skips hook install when simple-git-hooks is not installed', async () => {
