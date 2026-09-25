@@ -33,9 +33,11 @@ export function isTuiResult(result) {
   return (
     result !== null &&
     typeof result === 'object' &&
-    Array.isArray(result.args) &&
-    result.args.every((arg) => typeof arg === 'string') &&
-    (result.baseUrl === undefined || typeof result.baseUrl === 'string')
+    (result.updatePrompt === true ||
+      (Array.isArray(result.args) && result.args.every((arg) => typeof arg === 'string'))) &&
+    (result.baseUrl === undefined || typeof result.baseUrl === 'string') &&
+    (result.installedVersion === undefined || typeof result.installedVersion === 'string') &&
+    (result.latestVersion === undefined || typeof result.latestVersion === 'string')
   );
 }
 

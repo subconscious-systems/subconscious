@@ -32,7 +32,7 @@ subc pi
 subc <agent> uninstall
 ```
 
-Running `subc` with no arguments in a terminal opens the native Go TUI. Use
+Running `subc` with no arguments in a terminal opens the native Go TUI immediately. The npm update check runs in the background. If a newer release is found, `subc` leaves the menu and shows the same update prompt as any other command. Skip for now returns to the menu. Use
 the arrow keys and Enter to launch agents or manage the active profile, `p` to
 switch profiles, and `q` to quit. The menu includes dedicated **Usage**,
 **Create profile**, **Coding sessions**, **Set default model**, **Set subagent model**,

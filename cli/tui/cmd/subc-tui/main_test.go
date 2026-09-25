@@ -554,6 +554,30 @@ func TestLoadingViewsShowInFlightCopy(t *testing.T) {
 	}
 }
 
+func TestUpdateOfferHandsOffToCommandPrompt(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "default",
+		Version:       "4.0.1",
+		Agents:        []agentState{{Command: "claude", Name: "Claude Code", Action: "Launch", Launch: true}},
+	})
+	available := true
+	latest := "5.0.0"
+	m = applyStatePatch(m, statePatch{UpdateAvailable: &available, LatestVersion: &latest})
+	offered, cmd := m.offerUpdate()
+	if cmd == nil {
+		t.Fatal("an available update should leave the TUI for the shared prompt")
+	}
+	if !offered.result.UpdatePrompt || offered.result.InstalledVersion != "4.0.1" || offered.result.LatestVersion != "5.0.0" {
+		t.Fatalf("prompt result = %#v", offered.result)
+	}
+	editing := m
+	editing.screen = screenUpdateBaseURL
+	stayed, stayCmd := editing.offerUpdate()
+	if stayCmd != nil || stayed.screen != screenUpdateBaseURL {
+		t.Fatal("update prompt interrupted an open editor")
+	}
+}
+
 func TestUpdateAvailableFooter(t *testing.T) {
 	m := newModel(inputState{
 		ActiveProfile:   "default",

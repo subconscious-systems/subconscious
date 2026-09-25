@@ -113,8 +113,11 @@ type statePatch struct {
 type updatesTickMsg struct{}
 
 type outputResult struct {
-	Args    []string `json:"args"`
-	BaseURL string   `json:"baseUrl,omitempty"`
+	Args             []string `json:"args"`
+	BaseURL          string   `json:"baseUrl,omitempty"`
+	UpdatePrompt     bool     `json:"updatePrompt,omitempty"`
+	InstalledVersion string   `json:"installedVersion,omitempty"`
+	LatestVersion    string   `json:"latestVersion,omitempty"`
 }
 
 type itemKind int
@@ -172,8 +175,8 @@ type model struct {
 	urlCursor       int
 	apiKeyInput     string
 	inputError      string
-	notice          string
-	sessionBaseURL  string
+	notice         string
+	sessionBaseURL string
 	width           int
 	height          int
 	result          outputResult
@@ -347,6 +350,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = applyStatePatch(m, patch)
 			}
 		}
+		var offerCmd tea.Cmd
+		m, offerCmd = m.offerUpdate()
+		if offerCmd != nil {
+			return m, offerCmd
+		}
 		if m.updatesPath != "" || m.isLoading() {
 			return m, tickUpdates()
 		}
@@ -356,30 +364,53 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key == "ctrl+c" {
 			return m, tea.Quit
 		}
+		var next tea.Model
+		var cmd tea.Cmd
 		switch m.screen {
 		case screenProfiles:
-			return m.updateProfiles(key)
+			next, cmd = m.updateProfiles(key)
 		case screenSetDefaultModel:
-			return m.updateModels(key)
+			next, cmd = m.updateModels(key)
 		case screenSetSubagentModel:
-			return m.updateSubagentModels(key)
+			next, cmd = m.updateSubagentModels(key)
 		case screenCreateProfile:
-			return m.updateCreateProfile(msg)
+			next, cmd = m.updateCreateProfile(msg)
 		case screenUpdateBaseURL:
-			return m.updateBaseURL(msg)
+			next, cmd = m.updateBaseURL(msg)
 		case screenSessions:
-			return m.updateSessions(key)
+			next, cmd = m.updateSessions(key)
 		case screenSessionHarnesses:
-			return m.updateSessionHarnesses(key)
+			next, cmd = m.updateSessionHarnesses(key)
 		case screenUpdatePlatformURL:
-			return m.updatePlatformURL(msg)
+			next, cmd = m.updatePlatformURL(msg)
 		case screenSetApiKey:
-			return m.updateSetApiKey(msg)
+			next, cmd = m.updateSetApiKey(msg)
 		default:
-			return m.updateMain(key)
+			next, cmd = m.updateMain(key)
 		}
+		updated := next.(model)
+		if cmd == nil {
+			var offerCmd tea.Cmd
+			updated, offerCmd = updated.offerUpdate()
+			if offerCmd != nil {
+				cmd = offerCmd
+			}
+		}
+		return updated, cmd
 	}
 	return m, nil
+}
+
+func (m model) offerUpdate() (model, tea.Cmd) {
+	if m.screen != screenMain || !m.state.UpdateAvailable {
+		return m, nil
+	}
+	m.result = outputResult{
+		UpdatePrompt:     true,
+		InstalledVersion: m.state.Version,
+		LatestVersion:    m.state.LatestVersion,
+	}
+	return m, tea.Quit
 }
 
 func (m model) updateMain(key string) (tea.Model, tea.Cmd) {
@@ -1632,7 +1663,7 @@ func readState(path string) (inputState, error) {
 }
 
 func writeResult(path string, result outputResult) error {
-	if path == "" || len(result.Args) == 0 {
+	if path == "" || (len(result.Args) == 0 && !result.UpdatePrompt) {
 		return nil
 	}
 	data, err := json.Marshal(result)
