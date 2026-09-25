@@ -91,8 +91,11 @@ Required status checks, matching the job names GitHub reports:
 - `unix (ubuntu-latest)`
 - `unix (macos-latest)`
 - `commitlint`
+- `supply-chain`
 
 Also require a pull request before merging, and block force pushes.
+
+`supply-chain` is listed here so the ruleset stays in sync with CI. A maintainer still has to add that exact job name to the `Protect main` ruleset (`24016657`). This repository change cannot update the ruleset.
 
 Repository secret, supplied by a maintainer:
 

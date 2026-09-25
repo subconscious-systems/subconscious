@@ -1,6 +1,6 @@
 module github.com/subconscious-systems/subconscious/cli/tui
 
-go 1.25.0
+go 1.26.8
 
 require (
 	charm.land/bubbletea/v2 v2.0.9
