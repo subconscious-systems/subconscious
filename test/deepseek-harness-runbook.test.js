@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-const runPath = new URL('../bin/runbook/deepseek-harness/run.sh', import.meta.url);
+const runPath = new URL(
+  '../bin/runbook/deepseek-harness/run.sh',
+  import.meta.url,
+);
 
 async function makeFakeDsh(root) {
   const binDir = path.join(root, 'bin');
@@ -61,8 +64,12 @@ function runHarness(root, binDir, args = [], overrides = {}) {
     let stderr = '';
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
     child.on('error', reject);
     child.on('close', (code) => resolve({ code, stdout, stderr }));
   });
@@ -92,41 +99,62 @@ test('DeepSeek Harness launches web with a temporary live-catalog provider', asy
     assert.match(overlay, /x-subconscious-client: deepseek-harness/);
     assert.match(overlay, /supportsDeveloperRole: false/);
     assert.match(overlay, /maxTokensField: max_tokens/);
-    assert.equal((overlay.match(/subconscious\/glm-5\.3-marathon/g) || []).length, 3);
+    assert.equal(
+      (overlay.match(/subconscious\/glm-5\.3-marathon/g) || []).length,
+      3,
+    );
     assert.match(overlay, /subconscious\/deepseek-v4-flash-marathon/);
     assert.doesNotMatch(overlay, /test-harness-key/);
     const entries = overlay.split('          - id: ').slice(1);
     for (const entry of entries) {
-      assert.equal(entry.includes('input: [text, image]'), entry.startsWith("'subconscious/deepseek-v4.1-flash-marathon'"), entry);
+      assert.equal(
+        entry.includes('input: [text, image]'),
+        entry.startsWith("'subconscious/deepseek-v4.1-flash-marathon'"),
+        entry,
+      );
     }
 
     assert.equal(
       await fs.readFile(path.join(root, 'base-url'), 'utf8'),
       'https://gateway.example/v1\n',
     );
-    assert.equal(await fs.readFile(path.join(root, 'api-key'), 'utf8'), 'test-harness-key\n');
+    assert.equal(
+      await fs.readFile(path.join(root, 'api-key'), 'utf8'),
+      'test-harness-key\n',
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
 test('DeepSeek Harness supports headless mode and mirrors its exit status', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-dsh-headless-test-'));
+  const root = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'subc-dsh-headless-test-'),
+  );
   try {
     const binDir = await makeFakeDsh(root);
     const result = await runHarness(
       root,
       binDir,
       ['headless', 'fix the tests'],
-      { DSH_FAKE_EXIT_CODE: '7', MODEL: 'subconscious/deepseek-v4.1-flash-marathon' },
+      {
+        DSH_FAKE_EXIT_CODE: '7',
+        MODEL: 'subconscious/deepseek-v4.1-flash-marathon',
+      },
     );
     assert.equal(result.code, 7);
     const args = await readNullArgs(path.join(root, 'args'));
     assert.deepEqual(args.slice(0, 2), ['--profile', 'headless']);
     assert.deepEqual(args.slice(-1), ['fix the tests']);
     const overlay = await fs.readFile(path.join(root, 'overlay.yml'), 'utf8');
-    assert.match(overlay, /model: 'subconscious\/deepseek-v4\.1-flash-marathon'/);
-    assert.match(overlay, /name: 'subconscious\/deepseek-v4\.1-flash-marathon'\n            input: \[text, image\]/);
+    assert.match(
+      overlay,
+      /model: 'subconscious\/deepseek-v4\.1-flash-marathon'/,
+    );
+    assert.match(
+      overlay,
+      /name: 'subconscious\/deepseek-v4\.1-flash-marathon'\n {12}input: \[text, image\]/,
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

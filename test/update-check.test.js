@@ -33,7 +33,10 @@ test('fetchLatestVersion checks the npm latest endpoint without caching', async 
   });
 
   assert.equal(version, '4.1.0');
-  assert.equal(request.url, 'https://registry.npmjs.org/subconscious-cli/latest');
+  assert.equal(
+    request.url,
+    'https://registry.npmjs.org/subconscious-cli/latest',
+  );
   assert.equal(request.options.cache, 'no-store');
   assert.ok(request.options.signal instanceof AbortSignal);
 });
@@ -43,7 +46,7 @@ test('renderUpdateNotice keeps the selectable options outside the box', () => {
   assert.match(notice, /Subconscious CLI/);
   assert.match(notice, /Update available/);
   assert.match(notice, /▄██▄▄ ▄██▄ ▄▄██▄/);
-  assert.match(notice, /4\.0\.0  →  4\.1\.0/);
+  assert.match(notice, /4\.0\.0 {2}→ {2}4\.1\.0/);
   assert.doesNotMatch(notice, /Update\s+\|\n.*Skip/);
 
   const options = renderUpdateOptions(0, { installedVersion: '4.0.0' });
@@ -96,8 +99,8 @@ test('showUpdateNotice prints on every newer-version check', async () => {
   await showUpdateNotice(options);
 
   assert.equal(output.length, 2);
-  assert.match(output[0], /4\.0\.0  →  4\.1\.0/);
-  assert.match(output[1], /4\.0\.0  →  4\.1\.0/);
+  assert.match(output[0], /4\.0\.0 {2}→ {2}4\.1\.0/);
+  assert.match(output[1], /4\.0\.0 {2}→ {2}4\.1\.0/);
 });
 
 test('showUpdateNotice installs after Update is selected', async () => {
@@ -197,6 +200,9 @@ test('showUpdateNotice stays silent when current, disabled, or offline', async (
     }),
     null,
   );
-  assert.equal(await showUpdateNotice({ disabled: true, interactive: false, write }), null);
+  assert.equal(
+    await showUpdateNotice({ disabled: true, interactive: false, write }),
+    null,
+  );
   assert.deepEqual(output, []);
 });

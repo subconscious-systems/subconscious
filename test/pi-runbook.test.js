@@ -56,11 +56,18 @@ test('Pi launch replaces only the Subconscious provider with the live catalog', 
   });
 
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.trim(), `--provider subconscious --model ${models[0]} --continue`);
+  assert.equal(
+    result.stdout.trim(),
+    `--provider subconscious --model ${models[0]} --continue`,
+  );
 
   const config = JSON.parse(await fs.readFile(modelsPath, 'utf8'));
   for (const model of config.providers.subconscious.models) {
-    assert.deepEqual(model.input, model.id === models[0] ? ['text', 'image'] : undefined, model.id);
+    assert.deepEqual(
+      model.input,
+      model.id === models[0] ? ['text', 'image'] : undefined,
+      model.id,
+    );
   }
   assert.deepEqual(config.providers.other.models, [{ id: 'other/model' }]);
   assert.deepEqual(
@@ -68,7 +75,9 @@ test('Pi launch replaces only the Subconscious provider with the live catalog', 
     models,
   );
   assert.equal(
-    config.providers.subconscious.models.some((model) => model.id === 'gw-glm-5.2'),
+    config.providers.subconscious.models.some(
+      (model) => model.id === 'gw-glm-5.2',
+    ),
     false,
   );
 });

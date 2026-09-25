@@ -1,10 +1,10 @@
-import fs from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { spawnWindows } from './windows/process.js';
+import fs from 'node:fs/promises';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { LOGO_ART_SMALL_LINES } from './branding.js';
 import { c, colorEnabled } from './colors.js';
+import { spawnWindows } from './windows/process.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
 export const UPDATE_CHECK_TIMEOUT_MS = 1500;
@@ -46,7 +46,9 @@ export function detectInstallTarget(
   }
 
   const marker = `/lib/node_modules/${PACKAGE_NAME}/`;
-  let prefix = normalized.includes(marker) ? normalized.slice(0, normalized.indexOf(marker)) : '';
+  let prefix = normalized.includes(marker)
+    ? normalized.slice(0, normalized.indexOf(marker))
+    : '';
   if (!prefix && platform === 'win32') {
     const windowsMarker = `/node_modules/${PACKAGE_NAME}/`;
     if (normalized.includes(windowsMarker)) {
@@ -59,7 +61,14 @@ export function detectInstallTarget(
   return {
     command: 'npm',
     args,
-    display: ['npm', ...args].map(platform === 'win32' ? value => /^[-/@A-Za-z0-9._:]+$/.test(value) ? value : `"${value}"` : shellQuote).join(' '),
+    display: ['npm', ...args]
+      .map(
+        platform === 'win32'
+          ? (value) =>
+              /^[-/@A-Za-z0-9._:]+$/.test(value) ? value : `"${value}"`
+          : shellQuote,
+      )
+      .join(' '),
     prefix,
   };
 }
@@ -67,7 +76,9 @@ export function detectInstallTarget(
 function parseVersion(version) {
   const match = String(version)
     .trim()
-    .match(/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
+    .match(
+      /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/,
+    );
   if (!match) return null;
   return {
     core: match.slice(1, 4).map(Number),
@@ -87,7 +98,8 @@ function comparePrerelease(a, b) {
 
     const aNumber = /^\d+$/.test(a[index]) ? Number(a[index]) : null;
     const bNumber = /^\d+$/.test(b[index]) ? Number(b[index]) : null;
-    if (aNumber !== null && bNumber !== null) return Math.sign(aNumber - bNumber);
+    if (aNumber !== null && bNumber !== null)
+      return Math.sign(aNumber - bNumber);
     if (aNumber !== null) return -1;
     if (bNumber !== null) return 1;
     return a[index].localeCompare(b[index]);
@@ -109,7 +121,9 @@ export function compareVersions(a, b) {
 }
 
 export async function currentVersion() {
-  const pkg = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf-8'));
+  const pkg = JSON.parse(
+    await fs.readFile(new URL('../package.json', import.meta.url), 'utf-8'),
+  );
   return pkg.version;
 }
 
@@ -134,7 +148,11 @@ export async function fetchLatestVersion(options = {}) {
   try {
     const aborted = new Promise((_, reject) => {
       const fail = () => {
-        const error = new Error(signal?.aborted ? 'Update check was cancelled' : 'Update check timed out');
+        const error = new Error(
+          signal?.aborted
+            ? 'Update check was cancelled'
+            : 'Update check timed out',
+        );
         error.name = 'AbortError';
         reject(error);
       };
@@ -154,7 +172,8 @@ export async function fetchLatestVersion(options = {}) {
     ]);
     if (!response.ok) throw new Error(`npm returned HTTP ${response.status}`);
     const payload = await response.json();
-    if (!parseVersion(payload?.version)) throw new Error('npm returned an invalid version');
+    if (!parseVersion(payload?.version))
+      throw new Error('npm returned an invalid version');
     return payload.version;
   } finally {
     signal?.removeEventListener('abort', onAbort);
@@ -175,7 +194,10 @@ export function renderUpdateNotice(installedVersion, latestVersion) {
     { raw: '', value: '' },
     { raw: '', value: '' },
     { raw: '', value: '' },
-    { raw: 'Subconscious CLI', value: `${c.orange}${c.bold}Subconscious CLI${c.reset}` },
+    {
+      raw: 'Subconscious CLI',
+      value: `${c.orange}${c.bold}Subconscious CLI${c.reset}`,
+    },
     { raw: 'Update available', value: `${c.bold}Update available${c.reset}` },
     { raw: '', value: '' },
     {
@@ -198,7 +220,8 @@ export function renderUpdateNotice(installedVersion, latestVersion) {
 }
 
 export function renderUpdateOptions(selectedIndex = 0, versions = {}) {
-  const installCommand = versions.installCommand || detectInstallTarget().display;
+  const installCommand =
+    versions.installCommand || detectInstallTarget().display;
   const descriptions = [
     `Runs \`${installCommand}\``,
     versions.installedVersion
@@ -209,9 +232,7 @@ export function renderUpdateOptions(selectedIndex = 0, versions = {}) {
   return UPDATE_ACTIONS.map((label, index) => {
     const active = index === selectedIndex;
     const pointer = active ? `${c.orange}›${c.reset}` : ' ';
-    const activeStyle = colorEnabled
-      ? `${c.bgOrange}${c.black}`
-      : c.inverse;
+    const activeStyle = colorEnabled ? `${c.bgOrange}${c.black}` : c.inverse;
     const option = active
       ? `${activeStyle}${c.bold} ${label} ${c.reset}`
       : ` ${label} `;
@@ -278,7 +299,8 @@ export async function selectUpdateAction(options = {}) {
 }
 
 export async function installLatest(options = {}) {
-  const spawnImpl = options.spawnImpl || (process.platform === 'win32' ? spawnWindows : spawn);
+  const spawnImpl =
+    options.spawnImpl || (process.platform === 'win32' ? spawnWindows : spawn);
   const target = options.target || detectInstallTarget();
   return new Promise((resolve) => {
     const child = spawnImpl(target.command, target.args, {
@@ -325,8 +347,10 @@ export async function showUpdateNotice(options = {}) {
     write(`\n${notice}\n\n`);
 
     const interactive =
-      options.interactive ?? (process.stdin.isTTY === true && process.stderr.isTTY === true);
-    if (!interactive) return { installedVersion, latestVersion, action: 'skip' };
+      options.interactive ??
+      (process.stdin.isTTY === true && process.stderr.isTTY === true);
+    if (!interactive)
+      return { installedVersion, latestVersion, action: 'skip' };
 
     const select = options.select || selectUpdateAction;
     const installTarget = options.installTarget || detectInstallTarget();
@@ -341,10 +365,13 @@ export async function showUpdateNotice(options = {}) {
       return { installedVersion, latestVersion, action };
     }
 
-    write(`\n  ${c.cyan}Updating ${PACKAGE_NAME} to ${latestVersion}...${c.reset}\n\n`);
+    write(
+      `\n  ${c.cyan}Updating ${PACKAGE_NAME} to ${latestVersion}...${c.reset}\n\n`,
+    );
     const install =
       options.install ||
-      ((expectedVersion) => installLatest({ expectedVersion, target: installTarget }));
+      ((expectedVersion) =>
+        installLatest({ expectedVersion, target: installTarget }));
     const installed = await install(latestVersion);
     if (installed) {
       write(
@@ -353,7 +380,9 @@ export async function showUpdateNotice(options = {}) {
       return { installedVersion, latestVersion, action: 'updated' };
     }
 
-    write(`\n  ${c.red}Update failed or the running installation stayed unchanged.${c.reset}\n`);
+    write(
+      `\n  ${c.red}Update failed or the running installation stayed unchanged.${c.reset}\n`,
+    );
     write(`  Try the exact detected install target manually:\n\n`);
     write(`    ${c.cyan}${installTarget.display}${c.reset}\n\n`);
     return { installedVersion, latestVersion, action: 'failed' };

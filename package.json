@@ -12,6 +12,9 @@
     "test:windows": "node --test test/windows.test.js test/models.test.js test/model-capabilities.test.js test/auth.test.js test/tui.test.js test/update-check.test.js test/sessions.test.js test/branding.test.js test/claude-version.test.js test/usage.test.js test/feedback.test.js test/release.test.js",
     "test:tui": "go -C tui test ./...",
     "generate": "node scripts/generate-agents.js",
+    "lint": "biome ci .",
+    "format": "biome check --write .",
+    "typecheck": "tsc --noEmit",
     "prepare": "node scripts/install-git-hooks.js",
     "prepack": "npm run build:tui",
     "prepublishOnly": "node scripts/require-publish-script.js"
@@ -51,8 +54,11 @@
     "commit-msg": "npx --no-install commitlint --edit $1"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.14",
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
-    "simple-git-hooks": "^2.14.0"
+    "@types/node": "^26.6.2",
+    "simple-git-hooks": "^2.14.0",
+    "typescript": "^7.0.2"
   }
 }

@@ -35,22 +35,37 @@ test('Codex advertises image input for DeepSeek V4.1 only, selected or in the pi
   const visionModel = 'subconscious/deepseek-v4.1-flash-marathon';
   const otherModel = 'subconscious/deepseek-v4-flash-marathon';
   for (const selected of [visionModel, otherModel]) {
-    const result = spawnSync('bash', [new URL('../bin/runbook/codex/run.sh', import.meta.url).pathname], {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${testDir}:${process.env.PATH}`,
-        GATEWAY_URL: 'https://gateway.example', API_KEY: 'sk-test', MODEL: selected,
-        SUBCONSCIOUS_MODELS: [otherModel, visionModel, `${visionModel}-other`].join('\n'),
-        SUBC_ENV_FILE: os.devNull, CODEX_DIR: path.join(testDir, '.codex'),
-        CAPTURED_CATALOG: capturedCatalog,
+    const result = spawnSync(
+      'bash',
+      [new URL('../bin/runbook/codex/run.sh', import.meta.url).pathname],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          PATH: `${testDir}:${process.env.PATH}`,
+          GATEWAY_URL: 'https://gateway.example',
+          API_KEY: 'sk-test',
+          MODEL: selected,
+          SUBCONSCIOUS_MODELS: [
+            otherModel,
+            visionModel,
+            `${visionModel}-other`,
+          ].join('\n'),
+          SUBC_ENV_FILE: os.devNull,
+          CODEX_DIR: path.join(testDir, '.codex'),
+          CAPTURED_CATALOG: capturedCatalog,
+        },
       },
-    });
+    );
     assert.equal(result.status, 0, result.stderr);
     const catalog = JSON.parse(await fs.readFile(capturedCatalog, 'utf8'));
     assert.equal(catalog.models[0].slug, selected);
     for (const model of catalog.models) {
-      assert.deepEqual(model.input_modalities, model.slug === visionModel ? ['text', 'image'] : undefined, model.slug);
+      assert.deepEqual(
+        model.input_modalities,
+        model.slug === visionModel ? ['text', 'image'] : undefined,
+        model.slug,
+      );
     }
   }
 });
@@ -91,7 +106,8 @@ test('Codex catalog advertises the configured priority service tier', async () =
     {
       id: 'priority',
       name: 'Priority',
-      description: 'Route requests through the configured priority service tier',
+      description:
+        'Route requests through the configured priority service tier',
     },
   ]);
 });
@@ -113,7 +129,9 @@ test('Codex catalog declares the reasoning levels it accepts', async () => {
   // `medium` is not supported ... Supported reasoning efforts:" and no values.
   const catalog = await captureCatalog();
   for (const model of catalog.models) {
-    const efforts = (model.supported_reasoning_levels || []).map((l) => l.effort);
+    const efforts = (model.supported_reasoning_levels || []).map(
+      (l) => l.effort,
+    );
     assert.deepEqual(
       efforts,
       ['none', 'low', 'medium', 'high', 'max'],
@@ -182,7 +200,9 @@ test('CODEX_SUBAGENT_REASONING_EFFORT can be overridden or cleared', async () =>
 
   const cleared = await captureArgs({ CODEX_SUBAGENT_REASONING_EFFORT: '' });
   assert.ok(
-    !cleared.some((arg) => arg.startsWith('agents.default_subagent_reasoning_effort=')),
+    !cleared.some((arg) =>
+      arg.startsWith('agents.default_subagent_reasoning_effort='),
+    ),
     cleared.join(' '),
   );
 });
@@ -215,7 +235,9 @@ test('Codex launch allows a silent think longer than five minutes', async () => 
 test('CODEX_STREAM_IDLE_TIMEOUT_MS overrides the stream idle timeout', async () => {
   const args = await captureArgs({ CODEX_STREAM_IDLE_TIMEOUT_MS: '1800000' });
   assert.ok(
-    args.includes('model_providers.subconscious.stream_idle_timeout_ms=1800000'),
+    args.includes(
+      'model_providers.subconscious.stream_idle_timeout_ms=1800000',
+    ),
     args.join(' '),
   );
 });

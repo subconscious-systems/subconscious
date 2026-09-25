@@ -1,37 +1,65 @@
 // Windows-only equivalent of the existing Claude shell launch.
 import { readFileSync } from 'node:fs';
 import { resolvedModelSetting } from '../profiles.js';
-import { positiveInteger, parseOptions } from './common.js';
-const DEFAULTS = JSON.parse(readFileSync(new URL('../registry.generated.json', import.meta.url), 'utf8')).defaults;
+import { parseOptions, positiveInteger } from './common.js';
+
+const DEFAULTS = JSON.parse(
+  readFileSync(new URL('../registry.generated.json', import.meta.url), 'utf8'),
+).defaults;
 function claudePickerSettings(models) {
-  return { availableModels: models, modelPicker: { replaceBuiltInOptions: true, options: models.map(model => ({model, label: model, description: 'Subconscious model ' + model})) } };
+  return {
+    availableModels: models,
+    modelPicker: {
+      replaceBuiltInOptions: true,
+      options: models.map((model) => ({
+        model,
+        label: model,
+        description: `Subconscious model ${model}`,
+      })),
+    },
+  };
 }
 
 export function claudeNativeLaunch(argv, environment) {
   const { options, rest: passthrough } = parseOptions(argv, {
-    '--gateway-url': 1, '--api-key': 1, '--model': 1,
-    '--compact-window': 1, '--max-context-tokens': 1,
+    '--gateway-url': 1,
+    '--api-key': 1,
+    '--model': 1,
+    '--compact-window': 1,
+    '--max-context-tokens': 1,
   });
-  const gatewayUrl = options['--gateway-url'] || environment.GATEWAY_URL?.trim() || '';
-  const apiKey = options['--api-key'] || environment.CLAUDE_CODE_API_KEY?.trim() || environment.API_KEY?.trim() || '';
-  const model = options['--model'] || environment.MODEL?.trim() || DEFAULTS.model;
-  const compactWindow = options['--compact-window'] ||
+  const gatewayUrl =
+    options['--gateway-url'] || environment.GATEWAY_URL?.trim() || '';
+  const apiKey =
+    options['--api-key'] ||
+    environment.CLAUDE_CODE_API_KEY?.trim() ||
+    environment.API_KEY?.trim() ||
+    '';
+  const model =
+    options['--model'] || environment.MODEL?.trim() || DEFAULTS.model;
+  const compactWindow =
+    options['--compact-window'] ||
     environment.CLAUDE_CODE_AUTO_COMPACT_WINDOW?.trim() ||
     environment.COMPACT_WINDOW?.trim() ||
     '1000000';
-  const maxContextTokens = options['--max-context-tokens'] ||
+  const maxContextTokens =
+    options['--max-context-tokens'] ||
     environment.CLAUDE_CODE_MAX_CONTEXT_TOKENS?.trim() ||
     environment.MAX_CONTEXT_TOKENS?.trim() ||
     '3000000';
 
   if (!gatewayUrl || !apiKey) {
-    throw new Error('GATEWAY_URL and API_KEY are required to launch Claude Code');
+    throw new Error(
+      'GATEWAY_URL and API_KEY are required to launch Claude Code',
+    );
   }
   positiveInteger(compactWindow, 'compact-window');
   positiveInteger(maxContextTokens, 'max-context-tokens');
 
-  const effectiveGatewayUrl = environment.CLAUDE_GATEWAY_URL?.trim() || gatewayUrl;
-  const subagentModel = resolvedModelSetting(environment.CLAUDE_CODE_SUBAGENT_MODEL) || model;
+  const effectiveGatewayUrl =
+    environment.CLAUDE_GATEWAY_URL?.trim() || gatewayUrl;
+  const subagentModel =
+    resolvedModelSetting(environment.CLAUDE_CODE_SUBAGENT_MODEL) || model;
   const settings =
     environment.SUBC_CLAUDE_SETTINGS?.trim() ||
     JSON.stringify(claudePickerSettings([model], model));
@@ -41,7 +69,8 @@ export function claudeNativeLaunch(argv, environment) {
     ANTHROPIC_BASE_URL: effectiveGatewayUrl,
     ANTHROPIC_AUTH_TOKEN: apiKey,
     ANTHROPIC_MODEL: environment.ANTHROPIC_MODEL?.trim() || model,
-    ANTHROPIC_SMALL_FAST_MODEL: environment.ANTHROPIC_SMALL_FAST_MODEL?.trim() || model,
+    ANTHROPIC_SMALL_FAST_MODEL:
+      environment.ANTHROPIC_SMALL_FAST_MODEL?.trim() || model,
     CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY:
       environment.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY?.trim() || '0',
     CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,

@@ -1,16 +1,22 @@
 import assert from 'node:assert/strict';
-import { spawn, execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
-import { createHash } from 'node:crypto';
 
 const exec = promisify(execFile);
 
-const runPath = new URL('../bin/runbook/subconscious-code/run.sh', import.meta.url);
-const installPath = new URL('../bin/runbook/subconscious-code/install.sh', import.meta.url);
+const runPath = new URL(
+  '../bin/runbook/subconscious-code/run.sh',
+  import.meta.url,
+);
+const installPath = new URL(
+  '../bin/runbook/subconscious-code/install.sh',
+  import.meta.url,
+);
 
 async function makeFakeSc(root) {
   const binDir = path.join(root, 'bin');
@@ -54,7 +60,9 @@ function runSc(root, binDir, args = [], overrides = {}) {
     });
     let stderr = '';
     child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
     child.on('error', reject);
     child.on('close', (code) => resolve({ code, stderr }));
   });
@@ -78,8 +86,12 @@ function runInstaller(root, binDir, overrides = {}) {
     let stderr = '';
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk;
+    });
     child.on('error', reject);
     child.on('close', (code) => resolve({ code, stdout, stderr }));
   });
@@ -161,7 +173,11 @@ test('Marathon receives the selected profile and passthrough arguments', async (
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-test-'));
   try {
     const binDir = await makeFakeSc(root);
-    await fs.writeFile(path.join(binDir, 'sc'), '#!/usr/bin/env bash\nexit 99\n', { mode: 0o755 });
+    await fs.writeFile(
+      path.join(binDir, 'sc'),
+      '#!/usr/bin/env bash\nexit 99\n',
+      { mode: 0o755 },
+    );
     const result = await runSc(root, binDir, ['-p', 'fix the tests']);
     assert.equal(result.code, 0, result.stderr);
 
@@ -169,10 +185,22 @@ test('Marathon receives the selected profile and passthrough arguments', async (
       .split('\n')
       .filter(Boolean);
     assert.deepEqual(args, ['-p', 'fix the tests']);
-    assert.equal(await fs.readFile(path.join(root, 'base-url'), 'utf8'), 'https://gateway.example/v1\n');
-    assert.equal(await fs.readFile(path.join(root, 'dlr-url'), 'utf8'), 'https://gateway.example\n');
-    assert.equal(await fs.readFile(path.join(root, 'dlr-enabled'), 'utf8'), 'true\n');
-    assert.equal(await fs.readFile(path.join(root, 'api-key'), 'utf8'), 'sc-specific-key\n');
+    assert.equal(
+      await fs.readFile(path.join(root, 'base-url'), 'utf8'),
+      'https://gateway.example/v1\n',
+    );
+    assert.equal(
+      await fs.readFile(path.join(root, 'dlr-url'), 'utf8'),
+      'https://gateway.example\n',
+    );
+    assert.equal(
+      await fs.readFile(path.join(root, 'dlr-enabled'), 'utf8'),
+      'true\n',
+    );
+    assert.equal(
+      await fs.readFile(path.join(root, 'api-key'), 'utf8'),
+      'sc-specific-key\n',
+    );
     assert.equal(
       await fs.readFile(path.join(root, 'model'), 'utf8'),
       'subconscious/glm-5.3-marathon\n',
@@ -205,7 +233,9 @@ test('Subconscious Code installer selects the matching release target', async (t
 
   for (const [platform, architecture, target] of cases) {
     await t.test(`${platform} ${architecture}`, async () => {
-      const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-install-test-'));
+      const root = await fs.mkdtemp(
+        path.join(os.tmpdir(), 'subc-sc-install-test-'),
+      );
       try {
         const binDir = await makeFakeInstallerTools(root);
         const result = await runInstaller(root, binDir, {
@@ -220,8 +250,16 @@ test('Subconscious Code installer selects the matching release target', async (t
         await fs.access(path.join(root, 'install', 'marathon'));
 
         const ghCalls = await fs.readFile(path.join(root, 'gh-calls'), 'utf8');
-        assert.match(ghCalls, new RegExp(`--pattern marathon-${target}\\.tar\\.gz(?:\\s|$)`));
-        assert.match(ghCalls, new RegExp(`--pattern marathon-${target}\\.tar\\.gz\\.sha256(?:\\s|$)`));
+        assert.match(
+          ghCalls,
+          new RegExp(`--pattern marathon-${target}\\.tar\\.gz(?:\\s|$)`),
+        );
+        assert.match(
+          ghCalls,
+          new RegExp(
+            `--pattern marathon-${target}\\.tar\\.gz\\.sha256(?:\\s|$)`,
+          ),
+        );
       } finally {
         await fs.rm(root, { recursive: true, force: true });
       }
@@ -230,7 +268,9 @@ test('Subconscious Code installer selects the matching release target', async (t
 });
 
 test('Subconscious Code installer rejects unsupported platforms', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-install-unsupported-'));
+  const root = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'subc-sc-install-unsupported-'),
+  );
   try {
     const binDir = await makeFakeInstallerTools(root);
     const result = await runInstaller(root, binDir, {
@@ -239,14 +279,19 @@ test('Subconscious Code installer rejects unsupported platforms', async () => {
     });
 
     assert.equal(result.code, 1);
-    assert.match(result.stderr, /unsupported platform or architecture: FreeBSD x86_64/);
+    assert.match(
+      result.stderr,
+      /unsupported platform or architecture: FreeBSD x86_64/,
+    );
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test('Unix installer verifies real archives, migrates legacy names, and preserves existing files on failure', async t => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-marathon-archives-'));
+test('Unix installer verifies real archives, migrates legacy names, and preserves existing files on failure', async (t) => {
+  const root = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'subc-marathon-archives-'),
+  );
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const binDir = await makeFakeInstallerTools(root);
   // Exercise the host tar and SHA-256 tools, not the mapping-test stubs.
@@ -258,35 +303,68 @@ test('Unix installer verifies real archives, migrates legacy names, and preserve
   await fs.mkdir(releaseDir);
   await fs.mkdir(source);
   await fs.mkdir(installDir);
-  await fs.writeFile(path.join(installDir, 'sc'), 'leave existing sc untouched');
+  await fs.writeFile(
+    path.join(installDir, 'sc'),
+    'leave existing sc untouched',
+  );
   const environment = {
-    SC_TEST_UNAME_S: 'Linux', SC_TEST_UNAME_M: 'x86_64', SC_TEST_RELEASE_DIR: releaseDir,
+    SC_TEST_UNAME_S: 'Linux',
+    SC_TEST_UNAME_M: 'x86_64',
+    SC_TEST_RELEASE_DIR: releaseDir,
   };
   for (const name of ['sc', 'marathon']) {
     const asset = `${name}-x86_64-unknown-linux-musl.tar.gz`;
     const fixture = `#!/usr/bin/env bash\nprintf 'installed ${name}\\n'\n`;
     await fs.writeFile(path.join(source, name), fixture, { mode: 0o755 });
-    await exec('tar', ['-czf', path.join(releaseDir, asset), '-C', source, name]);
-    const hash = createHash('sha256').update(await fs.readFile(path.join(releaseDir, asset))).digest('hex');
-    await fs.writeFile(path.join(releaseDir, asset + '.sha256'), `${hash}  ${asset}\n`);
+    await exec('tar', [
+      '-czf',
+      path.join(releaseDir, asset),
+      '-C',
+      source,
+      name,
+    ]);
+    const hash = createHash('sha256')
+      .update(await fs.readFile(path.join(releaseDir, asset)))
+      .digest('hex');
+    await fs.writeFile(
+      path.join(releaseDir, `${asset}.sha256`),
+      `${hash}  ${asset}\n`,
+    );
     const options = { ...environment, SC_TEST_ASSET: asset };
     const result = await runInstaller(root, binDir, options);
     assert.equal(result.code, 0, result.stderr);
     const destination = path.join(installDir, 'marathon');
     assert.equal(await fs.readFile(destination, 'utf8'), fixture);
     assert.equal((await exec(destination)).stdout, `installed ${name}\n`);
-    assert.equal(await fs.readFile(path.join(installDir, 'sc'), 'utf8'), 'leave existing sc untouched');
+    assert.equal(
+      await fs.readFile(path.join(installDir, 'sc'), 'utf8'),
+      'leave existing sc untouched',
+    );
 
-    await fs.writeFile(path.join(releaseDir, asset + '.sha256'), `${'0'.repeat(64)}  ${asset}\n`);
+    await fs.writeFile(
+      path.join(releaseDir, `${asset}.sha256`),
+      `${'0'.repeat(64)}  ${asset}\n`,
+    );
     const failed = await runInstaller(root, binDir, options);
     assert.notEqual(failed.code, 0);
     assert.equal(await fs.readFile(destination, 'utf8'), fixture);
 
     // A correctly hashed archive with the wrong entry must not change the install.
     await fs.writeFile(path.join(source, 'wrong'), 'not the native executable');
-    await exec('tar', ['-czf', path.join(releaseDir, asset), '-C', source, 'wrong']);
-    const wrongHash = createHash('sha256').update(await fs.readFile(path.join(releaseDir, asset))).digest('hex');
-    await fs.writeFile(path.join(releaseDir, asset + '.sha256'), `${wrongHash}  ${asset}\n`);
+    await exec('tar', [
+      '-czf',
+      path.join(releaseDir, asset),
+      '-C',
+      source,
+      'wrong',
+    ]);
+    const wrongHash = createHash('sha256')
+      .update(await fs.readFile(path.join(releaseDir, asset)))
+      .digest('hex');
+    await fs.writeFile(
+      path.join(releaseDir, `${asset}.sha256`),
+      `${wrongHash}  ${asset}\n`,
+    );
     const wrong = await runInstaller(root, binDir, options);
     assert.notEqual(wrong.code, 0);
     assert.equal(await fs.readFile(destination, 'utf8'), fixture);
@@ -294,11 +372,13 @@ test('Unix installer verifies real archives, migrates legacy names, and preserve
   }
 });
 
-test('Unix curl installer falls back only for a missing archive, never for server or checksum failures', async t => {
+test('Unix curl installer falls back only for a missing archive, never for server or checksum failures', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-marathon-curl-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const binDir = await makeFakeInstallerTools(root);
-  await fs.writeFile(path.join(binDir, 'curl'), `#!/usr/bin/env bash
+  await fs.writeFile(
+    path.join(binDir, 'curl'),
+    `#!/usr/bin/env bash
 set -euo pipefail
 url=''; output=''; format=''
 while [[ $# -gt 0 ]]; do
@@ -313,20 +393,41 @@ printf '%s\\n' "$url" >>"$SC_TEST_CURL_CALLS_FILE"
 : >"$output"
 if [[ "$url" == *.sha256 && "\${SC_TEST_BAD_CHECKSUM:-}" == 1 ]]; then exit 22; fi
 if [[ -n "$format" ]]; then printf '%s' "$SC_TEST_HTTP_STATUS"; fi
-`, { mode: 0o755 });
+`,
+    { mode: 0o755 },
+  );
   const environment = {
-    SC_TEST_UNAME_S: 'Darwin', SC_TEST_UNAME_M: 'arm64', SC_TEST_NO_GH: '1',
+    SC_TEST_UNAME_S: 'Darwin',
+    SC_TEST_UNAME_M: 'arm64',
+    SC_TEST_NO_GH: '1',
     SC_TEST_CURL_CALLS_FILE: path.join(root, 'curl-calls'),
   };
   for (const status of ['200', '404', '503']) {
     await fs.writeFile(environment.SC_TEST_CURL_CALLS_FILE, '');
-    const result = await runInstaller(root, binDir, { ...environment, SC_TEST_HTTP_STATUS: status });
-    const calls = await fs.readFile(environment.SC_TEST_CURL_CALLS_FILE, 'utf8');
+    const result = await runInstaller(root, binDir, {
+      ...environment,
+      SC_TEST_HTTP_STATUS: status,
+    });
+    const calls = await fs.readFile(
+      environment.SC_TEST_CURL_CALLS_FILE,
+      'utf8',
+    );
     assert.equal(result.code === 0, status !== '503', result.stderr);
-    assert.equal(calls.includes('/sc-aarch64-apple-darwin.tar.gz'), status === '404', calls);
+    assert.equal(
+      calls.includes('/sc-aarch64-apple-darwin.tar.gz'),
+      status === '404',
+      calls,
+    );
   }
   await fs.writeFile(environment.SC_TEST_CURL_CALLS_FILE, '');
-  const result = await runInstaller(root, binDir, { ...environment, SC_TEST_HTTP_STATUS: '200', SC_TEST_BAD_CHECKSUM: '1' });
+  const result = await runInstaller(root, binDir, {
+    ...environment,
+    SC_TEST_HTTP_STATUS: '200',
+    SC_TEST_BAD_CHECKSUM: '1',
+  });
   assert.notEqual(result.code, 0);
-  assert.doesNotMatch(await fs.readFile(environment.SC_TEST_CURL_CALLS_FILE, 'utf8'), /\/sc-aarch64/);
+  assert.doesNotMatch(
+    await fs.readFile(environment.SC_TEST_CURL_CALLS_FILE, 'utf8'),
+    /\/sc-aarch64/,
+  );
 });

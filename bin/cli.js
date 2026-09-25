@@ -10,43 +10,43 @@
  */
 
 import fs from 'node:fs/promises';
-import { c } from './colors.js';
-import { renderBanner } from './branding.js';
 import {
+  agentCommandName,
+  agentList,
+  isAgentHelpRequest,
+  parseAgentAction,
+  resolveAgent,
+  runAgent,
+} from './agents.js';
+import {
+  getApiKey,
   loginCommand,
   logoutCommand,
-  getApiKey,
   updateApiKeyCommand,
   whoamiCommand,
 } from './auth.js';
-import { upgradeCommand } from './upgrade.js';
-import {
-  resolveAgent,
-  runAgent,
-  agentList,
-  agentCommandName,
-  isAgentHelpRequest,
-  parseAgentAction,
-} from './agents.js';
+import { renderBanner } from './branding.js';
+import { c } from './colors.js';
+import { feedbackCommand, printFeedbackHelp } from './feedback.js';
+import { resolveModelCatalog } from './models.js';
 import {
   configCommand,
   DEFAULT_PROFILE,
   loadProfile,
   modelsCommand,
-  printConfigHelp,
-  resolvedModelSetting,
-  RUNBOOK_DEFAULTS,
   SUPPORTED_MODELS as PACKAGED_MODELS,
+  printConfigHelp,
+  RUNBOOK_DEFAULTS,
+  resolvedModelSetting,
   updatePlatformUrlCommand,
   updateUrlCommand,
   validateProfileName,
 } from './profiles.js';
-import { resolveModelCatalog } from './models.js';
-import { showUpdateNotice } from './update-check.js';
-import { runTui } from './tui.js';
 import { sessionsCommand } from './sessions.js';
+import { runTui } from './tui.js';
+import { showUpdateNotice } from './update-check.js';
+import { upgradeCommand } from './upgrade.js';
 import { printUsageHelp, usageCommand } from './usage.js';
-import { feedbackCommand, printFeedbackHelp } from './feedback.js';
 
 function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
@@ -54,7 +54,10 @@ function isHelpArg(arg) {
 
 function printHelp() {
   const agents = agentList()
-    .map(({ name, alias, action }) => `    ${c.cyan}${alias.padEnd(13)}${c.reset}${c.dim}${action} ${name}${c.reset}`)
+    .map(
+      ({ name, alias, action }) =>
+        `    ${c.cyan}${alias.padEnd(13)}${c.reset}${c.dim}${action} ${name}${c.reset}`,
+    )
     .join('\n');
 
   console.log(`${renderBanner()}
@@ -330,7 +333,12 @@ async function main() {
     }
   }
 
-  if (!command || command === '--help' || command === '-h' || (command === 'help' && !args[1])) {
+  if (
+    !command ||
+    command === '--help' ||
+    command === '-h' ||
+    (command === 'help' && !args[1])
+  ) {
     printHelp();
     return;
   }

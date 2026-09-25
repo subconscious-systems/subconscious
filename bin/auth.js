@@ -12,16 +12,23 @@
  */
 
 import { exec } from 'node:child_process';
-import { openWindowsBrowser } from './windows/process.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { c } from './colors.js';
-import { clearProfileApiKey, DEFAULT_PROFILE, ensureProfile } from './profiles.js';
+import {
+  clearProfileApiKey,
+  DEFAULT_PROFILE,
+  ensureProfile,
+} from './profiles.js';
 import { printLoginUpgradeWarning } from './upgrade.js';
+import { openWindowsBrowser } from './windows/process.js';
 
 function configDir() {
-  return process.env.SUBC_CONFIG_DIR?.trim() || path.join(os.homedir(), '.subconscious');
+  return (
+    process.env.SUBC_CONFIG_DIR?.trim() ||
+    path.join(os.homedir(), '.subconscious')
+  );
 }
 
 function configFile() {
@@ -78,7 +85,10 @@ export async function getApiKey(profile) {
 
   const config = await loadConfig();
   if (config.subconscious_api_key) {
-    return { key: config.subconscious_api_key, source: '~/.subconscious/config.json' };
+    return {
+      key: config.subconscious_api_key,
+      source: '~/.subconscious/config.json',
+    };
   }
   return null;
 }
@@ -87,9 +97,11 @@ export async function getApiKey(profile) {
 
 function openBrowser(url) {
   if (process.platform === 'win32') {
-    void openWindowsBrowser(url).then(code => {
-      if (code) throw new Error('Browser could not be opened');
-    }).catch(() => console.log(`Please open this URL manually:\n\n  ${url}\n`));
+    void openWindowsBrowser(url)
+      .then((code) => {
+        if (code) throw new Error('Browser could not be opened');
+      })
+      .catch(() => console.log(`Please open this URL manually:\n\n  ${url}\n`));
     return;
   }
   const cmd =
@@ -131,7 +143,11 @@ export async function registerDeviceLogin(platformUrl, fetchImpl = fetch) {
   return data;
 }
 
-export async function pollDeviceLogin(platformUrl, deviceCode, fetchImpl = fetch) {
+export async function pollDeviceLogin(
+  platformUrl,
+  deviceCode,
+  fetchImpl = fetch,
+) {
   const res = await fetchImpl(`${platformUrl}/api/cli/device/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -151,7 +167,9 @@ function printDeviceInstructions(platformUrl, userCode) {
   console.log(`  ${c.dim}Opening browser to sign in...${c.reset}`);
   console.log();
   console.log(`  ${c.dim}If a window doesn't open, go to:${c.reset}`);
-  console.log(`  ${c.underline}${c.cyan}${terminalLink(verificationUrl)}${c.reset}`);
+  console.log(
+    `  ${c.underline}${c.cyan}${terminalLink(verificationUrl)}${c.reset}`,
+  );
   console.log();
   console.log(
     `  ${c.dim}Or open ${c.reset}${c.underline}${c.cyan}${terminalLink(deviceUrl)}${c.reset}${c.dim} and enter:${c.reset} ${c.bold}${userCode}${c.reset}`,
@@ -161,7 +179,9 @@ function printDeviceInstructions(platformUrl, userCode) {
 }
 
 function printLoginFallback() {
-  console.error(`  ${c.dim}You can also copy an API key from the dashboard and run${c.reset} ${c.cyan}subc update-key <your-api-key>${c.reset}${c.dim}.${c.reset}`);
+  console.error(
+    `  ${c.dim}You can also copy an API key from the dashboard and run${c.reset} ${c.cyan}subc update-key <your-api-key>${c.reset}${c.dim}.${c.reset}`,
+  );
 }
 
 async function saveLoginKey(profileName, token) {
@@ -181,17 +201,23 @@ export async function loginCommand(_argv = [], options = {}) {
   if (existing) {
     const profile = await ensureProfile(profileName, existing.key);
     const logout =
-      profileName === DEFAULT_PROFILE ? 'subc logout' : `subc --profile ${profileName} logout`;
-    const masked = existing.key.slice(0, 8) + '...' + existing.key.slice(-4);
+      profileName === DEFAULT_PROFILE
+        ? 'subc logout'
+        : `subc --profile ${profileName} logout`;
+    const masked = `${existing.key.slice(0, 8)}...${existing.key.slice(-4)}`;
     console.log(`\n${c.yellow}Already logged in.${c.reset}`);
     console.log(`  Key: ${c.dim}${masked}${c.reset}`);
     console.log(`  Profile: ${c.dim}${profile.path}${c.reset}`);
-    console.log(`\n  Run ${c.cyan}${logout}${c.reset} first to switch accounts.\n`);
+    console.log(
+      `\n  Run ${c.cyan}${logout}${c.reset} first to switch accounts.\n`,
+    );
     return;
   }
 
   console.log();
-  console.log(`  ${c.magenta}${c.bold}Subconscious${c.reset} ${c.dim}— CLI Login${c.reset}`);
+  console.log(
+    `  ${c.magenta}${c.bold}Subconscious${c.reset} ${c.dim}— CLI Login${c.reset}`,
+  );
   console.log();
 
   const platformUrl = getPlatformUrl(options.profile);
@@ -206,7 +232,10 @@ export async function loginCommand(_argv = [], options = {}) {
     return;
   }
 
-  const verificationUrl = printDeviceInstructions(platformUrl, registered.user_code);
+  const verificationUrl = printDeviceInstructions(
+    platformUrl,
+    registered.user_code,
+  );
   (options.openBrowser || openBrowser)(verificationUrl);
 
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
@@ -229,35 +258,47 @@ export async function loginCommand(_argv = [], options = {}) {
       if (Date.now() - started > DEVICE_POLL_TIMEOUT_MS) {
         throw new Error('Authentication timed out (5 min). Please try again.');
       }
-      const polled = await pollDeviceLogin(platformUrl, registered.device_code, fetchImpl);
+      const polled = await pollDeviceLogin(
+        platformUrl,
+        registered.device_code,
+        fetchImpl,
+      );
       if (polled.status === 'approved') {
         clearInterval(spinner);
-        process.stdout.write('\r' + ' '.repeat(50) + '\r');
+        process.stdout.write(`\r${' '.repeat(50)}\r`);
         const profile = await saveLoginKey(profileName, polled.key);
-        const masked = polled.key.slice(0, 8) + '...' + polled.key.slice(-4);
+        const masked = `${polled.key.slice(0, 8)}...${polled.key.slice(-4)}`;
         console.log(`  ${c.green}${c.bold}✓ Logged in successfully!${c.reset}`);
         console.log(`  ${c.dim}Key: ${masked}${c.reset}`);
         if (profileName === DEFAULT_PROFILE) {
-          console.log(`  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`);
+          console.log(
+            `  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`,
+          );
         }
         console.log(`  ${c.dim}Runbook profile: ${profile.path}${c.reset}`);
-        console.log(`  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or install editor hooks with ${c.reset}${c.cyan}subc cursor install${c.reset}${c.dim}.${c.reset}`);
-        console.log(`  ${c.dim}Pi needs ${c.reset}${c.cyan}subc pi install${c.reset}${c.dim} first. List profiles with ${c.reset}${c.cyan}subc config${c.reset}${c.dim}.${c.reset}`);
+        console.log(
+          `  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or install editor hooks with ${c.reset}${c.cyan}subc cursor install${c.reset}${c.dim}.${c.reset}`,
+        );
+        console.log(
+          `  ${c.dim}Pi needs ${c.reset}${c.cyan}subc pi install${c.reset}${c.dim} first. List profiles with ${c.reset}${c.cyan}subc config${c.reset}${c.dim}.${c.reset}`,
+        );
         console.log();
         return;
       }
       if (polled.status === 'expired') {
         throw new Error('Login code expired. Please try again.');
       }
-      await new Promise((resolve) => setTimeout(resolve, DEVICE_POLL_INTERVAL_MS));
+      await new Promise((resolve) =>
+        setTimeout(resolve, DEVICE_POLL_INTERVAL_MS),
+      );
     }
     clearInterval(spinner);
-    process.stdout.write('\r' + ' '.repeat(50) + '\r');
+    process.stdout.write(`\r${' '.repeat(50)}\r`);
     console.log(`\n  ${c.dim}Login cancelled.${c.reset}\n`);
     process.exitCode = 1;
   } catch (error) {
     clearInterval(spinner);
-    process.stdout.write('\r' + ' '.repeat(50) + '\r');
+    process.stdout.write(`\r${' '.repeat(50)}\r`);
     console.error(`  ${c.red}✗ ${error.message}${c.reset}`);
     printLoginFallback();
     console.log();
@@ -282,7 +323,8 @@ export async function updateApiKeyCommand(argv = [], options = {}) {
     await saveConfig(config);
   }
 
-  const masked = key.length <= 12 ? '********' : `${key.slice(0, 8)}...${key.slice(-4)}`;
+  const masked =
+    key.length <= 12 ? '********' : `${key.slice(0, 8)}...${key.slice(-4)}`;
   console.log(`\n  ${c.green}${c.bold}✓ API key updated.${c.reset}`);
   console.log(`  ${c.dim}Profile: ${profile.path}${c.reset}`);
   console.log(`  ${c.dim}Key:     ${masked}${c.reset}`);
@@ -298,7 +340,8 @@ export async function logoutCommand(_argv = [], options = {}) {
   const profileName = options.profileName || DEFAULT_PROFILE;
   const config = await loadConfig();
   const clearedProfile = await clearProfileApiKey(profileName);
-  const clearSavedConfig = profileName === DEFAULT_PROFILE && config.subconscious_api_key;
+  const clearSavedConfig =
+    profileName === DEFAULT_PROFILE && config.subconscious_api_key;
 
   if (!clearSavedConfig && !clearedProfile) {
     console.log(`\n  ${c.dim}Not logged in.${c.reset}\n`);
@@ -331,16 +374,19 @@ export async function whoamiCommand(_argv = [], options = {}) {
   }
 
   const { key, source } = auth;
-  const masked = key.slice(0, 8) + '...' + key.slice(-4);
+  const masked = `${key.slice(0, 8)}...${key.slice(-4)}`;
 
   console.log();
 
   // Validate the key against the server; falls back to offline display if unreachable
   try {
-    const res = await fetch(`${getPlatformUrl(options.profile)}/api/cli/whoami`, {
-      headers: { Authorization: `Bearer ${key}` },
-      signal: AbortSignal.timeout(5000),
-    });
+    const res = await fetch(
+      `${getPlatformUrl(options.profile)}/api/cli/whoami`,
+      {
+        headers: { Authorization: `Bearer ${key}` },
+        signal: AbortSignal.timeout(5000),
+      },
+    );
 
     if (res.status === 404) {
       printLoginUpgradeWarning();
@@ -365,7 +411,9 @@ export async function whoamiCommand(_argv = [], options = {}) {
       );
     }
   } catch {
-    console.log(`  ${c.green}✓ Authenticated${c.reset} ${c.dim}(offline — key not verified)${c.reset}`);
+    console.log(
+      `  ${c.green}✓ Authenticated${c.reset} ${c.dim}(offline — key not verified)${c.reset}`,
+    );
     console.log(`  ${c.dim}Key:    ${masked}${c.reset}`);
     console.log(`  ${c.dim}Source: ${source}${c.reset}`);
   }

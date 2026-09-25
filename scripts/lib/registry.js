@@ -64,4 +64,4 @@ function substitute(value, ctx) {
   return value;
 }
 
-export { loadRegistry, substitute, REGISTRY_PATH };
+export { loadRegistry, REGISTRY_PATH, substitute };

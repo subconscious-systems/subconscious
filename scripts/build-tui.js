@@ -5,7 +5,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const CLI_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CLI_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 const TUI_DIR = path.join(CLI_DIR, 'tui');
 const OUTPUT_DIR = path.join(CLI_DIR, 'bin', 'native');
 
@@ -22,7 +25,9 @@ function hostTarget() {
   const platform = process.platform === 'win32' ? 'windows' : process.platform;
   const arch = { x64: 'amd64', arm64: 'arm64' }[process.arch];
   if (!arch || !['darwin', 'linux', 'windows'].includes(platform)) {
-    throw new Error(`Unsupported TUI build host: ${process.platform}/${process.arch}`);
+    throw new Error(
+      `Unsupported TUI build host: ${process.platform}/${process.arch}`,
+    );
   }
   return { platform, arch };
 }
@@ -32,12 +37,16 @@ function filename(target) {
   return `subc-tui-${target.platform}-${target.arch}${extension}`;
 }
 
-const selectedTargets = process.argv.includes('--host') ? [hostTarget()] : targets;
+const selectedTargets = process.argv.includes('--host')
+  ? [hostTarget()]
+  : targets;
 fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
 for (const target of selectedTargets) {
   const output = path.join(OUTPUT_DIR, filename(target));
-  console.log(`Building ${target.platform}/${target.arch} → ${path.relative(CLI_DIR, output)}`);
+  console.log(
+    `Building ${target.platform}/${target.arch} → ${path.relative(CLI_DIR, output)}`,
+  );
   execFileSync(
     'go',
     ['build', '-trimpath', '-ldflags=-s -w', '-o', output, './cmd/subc-tui'],

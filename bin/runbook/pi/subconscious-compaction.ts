@@ -31,40 +31,43 @@
  *       https://pi.dev/docs/latest/extensions
  */
 
-import { readFileSync } from "node:fs"
-import { homedir } from "node:os"
-import { join } from "node:path"
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 
-const TIMEOUT_MS = 2000
+const TIMEOUT_MS = 2000;
 
-type CompactPhase = "start" | "end"
+type CompactPhase = 'start' | 'end';
 
-let envFileLoaded = false
+let envFileLoaded = false;
 
 function loadSubconsciousEnvFile(): void {
-  if (envFileLoaded) return
-  envFileLoaded = true
-  if (process.env.SUBCONSCIOUS_GATEWAY_URL && process.env.SUBCONSCIOUS_API_KEY) {
-    return
+  if (envFileLoaded) return;
+  envFileLoaded = true;
+  if (
+    process.env.SUBCONSCIOUS_GATEWAY_URL &&
+    process.env.SUBCONSCIOUS_API_KEY
+  ) {
+    return;
   }
   try {
-    const path = join(homedir(), ".pi", "agent", "subconscious.env")
-    const text = readFileSync(path, "utf8")
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith("#")) continue
-      const m = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/)
-      if (!m) continue
-      const key = m[1]
-      let val = m[2]
+    const path = join(homedir(), '.pi', 'agent', 'subconscious.env');
+    const text = readFileSync(path, 'utf8');
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const m = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+      if (!m) continue;
+      const key = m[1];
+      let val = m[2];
       if (
         (val.startsWith('"') && val.endsWith('"')) ||
         (val.startsWith("'") && val.endsWith("'"))
       ) {
-        val = val.slice(1, -1)
+        val = val.slice(1, -1);
       }
       if (process.env[key] === undefined) {
-        process.env[key] = val
+        process.env[key] = val;
       }
     }
   } catch {
@@ -73,14 +76,18 @@ function loadSubconsciousEnvFile(): void {
 }
 
 function gatewayUrl(): string | undefined {
-  loadSubconsciousEnvFile()
-  const raw = process.env.SUBCONSCIOUS_GATEWAY_URL ?? process.env.GATEWAY_URL
-  return raw ? raw.replace(/\/+$/, "") : undefined
+  loadSubconsciousEnvFile();
+  const raw = process.env.SUBCONSCIOUS_GATEWAY_URL ?? process.env.GATEWAY_URL;
+  return raw ? raw.replace(/\/+$/, '') : undefined;
 }
 
 function apiKey(): string | undefined {
-  loadSubconsciousEnvFile()
-  return process.env.SUBCONSCIOUS_API_KEY ?? process.env.API_KEY ?? process.env.PI_API_KEY
+  loadSubconsciousEnvFile();
+  return (
+    process.env.SUBCONSCIOUS_API_KEY ??
+    process.env.API_KEY ??
+    process.env.PI_API_KEY
+  );
 }
 
 async function report(
@@ -89,25 +96,25 @@ async function report(
   hookEventName: string,
   metadata?: Record<string, unknown>,
 ): Promise<void> {
-  const url = gatewayUrl()
-  const key = apiKey()
-  if (!url || !key || !sessionID) return
+  const url = gatewayUrl();
+  const key = apiKey();
+  if (!url || !key || !sessionID) return;
 
   // Unique per event, stable for a transport-level retry of this same POST.
-  const dedupeKey = `${sessionID}:${phase}:${Date.now()}`
+  const dedupeKey = `${sessionID}:${phase}:${Date.now()}`;
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     await fetch(`${url}/v1/agent-hooks`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "content-type": "application/json",
+        'content-type': 'application/json',
         authorization: `Bearer ${key}`,
-        "x-subconscious-client": "pi",
+        'x-subconscious-client': 'pi',
       },
       body: JSON.stringify({
-        event: "conversation_compaction",
+        event: 'conversation_compaction',
         conversation_id: sessionID,
         phase,
         hook_event_name: hookEventName,
@@ -115,37 +122,50 @@ async function report(
         metadata: metadata ?? undefined,
       }),
       signal: controller.signal,
-    })
+    });
   } catch {
     // Fail open on timeout, offline gateway, or auth failure.
   } finally {
-    clearTimeout(timer)
+    clearTimeout(timer);
   }
 }
+
+type PiCompactEvent = {
+  reason?: unknown;
+  preparation?: { tokensBefore?: unknown };
+  fromExtension?: unknown;
+};
+
+type PiContext = {
+  sessionManager?: { getSessionId?: () => string | undefined };
+};
 
 // Pi auto-discovers default-exported extension factories from
 // ~/.pi/agent/extensions/*.ts. See https://pi.dev/docs/latest/extensions
 export default function (pi: {
-  on: (event: string, handler: (...args: any[]) => any) => void
+  on: (
+    event: string,
+    handler: (event: PiCompactEvent, ctx: PiContext) => Promise<void>,
+  ) => void;
 }) {
-  pi.on("session_before_compact", async (event: any, ctx: any) => {
-    const sessionID = ctx?.sessionManager?.getSessionId?.()
+  pi.on('session_before_compact', async (event, ctx) => {
+    const sessionID = ctx?.sessionManager?.getSessionId?.();
     if (sessionID) {
-      await report(sessionID, "start", "session_before_compact", {
+      await report(sessionID, 'start', 'session_before_compact', {
         reason: event?.reason ?? null,
         tokens_before: event?.preparation?.tokensBefore ?? null,
-      })
+      });
     }
     // Deliberately return nothing: do not cancel or replace summarization.
-  })
+  });
 
-  pi.on("session_compact", async (event: any, ctx: any) => {
-    const sessionID = ctx?.sessionManager?.getSessionId?.()
+  pi.on('session_compact', async (event, ctx) => {
+    const sessionID = ctx?.sessionManager?.getSessionId?.();
     if (sessionID) {
-      await report(sessionID, "end", "session_compact", {
+      await report(sessionID, 'end', 'session_compact', {
         reason: event?.reason ?? null,
         from_extension: event?.fromExtension ?? null,
-      })
+      });
     }
-  })
+  });
 }

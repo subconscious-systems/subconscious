@@ -8,8 +8,8 @@ import * as profiles from '../bin/profiles.js';
 import {
   createLocalTuiState,
   createTuiState,
-  loadRemoteTuiUpdates,
   isTuiResult,
+  loadRemoteTuiUpdates,
   nativeTargetName,
   resolveTuiExecutable,
   runTui,
@@ -17,7 +17,9 @@ import {
   writeAtomicJson,
 } from '../bin/tui.js';
 
-const testConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-tui-test-'));
+const testConfigDir = await fs.mkdtemp(
+  path.join(os.tmpdir(), 'subc-tui-test-'),
+);
 process.env.SUBC_CONFIG_DIR = testConfigDir;
 process.env.NO_COLOR = '1';
 process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
@@ -37,7 +39,9 @@ test('nativeTargetName maps npm platforms and architectures to Go binaries', () 
 });
 
 test('SUBC_TUI_BIN overrides packaged and source-checkout binaries', async () => {
-  const executable = await resolveTuiExecutable({ binary: '/tmp/custom-subc-tui' });
+  const executable = await resolveTuiExecutable({
+    binary: '/tmp/custom-subc-tui',
+  });
   assert.deepEqual(executable, {
     command: '/tmp/custom-subc-tui',
     args: [],
@@ -106,7 +110,11 @@ test('writeAtomicJson replaces a file that is being read', async () => {
 
   try {
     for (let i = 0; i < 20; i++) {
-      await writeAtomicJson(file, { n: i, modelsLoading: false, sessionsLoading: false });
+      await writeAtomicJson(file, {
+        n: i,
+        modelsLoading: false,
+        sessionsLoading: false,
+      });
     }
     const last = JSON.parse(await fs.readFile(file, 'utf8'));
     assert.equal(last.n, 19);
@@ -264,7 +272,8 @@ test('runTui aborts leftover remote work when the TUI exits first', async () => 
       new Promise((resolve, reject) => {
         catalogCalls += 1;
         const timer = setTimeout(
-          () => resolve({ models: ['too-late'], source: 'available', error: null }),
+          () =>
+            resolve({ models: ['too-late'], source: 'available', error: null }),
           10_000,
         );
         signal.addEventListener(

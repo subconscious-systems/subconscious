@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { after, test } from 'node:test';
 
-const testConfigDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-profiles-test-'));
+const testConfigDir = await fs.mkdtemp(
+  path.join(os.tmpdir(), 'subc-profiles-test-'),
+);
 process.env.SUBC_CONFIG_DIR = testConfigDir;
 process.env.NO_COLOR = '1';
 process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
@@ -12,7 +14,10 @@ process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
 const profiles = await import('../bin/profiles.js');
 const agents = await import('../bin/agents.js');
 const registry = JSON.parse(
-  await fs.readFile(new URL('../bin/registry.generated.json', import.meta.url), 'utf-8'),
+  await fs.readFile(
+    new URL('../bin/registry.generated.json', import.meta.url),
+    'utf-8',
+  ),
 );
 
 after(async () => {
@@ -23,9 +28,9 @@ test('profile sections stay in sync with every registered CLI agent', () => {
   const expectedAgentIds = registry.agents
     .filter((agent) => agent.cli !== false)
     .map((agent) => agent.id);
-  const actualAgentIds = profiles.PROFILE_SETTING_GROUPS
-    .filter((group) => group.id !== 'shared')
-    .map((group) => group.id);
+  const actualAgentIds = profiles.PROFILE_SETTING_GROUPS.filter(
+    (group) => group.id !== 'shared',
+  ).map((group) => group.id);
 
   assert.deepEqual(actualAgentIds, expectedAgentIds);
   for (const group of profiles.PROFILE_SETTING_GROUPS) {
@@ -82,15 +87,29 @@ test('config lists profiles by default and shows a named profile', async () => {
   assert.match(listed.stdout, /work/);
   assert.match(listed.stdout, /Profiles/);
   assert.match(listed.stdout, /\.env/);
-  assert.match(listed.stdout, new RegExp(profiles.profilePath('work').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(
+    listed.stdout,
+    new RegExp(
+      profiles.profilePath('work').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    ),
+  );
 
-  const shown = spawnSync(process.execPath, [cli.pathname, '-p', 'work', 'config'], {
-    encoding: 'utf-8',
-    env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
-  });
+  const shown = spawnSync(
+    process.execPath,
+    [cli.pathname, '-p', 'work', 'config'],
+    {
+      encoding: 'utf-8',
+      env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
+    },
+  );
   assert.equal(shown.status, 0);
   assert.match(shown.stdout, /Profile: work/);
-  assert.match(shown.stdout, new RegExp(profiles.profilePath('work').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(
+    shown.stdout,
+    new RegExp(
+      profiles.profilePath('work').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    ),
+  );
   assert.match(shown.stdout, /GATEWAY_URL=/);
   assert.doesNotMatch(shown.stdout, /shared-secret/);
 });
@@ -116,7 +135,10 @@ test('profiles are created securely and preserve agent-specific settings', async
 
   const profileText = await fs.readFile(updated.path, 'utf-8');
   for (const model of profiles.SUPPORTED_MODELS) {
-    assert.match(profileText, new RegExp(`#   ${model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+    assert.match(
+      profileText,
+      new RegExp(`#   ${model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`),
+    );
   }
 
   assert.equal(await profiles.clearProfileApiKey('work'), true);
@@ -153,18 +175,24 @@ test('subagent model can be saved independently or reset to follow the default',
     (group) => group.id === 'claude-code',
   ).settings;
   assert.ok(
-    claudeSettings.some((setting) => setting.key === 'CLAUDE_CODE_SUBAGENT_MODEL'),
+    claudeSettings.some(
+      (setting) => setting.key === 'CLAUDE_CODE_SUBAGENT_MODEL',
+    ),
   );
 });
 
 test('config create makes a new profile and rejects duplicates', async () => {
-  await profiles.configCommand(['create'], 'created-in-tui', { profileExplicit: true });
+  await profiles.configCommand(['create'], 'created-in-tui', {
+    profileExplicit: true,
+  });
   const created = await profiles.loadProfile('created-in-tui');
   assert.equal(created.exists, true);
   assert.equal(created.values.MODEL, registry.defaults.model);
   assert.equal((await fs.stat(created.path)).mode & 0o777, 0o600);
   await assert.rejects(
-    profiles.configCommand(['create'], 'created-in-tui', { profileExplicit: true }),
+    profiles.configCommand(['create'], 'created-in-tui', {
+      profileExplicit: true,
+    }),
     /already exists/,
   );
 });
@@ -212,15 +240,30 @@ test('undersized Copilot token defaults migrate while custom budgets are preserv
 
 test('profile parsing and validation reject unsafe names and invalid values', () => {
   assert.deepEqual(
-    profiles.parseProfile('export API_KEY="a key"\nMODEL=subconscious/glm-5.2\n# ignored\n'),
+    profiles.parseProfile(
+      'export API_KEY="a key"\nMODEL=subconscious/glm-5.2\n# ignored\n',
+    ),
     { API_KEY: 'a key', MODEL: 'subconscious/glm-5.2' },
   );
-  assert.throws(() => profiles.validateProfileName('../escape'), /Invalid profile name/);
+  assert.throws(
+    () => profiles.validateProfileName('../escape'),
+    /Invalid profile name/,
+  );
 
-  const shared = profiles.PROFILE_SETTING_GROUPS.find((group) => group.id === 'shared');
-  const gateway = shared.settings.find((setting) => setting.key === 'GATEWAY_URL');
-  assert.equal(profiles.validateSettingValue(gateway, 'https://gateway.example'), null);
-  assert.match(profiles.validateSettingValue(gateway, 'file:///tmp/gateway'), /valid http/);
+  const shared = profiles.PROFILE_SETTING_GROUPS.find(
+    (group) => group.id === 'shared',
+  );
+  const gateway = shared.settings.find(
+    (setting) => setting.key === 'GATEWAY_URL',
+  );
+  assert.equal(
+    profiles.validateSettingValue(gateway, 'https://gateway.example'),
+    null,
+  );
+  assert.match(
+    profiles.validateSettingValue(gateway, 'file:///tmp/gateway'),
+    /valid http/,
+  );
 
   const claude = profiles.PROFILE_SETTING_GROUPS.find(
     (group) => group.id === 'claude-code',
@@ -229,7 +272,10 @@ test('profile parsing and validation reject unsafe names and invalid values', ()
     (setting) => setting.key === 'CLAUDE_CODE_AUTO_COMPACT_WINDOW',
   );
   assert.equal(profiles.validateSettingValue(compactWindow, '100000'), null);
-  assert.match(profiles.validateSettingValue(compactWindow, '99999'), /at least 100000/);
+  assert.match(
+    profiles.validateSettingValue(compactWindow, '99999'),
+    /at least 100000/,
+  );
 });
 
 test('extra profile keys survive known-field updates and appear in config show', async () => {
@@ -237,18 +283,30 @@ test('extra profile keys survive known-field updates and appear in config show',
   const text = `${await fs.readFile(created.path, 'utf-8')}ANTHROPIC_DEFAULT_OPUS_MODEL=subconscious/custom-opus\n`;
   await fs.writeFile(created.path, text, { encoding: 'utf-8', mode: 0o600 });
 
-  const updated = await profiles.updateProfile('extras', { MODEL: registry.defaults.model });
-  assert.equal(updated.values.ANTHROPIC_DEFAULT_OPUS_MODEL, 'subconscious/custom-opus');
+  const updated = await profiles.updateProfile('extras', {
+    MODEL: registry.defaults.model,
+  });
+  assert.equal(
+    updated.values.ANTHROPIC_DEFAULT_OPUS_MODEL,
+    'subconscious/custom-opus',
+  );
   assert.equal(updated.values.MODEL, registry.defaults.model);
 
   const { spawnSync } = await import('node:child_process');
   const cli = new URL('../bin/cli.js', import.meta.url);
-  const shown = spawnSync(process.execPath, [cli.pathname, '-p', 'extras', 'config'], {
-    encoding: 'utf-8',
-    env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
-  });
+  const shown = spawnSync(
+    process.execPath,
+    [cli.pathname, '-p', 'extras', 'config'],
+    {
+      encoding: 'utf-8',
+      env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
+    },
+  );
   assert.equal(shown.status, 0);
-  assert.match(shown.stdout, /ANTHROPIC_DEFAULT_OPUS_MODEL=subconscious\/custom-opus/);
+  assert.match(
+    shown.stdout,
+    /ANTHROPIC_DEFAULT_OPUS_MODEL=subconscious\/custom-opus/,
+  );
   assert.doesNotMatch(shown.stdout, /secret-key-value/);
 });
 
@@ -258,18 +316,31 @@ test('config edit requires a terminal and rejects unknown editors', async () => 
   const cli = new URL('../bin/cli.js', import.meta.url);
   const env = { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' };
 
-  const nonTty = spawnSync(process.execPath, [cli.pathname, '-p', 'editme', 'config', 'edit'], {
-    encoding: 'utf-8',
-    env,
-  });
+  const nonTty = spawnSync(
+    process.execPath,
+    [cli.pathname, '-p', 'editme', 'config', 'edit'],
+    {
+      encoding: 'utf-8',
+      env,
+    },
+  );
   assert.notEqual(nonTty.status, 0);
   assert.match(nonTty.stderr, /requires a terminal/);
-  assert.match(nonTty.stderr, new RegExp(profiles.profilePath('editme').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(
+    nonTty.stderr,
+    new RegExp(
+      profiles.profilePath('editme').replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+    ),
+  );
 
-  const unknown = spawnSync(process.execPath, [cli.pathname, 'config', 'edit', 'emacs'], {
-    encoding: 'utf-8',
-    env,
-  });
+  const unknown = spawnSync(
+    process.execPath,
+    [cli.pathname, 'config', 'edit', 'emacs'],
+    {
+      encoding: 'utf-8',
+      env,
+    },
+  );
   assert.notEqual(unknown.status, 0);
   assert.match(unknown.stderr, /vim or nano/);
 });
@@ -279,7 +350,10 @@ test('profile extras can remap Claude picker slots only to catalog models', () =
   delete process.env.ANTHROPIC_DEFAULT_OPUS_MODEL;
   try {
     const claude = agents.resolveAgent('claude');
-    const catalog = ['subconscious/glm-5.3-marathon', 'subconscious/tim-qwen3.6-27b'];
+    const catalog = [
+      'subconscious/glm-5.3-marathon',
+      'subconscious/tim-qwen3.6-27b',
+    ];
     const remapped = agents.runbookEnv(
       'sk-test',
       catalog[0],
@@ -319,12 +393,16 @@ test('Claude picker slots stay inside the live catalog', () => {
   const previousHaiku = process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
   const previousFable = process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
   const previousCustom = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
-  process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = 'subconscious/deepseek-v4-flash-marathon';
+  process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL =
+    'subconscious/deepseek-v4-flash-marathon';
   process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = 'subconscious/glm-5.2';
   process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = 'subconscious/glm-5.2';
   try {
     const claude = agents.resolveAgent('claude');
-    const catalog = ['subconscious/glm-5.3-marathon', 'subconscious/tim-qwen3.6-27b'];
+    const catalog = [
+      'subconscious/glm-5.3-marathon',
+      'subconscious/tim-qwen3.6-27b',
+    ];
     const env = agents.runbookEnv(
       'sk-test',
       catalog[0],
@@ -352,11 +430,14 @@ test('Claude picker slots stay inside the live catalog', () => {
       catalog,
     );
   } finally {
-    if (previousHaiku === undefined) delete process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
+    if (previousHaiku === undefined)
+      delete process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
     else process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = previousHaiku;
-    if (previousFable === undefined) delete process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
+    if (previousFable === undefined)
+      delete process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
     else process.env.ANTHROPIC_DEFAULT_FABLE_MODEL = previousFable;
-    if (previousCustom === undefined) delete process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
+    if (previousCustom === undefined)
+      delete process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
     else process.env.ANTHROPIC_CUSTOM_MODEL_OPTION = previousCustom;
   }
 });
@@ -403,7 +484,10 @@ test('UNSET and legacy aliases clear model settings', () => {
   assert.equal(profiles.isUnsetSetting('follow-gateway'), true);
   assert.equal(profiles.isUnsetSetting('subconscious/glm-5.2'), false);
   assert.equal(profiles.resolvedModelSetting('UNSET'), '');
-  assert.equal(profiles.resolvedModelSetting('subconscious/glm-5.2'), 'subconscious/glm-5.2');
+  assert.equal(
+    profiles.resolvedModelSetting('subconscious/glm-5.2'),
+    'subconscious/glm-5.2',
+  );
 });
 
 test('a blank profile model follows the first live catalog entry', () => {
@@ -418,11 +502,14 @@ test('a blank profile model follows the first live catalog entry', () => {
     });
     assert.equal(extracted.model, '');
     assert.equal(extracted.modelSource, 'catalog');
-    assert.deepEqual(agents.extractModel(['--model', 'UNSET'], {
-      name: 'blank',
-      path: '/profiles/blank.env',
-      values: { MODEL: 'subconscious/glm-5.2' },
-    }), { model: '', modelSource: 'catalog', rest: [] });
+    assert.deepEqual(
+      agents.extractModel(['--model', 'UNSET'], {
+        name: 'blank',
+        path: '/profiles/blank.env',
+        values: { MODEL: 'subconscious/glm-5.2' },
+      }),
+      { model: '', modelSource: 'catalog', rest: [] },
+    );
 
     const catalog = {
       source: 'available',
@@ -464,11 +551,10 @@ test('a removed saved default yields to the first live model but explicit overri
   }
 
   assert.equal(
-    agents.selectLaunchModel(
-      'subconscious/removed',
-      'profile',
-      { source: 'packaged', models: ['subconscious/live'] },
-    ),
+    agents.selectLaunchModel('subconscious/removed', 'profile', {
+      source: 'packaged',
+      models: ['subconscious/live'],
+    }),
     'subconscious/removed',
   );
 });
@@ -496,10 +582,16 @@ test('agent-specific credentials work without a shared profile key', async () =>
     });
 
     process.env.SUBCONSCIOUS_API_KEY = 'shared-env-key';
-    assert.equal((await agents.getAgentApiKey(profile, codex)).key, 'shared-env-key');
+    assert.equal(
+      (await agents.getAgentApiKey(profile, codex)).key,
+      'shared-env-key',
+    );
 
     process.env.CODEX_API_KEY = 'codex-env-key';
-    assert.equal((await agents.getAgentApiKey(profile, codex)).key, 'codex-env-key');
+    assert.equal(
+      (await agents.getAgentApiKey(profile, codex)).key,
+      'codex-env-key',
+    );
   } finally {
     if (previousSpecific === undefined) delete process.env.CODEX_API_KEY;
     else process.env.CODEX_API_KEY = previousSpecific;
@@ -514,26 +606,38 @@ test('managed agent binaries take precedence over older PATH installations', () 
   const cargo = path.join(path.sep, 'legacy', 'cargo-bin');
 
   assert.deepEqual(
-    agents.preferredBinDirsForAgent(sc, { SC_INSTALL_DIR: managed }, '/home/test'),
+    agents.preferredBinDirsForAgent(
+      sc,
+      { SC_INSTALL_DIR: managed },
+      '/home/test',
+    ),
     [managed],
   );
+  assert.deepEqual(agents.preferredBinDirsForAgent(sc, {}, '/home/test'), [
+    path.join('/home/test', '.local', 'bin'),
+  ]);
   assert.deepEqual(
-    agents.preferredBinDirsForAgent(sc, {}, '/home/test'),
-    [path.join('/home/test', '.local', 'bin')],
+    agents.preferredBinDirsForAgent(agents.resolveAgent('codex')),
+    [],
   );
-  assert.deepEqual(agents.preferredBinDirsForAgent(agents.resolveAgent('codex')), []);
   // OpenCode's curl installer always uses ~/.opencode/bin and only adds it to
   // PATH through shell rc files, so it must be probed directly (#71).
   assert.deepEqual(
-    agents.preferredBinDirsForAgent(agents.resolveAgent('opencode'), {}, '/home/test'),
+    agents.preferredBinDirsForAgent(
+      agents.resolveAgent('opencode'),
+      {},
+      '/home/test',
+    ),
     [path.resolve('/home/test', '.opencode', 'bin')],
   );
 
-  const augmented = agents.augmentPath(
-    [managed],
-    managed,
-    [cargo, managed, '/usr/bin'].join(path.delimiter),
-  ).split(path.delimiter);
+  const augmented = agents
+    .augmentPath(
+      [managed],
+      managed,
+      [cargo, managed, '/usr/bin'].join(path.delimiter),
+    )
+    .split(path.delimiter);
   assert.deepEqual(augmented, [managed, cargo, '/usr/bin']);
 });
 

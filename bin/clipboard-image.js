@@ -8,13 +8,23 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
-const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const PNG_SIGNATURE = Buffer.from([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+]);
 
 export function imageContentType(buffer) {
-  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+  if (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  ) {
     return 'image/jpeg';
   }
-  if (buffer.length >= PNG_SIGNATURE.length && buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)) {
+  if (
+    buffer.length >= PNG_SIGNATURE.length &&
+    buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE)
+  ) {
     return 'image/png';
   }
   return null;
@@ -52,7 +62,10 @@ async function readLinuxClipboard() {
   ];
   for (const [command, args] of commands) {
     try {
-      const { stdout } = await execFileAsync(command, args, { encoding: 'buffer', maxBuffer: 8 * 1024 * 1024 });
+      const { stdout } = await execFileAsync(command, args, {
+        encoding: 'buffer',
+        maxBuffer: 8 * 1024 * 1024,
+      });
       if (stdout?.length) return stdout;
     } catch {
       // Try the next clipboard tool.
@@ -72,7 +85,11 @@ async function readWindowsClipboard() {
     Write-Output $path
   `;
   try {
-    const { stdout } = await execFileAsync('powershell', ['-NoProfile', '-Command', script]);
+    const { stdout } = await execFileAsync('powershell', [
+      '-NoProfile',
+      '-Command',
+      script,
+    ]);
     const outPath = String(stdout).trim();
     if (!outPath) return null;
     const { readFile, rm } = await import('node:fs/promises');

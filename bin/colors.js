@@ -1,6 +1,6 @@
 // ANSI color helpers shared across the CLI. Keep redirected output machine
 // readable and honor the standard NO_COLOR opt-out.
-const noColor = Object.prototype.hasOwnProperty.call(process.env, 'NO_COLOR');
+const noColor = Object.hasOwn(process.env, 'NO_COLOR');
 const forceColor =
   process.env.FORCE_COLOR !== undefined && process.env.FORCE_COLOR !== '0';
 

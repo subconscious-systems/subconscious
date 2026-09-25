@@ -3,10 +3,10 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import {
-  PACKAGE_NAME,
   compareVersions,
   detectInstallCommand,
   installLatest,
+  PACKAGE_NAME,
   parseUpgradeArgs,
   printLoginUpgradeWarning,
   upgradeCommand,
@@ -43,24 +43,35 @@ function runCli(args) {
 test('parseUpgradeArgs accepts --latest and rejects unknown flags', () => {
   assert.deepEqual(parseUpgradeArgs([]), { latest: false });
   assert.deepEqual(parseUpgradeArgs(['--latest']), { latest: true });
-  assert.throws(() => parseUpgradeArgs(['--force']), /Unknown argument: --force/);
+  assert.throws(
+    () => parseUpgradeArgs(['--force']),
+    /Unknown argument: --force/,
+  );
 });
 
 test('detectInstallCommand picks the package manager from the install path', () => {
   assert.equal(
-    detectInstallCommand('/Users/me/Library/pnpm/global/5/.pnpm/subconscious-cli@4.0.0/bin/upgrade.js'),
+    detectInstallCommand(
+      '/Users/me/Library/pnpm/global/5/.pnpm/subconscious-cli@4.0.0/bin/upgrade.js',
+    ),
     `pnpm add -g ${PACKAGE_NAME}@latest`,
   );
   assert.equal(
-    detectInstallCommand('/Users/me/.yarn/berry/global/node_modules/subconscious-cli/bin/upgrade.js'),
+    detectInstallCommand(
+      '/Users/me/.yarn/berry/global/node_modules/subconscious-cli/bin/upgrade.js',
+    ),
     `yarn global add ${PACKAGE_NAME}@latest`,
   );
   assert.equal(
-    detectInstallCommand('/Users/me/.bun/install/global/node_modules/subconscious-cli/bin/upgrade.js'),
+    detectInstallCommand(
+      '/Users/me/.bun/install/global/node_modules/subconscious-cli/bin/upgrade.js',
+    ),
     `bun add -g ${PACKAGE_NAME}@latest`,
   );
   assert.equal(
-    detectInstallCommand('/usr/local/lib/node_modules/subconscious-cli/bin/upgrade.js'),
+    detectInstallCommand(
+      '/usr/local/lib/node_modules/subconscious-cli/bin/upgrade.js',
+    ),
     `npm install -g --prefix /usr/local ${PACKAGE_NAME}@latest`,
   );
 });
