@@ -79,7 +79,7 @@ Merging to `main` updates the Release Please pull request. Merging that pull req
 
 ## Maintainers: protect main
 
-`main` is covered by the repository ruleset `Protect main` (ruleset `24016657`). It requires a pull request, blocks force pushes, and requires the status checks below. The bypass list is empty until a maintainer adds the GitHub user that owns `RELEASE_GITHUB_TOKEN`. That user should be the only bypass, so Release Please can update its release pull request. Do not add a broader bypass.
+`main` is covered by the repository ruleset `Protect main` (ruleset `24016657`). It requires a pull request, blocks force pushes, and requires the status checks below. Release Please pushes its own branch and a person merges that pull request, so the token user does not need a bypass on `main`.
 
 Required status checks, matching the job names GitHub reports:
 
@@ -92,10 +92,19 @@ Required status checks, matching the job names GitHub reports:
 
 Also require a pull request before merging, and block force pushes.
 
-Repository secrets, both supplied by a maintainer:
+Repository secret, supplied by a maintainer:
 
-- `RELEASE_GITHUB_TOKEN`: a fine-grained or classic PAT that can open pull requests and push to `main` for the release user.
-- `NPM_TOKEN`: an npm automation token with publish access to `subconscious-cli`.
+- `RELEASE_GITHUB_TOKEN`: a fine-grained PAT for `subconscious-systems/subconscious` with Contents read and write, and Pull requests read and write. Metadata read is included automatically.
+
+npm publish uses [trusted publishing](https://docs.npmjs.com/trusted-publishers), not a long-lived token. On the `subconscious-cli` package settings, add one GitHub Actions trusted publisher:
+
+- Organization or user: `subconscious-systems`
+- Repository: `subconscious`
+- Workflow filename: `release-please.yaml`
+- Environment name: leave empty
+- Allowed actions: allow direct `npm publish`
+
+After a publish succeeds, set the package's publishing access to require two-factor authentication and disallow tokens.
 
 `create-subconscious-app` is no longer published from this repo. Deprecate it on npm. Do not unpublish it:
 

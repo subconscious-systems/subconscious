@@ -33,5 +33,6 @@ test('the CLI package only publishes from the Release Please workflow', async ()
   );
   assert.match(workflow, /SUBCONSCIOUS_RELEASE_PLEASE: "1"/);
   assert.match(workflow, /npm publish --access public/);
-  assert.match(workflow, /secrets\.NPM_TOKEN/);
+  assert.match(workflow, /id-token: write/);
+  assert.doesNotMatch(workflow, /NPM_TOKEN/);
 });
