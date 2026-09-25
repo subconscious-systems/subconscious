@@ -161,7 +161,7 @@ function printDeviceInstructions(platformUrl, userCode) {
 }
 
 function printLoginFallback() {
-  console.error(`  ${c.dim}You can also copy an API key from the dashboard and run${c.reset} ${c.cyan}subc update-key${c.reset}${c.dim}.${c.reset}`);
+  console.error(`  ${c.dim}You can also copy an API key from the dashboard and run${c.reset} ${c.cyan}subc update-key <your-api-key>${c.reset}${c.dim}.${c.reset}`);
 }
 
 async function saveLoginKey(profileName, token) {
