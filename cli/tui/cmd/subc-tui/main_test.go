@@ -390,6 +390,15 @@ func TestUsageMenuItemIsAvailable(t *testing.T) {
 	if !foundPlatform {
 		t.Fatalf("platform URL menu item missing: %#v", m.items)
 	}
+	foundFeedback := false
+	for _, item := range m.items {
+		if item.Name == "Give feedback" && item.Command == "feedback" && item.Kind == itemCommand {
+			foundFeedback = true
+		}
+	}
+	if !foundFeedback {
+		t.Fatalf("feedback menu item missing: %#v", m.items)
+	}
 }
 
 func TestUpdatePlatformURLUsesInlineDetail(t *testing.T) {

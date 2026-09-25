@@ -215,6 +215,7 @@ func newModel(state inputState) model {
 		menuItem{Section: "Account & configuration", Name: "Upgrade CLI", Command: "upgrade", Action: "Update", Description: "Check npm and install the latest published Subconscious CLI.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Update base URL", Command: "update-url", Action: "Configure", Description: "Validate and save a new gateway base URL without leaving the TUI.", Kind: itemUpdateBaseURL},
 		menuItem{Section: "Account & configuration", Name: "Update platform URL", Command: "update-platform-url", Action: "Configure", Description: "Validate and save the platform URL used for login, whoami, and usage.", Kind: itemUpdatePlatformURL},
+		menuItem{Section: "Account & configuration", Name: "Give feedback", Command: "feedback", Action: "Send", Description: "Send a message to the Subconscious support team. Your CLI version and environment are included.", Kind: itemCommand},
 	)
 
 	profileCursor := indexProfile(state.Profiles, state.ActiveProfile)

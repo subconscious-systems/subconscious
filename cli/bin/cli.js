@@ -46,6 +46,7 @@ import { showUpdateNotice } from './update-check.js';
 import { runTui } from './tui.js';
 import { sessionsCommand } from './sessions.js';
 import { printUsageHelp, usageCommand } from './usage.js';
+import { feedbackCommand, printFeedbackHelp } from './feedback.js';
 
 function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
@@ -70,6 +71,7 @@ function printHelp() {
     ${c.cyan}logout${c.reset}       Remove saved credentials
     ${c.cyan}whoami${c.reset}       Show current authentication status
     ${c.cyan}usage${c.reset}        Show billing, quota, and model usage
+    ${c.cyan}feedback${c.reset}     Send feedback or get help from support
     ${c.cyan}upgrade${c.reset}      Upgrade this CLI to the latest version
 
   ${c.bold}Profiles${c.reset}
@@ -100,6 +102,7 @@ ${agents}
     ${c.dim}$${c.reset} subc sessions resume claude:SESSION_ID --harness codex
     ${c.dim}$${c.reset} subc usage
     ${c.dim}$${c.reset} subc usage --json
+    ${c.dim}$${c.reset} subc feedback --subject "Bug" --message "Playground won't load"
     ${c.dim}$${c.reset} subc claude
     ${c.dim}$${c.reset} subc claude help
     ${c.dim}$${c.reset} subc cursor install
@@ -179,6 +182,14 @@ Usage:
   subc usage help
 
 Show billing mode, daily token allowance, credit balance, and per-model usage.
+`,
+  feedback: `
+Usage:
+  subc feedback
+  subc feedback -s "..." -m "..."
+  subc feedback help
+
+Send a message to the Subconscious support team.
 `,
   models: `
 Usage:
@@ -442,6 +453,16 @@ async function main() {
     }
     const profile = await loadProfile(profileName);
     await usageCommand(args.slice(1), { profile, profileName });
+    return;
+  }
+
+  if (command === 'feedback') {
+    if (isHelpArg(args[1])) {
+      printFeedbackHelp();
+      return;
+    }
+    const profile = await loadProfile(profileName);
+    await feedbackCommand(args.slice(1), { profile, profileName });
     return;
   }
 
