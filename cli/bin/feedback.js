@@ -135,7 +135,15 @@ function readAttachmentLine(onPaste) {
       }
       if (key.name === 'return') {
         process.stdout.write('\n');
-        finish(line);
+        if (line.trim()) {
+          console.log(
+            `  ${c.dim}Paste a screenshot with Ctrl+V. Press Enter with nothing typed to continue.${c.reset}`,
+          );
+          line = '';
+          rl.prompt();
+          return;
+        }
+        finish('');
         return;
       }
       if (key.name === 'backspace') {
@@ -156,8 +164,8 @@ function readAttachmentLine(onPaste) {
 async function promptForAttachments(already = 0) {
   if (process.stdin.isTTY !== true || already >= MAX_FEEDBACK_IMAGES) return [];
   const attachments = [];
-  console.log(`\n  Attachments (optional). Ctrl+V pastes a screenshot, or type a file path.`);
-  console.log(`  ${c.dim}Press Enter on an empty line when you are done.${c.reset}`);
+  console.log(`\n  Attachments (optional). Ctrl+V pastes a screenshot from the clipboard.`);
+  console.log(`  ${c.dim}Press Enter when you are done.${c.reset}`);
   while (already + attachments.length < MAX_FEEDBACK_IMAGES) {
     const line = await readAttachmentLine(async () => {
       if (already + attachments.length >= MAX_FEEDBACK_IMAGES) return;
@@ -171,11 +179,6 @@ async function promptForAttachments(already = 0) {
       console.log(`  ${c.green}Added screenshot ${already + attachments.length}.${c.reset}`);
     });
     if (line == null || !line.trim()) break;
-    const buffer = await fs.readFile(line.trim());
-    const contentType = imageContentType(buffer);
-    if (!contentType) throw new Error(`${line.trim()} is not a JPEG or PNG`);
-    attachments.push({ contentType, data: buffer.toString('base64') });
-    console.log(`  ${c.green}Added ${line.trim()}.${c.reset}`);
   }
   return attachments;
 }
