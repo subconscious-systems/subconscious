@@ -252,16 +252,17 @@ export async function feedbackCommand(argv = [], options = {}) {
     }
 
     if (!res.ok) {
-      const message = data?.error || `Request failed (${res.status})`;
-      if (res.status === 401) {
-        console.log(`\n  ${c.red}✗ ${message}${c.reset}`);
+      const detail = typeof data?.error === 'string' ? data.error : '';
+      const invalidKey = detail === 'Invalid or revoked API key' || detail === 'No API key provided';
+      console.log(`\n  ${c.red}✗ Couldn't send your message.${c.reset}`);
+      if (invalidKey) {
         console.log(
-          `  Run ${c.cyan}subc ${profileFlag}logout${c.reset} then ${c.cyan}subc ${profileFlag}login${c.reset} to re-authenticate.\n`,
+          `  Run ${c.cyan}subc ${profileFlag}logout${c.reset} then ${c.cyan}subc ${profileFlag}login${c.reset} to re-authenticate.`,
         );
-        process.exitCode = 1;
-        return;
       }
-      throw new Error(message);
+      console.log(`  Please email ${c.cyan}${SUPPORT_EMAIL}${c.reset} directly.\n`);
+      process.exitCode = 1;
+      return;
     }
 
     console.log(`\n  ${c.green}✓${c.reset} Feedback sent to ${SUPPORT_EMAIL}.`);
@@ -269,11 +270,11 @@ export async function feedbackCommand(argv = [], options = {}) {
   } catch (error) {
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
       console.log(`\n  ${c.yellow}Could not reach the platform (timed out).${c.reset}`);
-      console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}\n`);
-      process.exitCode = 1;
-      return;
+      console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}`);
+    } else {
+      console.log(`\n  ${c.red}✗ Couldn't send your message.${c.reset}`);
     }
-    console.error(`\n  ${c.red}${error.message}${c.reset}\n`);
+    console.log(`  Please email ${c.cyan}${SUPPORT_EMAIL}${c.reset} directly.\n`);
     process.exitCode = 1;
   }
 }
