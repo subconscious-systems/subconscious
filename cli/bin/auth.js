@@ -145,14 +145,19 @@ export async function pollDeviceLogin(platformUrl, deviceCode, fetchImpl = fetch
   throw new Error(data.message || data.error || 'CLI login failed.');
 }
 
-function printDeviceInstructions(verificationUrl, userCode) {
+function printDeviceInstructions(platformUrl, userCode) {
+  const deviceUrl = `${platformUrl}/cli/device`;
+  const verificationUrl = `${deviceUrl}?code=${encodeURIComponent(userCode)}`;
   console.log(`  ${c.dim}Opening browser to sign in...${c.reset}`);
   console.log();
   console.log(`  ${c.dim}If a window doesn't open, go to:${c.reset}`);
   console.log(`  ${c.underline}${c.cyan}${terminalLink(verificationUrl)}${c.reset}`);
   console.log();
-  console.log(`  ${c.dim}Or open ${c.reset}${c.cyan}/cli/device${c.reset}${c.dim} and enter:${c.reset} ${c.bold}${userCode}${c.reset}`);
+  console.log(
+    `  ${c.dim}Or open ${c.reset}${c.underline}${c.cyan}${terminalLink(deviceUrl)}${c.reset}${c.dim} and enter:${c.reset} ${c.bold}${userCode}${c.reset}`,
+  );
   console.log();
+  return verificationUrl;
 }
 
 function printLoginFallback() {
@@ -201,8 +206,7 @@ export async function loginCommand(_argv = [], options = {}) {
     return;
   }
 
-  const verificationUrl = `${platformUrl}/cli/device?code=${encodeURIComponent(registered.user_code)}`;
-  printDeviceInstructions(verificationUrl, registered.user_code);
+  const verificationUrl = printDeviceInstructions(platformUrl, registered.user_code);
   (options.openBrowser || openBrowser)(verificationUrl);
 
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];

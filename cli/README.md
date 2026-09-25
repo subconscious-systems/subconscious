@@ -380,7 +380,7 @@ passed through the same way and override Subconscious-injected defaults.
 
 `subc login` opens a browser to a one-time login link, waits for you to sign in, and saves the API key to the selected runbook profile with mode `600`. For the default profile it also maintains `~/.subconscious/config.json`. The same flow works on a laptop, over SSH, and inside a VM: the browser does not need to be on the machine running the CLI.
 
-If a window does not open, open the URL printed in the terminal, or go to `/cli/device` on the platform and enter the code. To skip the browser, copy an API key from the dashboard and run `subc update-key`.
+If a window does not open, open the login URL printed in the terminal. That URL includes your code. You can also open the printed `/cli/device` link and type the code. To skip the browser, copy an API key from the dashboard and run `subc update-key`.
 
 ```bash
 subc login
