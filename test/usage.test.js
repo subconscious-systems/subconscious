@@ -25,12 +25,18 @@ test('formatCurrency renders signed dollars', () => {
 });
 
 test('shortModelSlug strips subconscious prefix', () => {
-  assert.equal(shortModelSlug('subconscious/glm-5.3-marathon'), 'glm-5.3-marathon');
+  assert.equal(
+    shortModelSlug('subconscious/glm-5.3-marathon'),
+    'glm-5.3-marathon',
+  );
   assert.equal(shortModelSlug('other/model'), 'other/model');
 });
 
 test('isLegacyUsagePayload detects old quota-only responses', () => {
-  assert.equal(isLegacyUsagePayload({ dailyTokenCeiling: 100, consumedToday: 1 }), true);
+  assert.equal(
+    isLegacyUsagePayload({ dailyTokenCeiling: 100, consumedToday: 1 }),
+    true,
+  );
   assert.equal(isLegacyUsagePayload(null), true);
   assert.equal(
     isLegacyUsagePayload({
@@ -76,7 +82,9 @@ test('formatUsageDisplay renders a credit allowance as a percent', () => {
       },
     },
     credits: { balanceDollars: 47479.24, overageThisPeriodDollars: 0 },
-    models: [{ slug: 'subconscious/glm-5.3-marathon', consumedToday: 44_500_000 }],
+    models: [
+      { slug: 'subconscious/glm-5.3-marathon', consumedToday: 44_500_000 },
+    ],
   });
 
   assert.match(output, /6% of daily credit used/);
@@ -93,7 +101,11 @@ test('formatUsageDisplay warns when the daily credit is spent', () => {
       label: 'Heavy',
       status: 'active',
       isUnlimitedComp: false,
-      dailyAllowance: { basis: 'credit', percent: 112.4, resetAt: '2026-09-24T00:00:00.000Z' },
+      dailyAllowance: {
+        basis: 'credit',
+        percent: 112.4,
+        resetAt: '2026-09-24T00:00:00.000Z',
+      },
     },
     credits: { balanceDollars: 10, overageThisPeriodDollars: 1.2 },
     models: [],
@@ -110,7 +122,10 @@ test('formatUsageDisplay renders an unavailable daily credit', () => {
       label: 'Heavy',
       status: 'active',
       isUnlimitedComp: false,
-      dailyAllowance: { basis: 'unavailable', resetAt: '2026-09-24T00:00:00.000Z' },
+      dailyAllowance: {
+        basis: 'unavailable',
+        resetAt: '2026-09-24T00:00:00.000Z',
+      },
     },
     credits: { balanceDollars: 10, overageThisPeriodDollars: 0 },
     models: [],

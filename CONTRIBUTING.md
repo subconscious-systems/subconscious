@@ -67,6 +67,8 @@ npm run generate
 ```bash
 npm test
 npm run test:tui
+npm run lint
+npm run typecheck
 ```
 
 Windows verification is described in [WINDOWS_TESTING.md](WINDOWS_TESTING.md). Run `npm run test:windows` there.

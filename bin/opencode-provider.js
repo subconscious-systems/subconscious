@@ -3,7 +3,17 @@ import { modelSupportsVision } from './model-capabilities.js';
 export const OPENCODE_PROVIDER_ID = 'subconscious';
 export const OPENCODE_PROVIDER_NAME = 'Subconscious Gateway';
 
-const ACRONYMS = new Set(['gpt', 'oss', 'api', 'gguf', 'ggml', 'nomic', 'vl', 'it', 'mlx']);
+const ACRONYMS = new Set([
+  'gpt',
+  'oss',
+  'api',
+  'gguf',
+  'ggml',
+  'nomic',
+  'vl',
+  'it',
+  'mlx',
+]);
 
 function formatToken(token) {
   const lower = token.toLowerCase();
@@ -11,14 +21,17 @@ function formatToken(token) {
   if (/^\d+[bkmg]$/i.test(token)) return token.toUpperCase();
   if (/^q\d+$/i.test(token)) return token.toUpperCase();
   if (/^\d+\.\d+/.test(token)) return token;
-  if (/^[a-z]\d+[a-z]$/i.test(token) || /^\d+[a-z]$/i.test(token)) return token.toUpperCase();
+  if (/^[a-z]\d+[a-z]$/i.test(token) || /^\d+[a-z]$/i.test(token))
+    return token.toUpperCase();
   return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
 }
 
 /** Drop the subconscious/ prefix, then capitalize each dash-separated token. */
 export function opencodeModelDisplayName(modelId) {
   const text = String(modelId ?? '').trim();
-  const slug = text.startsWith('subconscious/') ? text.slice('subconscious/'.length) : text;
+  const slug = text.startsWith('subconscious/')
+    ? text.slice('subconscious/'.length)
+    : text;
   return slug.split(/[-_]/).filter(Boolean).map(formatToken).join(' ');
 }
 
@@ -31,14 +44,23 @@ export function buildOpenCodeModels(modelIds, { context, output }) {
         tools: true,
         limit: { context, output },
         ...(modelSupportsVision(id)
-          ? { attachment: true, modalities: { input: ['text', 'image'], output: ['text'] } }
+          ? {
+              attachment: true,
+              modalities: { input: ['text', 'image'], output: ['text'] },
+            }
           : {}),
       },
     ]),
   );
 }
 
-export function buildOpenCodeConfig({ baseUrl, model, modelIds, context, output }) {
+export function buildOpenCodeConfig({
+  baseUrl,
+  model,
+  modelIds,
+  context,
+  output,
+}) {
   return {
     $schema: 'https://opencode.ai/config.json',
     disabled_providers: ['subconscious-cli'],

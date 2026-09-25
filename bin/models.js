@@ -99,8 +99,10 @@ export async function fetchGatewayModels({
     if (signal?.aborted) throw abortError('Model discovery was cancelled');
     const aborted = new Promise((_, reject) => {
       const fail = () => {
-        if (signal?.aborted) reject(abortError('Model discovery was cancelled'));
-        else reject(new Error(`Model discovery timed out after ${timeoutMs}ms`));
+        if (signal?.aborted)
+          reject(abortError('Model discovery was cancelled'));
+        else
+          reject(new Error(`Model discovery timed out after ${timeoutMs}ms`));
       };
       controller.signal.addEventListener('abort', fail, { once: true });
     });
@@ -144,13 +146,17 @@ async function fetchPublicModels({ baseUrl, fetchImpl, timeoutMs, signal }) {
     timeoutMs,
     signal,
   });
-  if (!models.length) throw new Error('Model discovery returned no usable model IDs');
+  if (!models.length)
+    throw new Error('Model discovery returned no usable model IDs');
   return models;
 }
 
 function packagedCatalog(selectedModel, fallbackModels, error) {
   return {
-    models: normalizeModelIds([selectedModel, ...fallbackModels], selectedModel),
+    models: normalizeModelIds(
+      [selectedModel, ...fallbackModels],
+      selectedModel,
+    ),
     source: 'packaged',
     error,
   };
@@ -189,7 +195,12 @@ export async function resolveModelCatalog({
     } catch (availableError) {
       if (isAbortError(availableError) || signal?.aborted) throw availableError;
       try {
-        const discovered = await fetchPublicModels({ baseUrl, fetchImpl, timeoutMs, signal });
+        const discovered = await fetchPublicModels({
+          baseUrl,
+          fetchImpl,
+          timeoutMs,
+          signal,
+        });
         return liveCatalog(discovered, selectedModel, 'public');
       } catch (publicError) {
         if (isAbortError(publicError) || signal?.aborted) throw publicError;
@@ -199,7 +210,12 @@ export async function resolveModelCatalog({
   }
 
   try {
-    const discovered = await fetchPublicModels({ baseUrl, fetchImpl, timeoutMs, signal });
+    const discovered = await fetchPublicModels({
+      baseUrl,
+      fetchImpl,
+      timeoutMs,
+      signal,
+    });
     return liveCatalog(discovered, selectedModel, 'public');
   } catch (error) {
     if (isAbortError(error) || signal?.aborted) throw error;

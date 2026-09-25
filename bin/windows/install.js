@@ -1,26 +1,38 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { powershellCommand, runWindows } from './process.js';
 
-const registry = JSON.parse(readFileSync(new URL('../registry.generated.json', import.meta.url), 'utf8'));
+const registry = JSON.parse(
+  readFileSync(new URL('../registry.generated.json', import.meta.url), 'utf8'),
+);
 const repository = 'subconscious-systems/subconscious-code';
 
 function npmInstall(command) {
-  const match = /^npm (?:i|install) -g ([@a-zA-Z0-9/._-]+)$/.exec(command || '');
+  const match = /^npm (?:i|install) -g ([@a-zA-Z0-9/._-]+)$/.exec(
+    command || '',
+  );
   return match ? { command: 'npm', args: ['install', '-g', match[1]] } : null;
 }
 
 export function windowsInstallSpec(id, env = process.env) {
-  const install = registry.agents.find(agent => agent.id === id)?.install;
+  const install = registry.agents.find((agent) => agent.id === id)?.install;
   const command = typeof install === 'object' ? install.win32 : undefined;
-  if (id === 'subconscious-code') return { nativeRelease: true, display: 'subc marathon install' };
+  if (id === 'subconscious-code')
+    return { nativeRelease: true, display: 'subc marathon install' };
   if (!command) return null; // Never fall back to a Linux installer.
   if (id === 'claude-code') {
-    const primary = powershellCommand("$ErrorActionPreference = 'Stop'; Invoke-RestMethod 'https://claude.ai/install.ps1' | Invoke-Expression; if (-not $?) { exit 1 }", env);
-    return { ...primary, display: command, fallback: npmInstall(install.fallback) };
+    const primary = powershellCommand(
+      "$ErrorActionPreference = 'Stop'; Invoke-RestMethod 'https://claude.ai/install.ps1' | Invoke-Expression; if (-not $?) { exit 1 }",
+      env,
+    );
+    return {
+      ...primary,
+      display: command,
+      fallback: npmInstall(install.fallback),
+    };
   }
   const spec = npmInstall(command);
   if (!spec) throw new Error(`No safe Windows installer is defined for ${id}`);
@@ -28,38 +40,97 @@ export function windowsInstallSpec(id, env = process.env) {
 }
 
 export function windowsReleaseAsset(release, arch = process.arch) {
-  const target = { x64: 'x86_64-pc-windows-msvc', arm64: 'aarch64-pc-windows-msvc' }[arch];
-  if (!target) throw new Error(`Subconscious Code does not support Windows architecture ${arch}`);
+  const target = {
+    x64: 'x86_64-pc-windows-msvc',
+    arm64: 'aarch64-pc-windows-msvc',
+  }[arch];
+  if (!target)
+    throw new Error(
+      `Subconscious Code does not support Windows architecture ${arch}`,
+    );
   // Pinned older releases are installed under the new executable name too.
   // Never resolve or overwrite Windows' own sc.exe.
-  const names = [`marathon-${target}.zip`, `marathon-${target}.exe`, `sc-${target}.zip`, `sc-${target}.exe`];
-  const asset = names.map(name => release.assets?.find(asset => asset.name === name)).find(Boolean);
-  if (!asset) throw new Error(`Marathon ${release.tag_name || 'latest'} has no published native Windows ${arch} binary for subc marathon install.`);
-  const checksum = release.assets.find(candidate => candidate.name === `${asset.name}.sha256`);
-  if (!checksum) throw new Error(`The Windows release is missing ${asset.name}.sha256; refusing an unverified installation.`);
+  const names = [
+    `marathon-${target}.zip`,
+    `marathon-${target}.exe`,
+    `sc-${target}.zip`,
+    `sc-${target}.exe`,
+  ];
+  const asset = names
+    .map((name) => release.assets?.find((asset) => asset.name === name))
+    .find(Boolean);
+  if (!asset)
+    throw new Error(
+      `Marathon ${release.tag_name || 'latest'} has no published native Windows ${arch} binary for subc marathon install.`,
+    );
+  const checksum = release.assets.find(
+    (candidate) => candidate.name === `${asset.name}.sha256`,
+  );
+  if (!checksum)
+    throw new Error(
+      `The Windows release is missing ${asset.name}.sha256; refusing an unverified installation.`,
+    );
   return { asset, checksum };
 }
 
-export async function installWindowsSC(env, { fetchImpl = fetch, run = runWindows, home = os.homedir(), arch = process.arch, log = console.log } = {}) {
+export async function installWindowsSC(
+  env,
+  {
+    fetchImpl = fetch,
+    run = runWindows,
+    home = os.homedir(),
+    arch = process.arch,
+    log = console.log,
+  } = {},
+) {
   const version = env.SC_CODE_VERSION?.replace(/^v/, '');
-  const endpoint = version ? `tags/${encodeURIComponent('v' + version)}` : 'latest';
-  const response = await fetchImpl(`https://api.github.com/repos/${repository}/releases/${endpoint}`, { headers: { Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(15000) });
-  if (!response.ok) throw new Error(`Could not find a Subconscious Code release (HTTP ${response.status}).`);
+  const endpoint = version
+    ? `tags/${encodeURIComponent(`v${version}`)}`
+    : 'latest';
+  const response = await fetchImpl(
+    `https://api.github.com/repos/${repository}/releases/${endpoint}`,
+    {
+      headers: { Accept: 'application/vnd.github+json' },
+      signal: AbortSignal.timeout(15000),
+    },
+  );
+  if (!response.ok)
+    throw new Error(
+      `Could not find a Subconscious Code release (HTTP ${response.status}).`,
+    );
   const release = await response.json();
   const { asset, checksum } = windowsReleaseAsset(release, arch);
-  const download = async asset => {
+  const download = async (asset) => {
     const url = new URL(asset.browser_download_url);
-    if (url.origin !== 'https://github.com' || !url.pathname.startsWith(`/${repository}/releases/download/`)) throw new Error('Unexpected release download URL');
-    const response = await fetchImpl(url.href, { signal: AbortSignal.timeout(120000) });
-    if (!response.ok) throw new Error(`Download failed (HTTP ${response.status}): ${asset.name}`);
+    if (
+      url.origin !== 'https://github.com' ||
+      !url.pathname.startsWith(`/${repository}/releases/download/`)
+    )
+      throw new Error('Unexpected release download URL');
+    const response = await fetchImpl(url.href, {
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!response.ok)
+      throw new Error(
+        `Download failed (HTTP ${response.status}): ${asset.name}`,
+      );
     return Buffer.from(await response.arrayBuffer());
   };
   log(`Downloading Marathon ${release.tag_name} for Windows ${arch}...`);
-  const [binary, checksumText] = await Promise.all([download(asset), download(checksum)]);
+  const [binary, checksumText] = await Promise.all([
+    download(asset),
+    download(checksum),
+  ]);
   const expected = checksumText.toString('utf8').trim().split(/\s+/)[0];
-  if (!/^[a-f0-9]{64}$/i.test(expected) || createHash('sha256').update(binary).digest('hex') !== expected.toLowerCase()) throw new Error('Subconscious Code checksum verification failed');
+  if (
+    !/^[a-f0-9]{64}$/i.test(expected) ||
+    createHash('sha256').update(binary).digest('hex') !== expected.toLowerCase()
+  )
+    throw new Error('Subconscious Code checksum verification failed');
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sc-install-'));
-  const installDir = path.resolve(env.SC_INSTALL_DIR || path.join(home, '.local', 'bin'));
+  const installDir = path.resolve(
+    env.SC_INSTALL_DIR || path.join(home, '.local', 'bin'),
+  );
   const destination = path.join(installDir, 'marathon.exe');
   const staging = path.join(installDir, `marathon-${randomUUID()}.tmp`);
   try {
@@ -68,11 +139,24 @@ export async function installWindowsSC(env, { fetchImpl = fetch, run = runWindow
       const archive = path.join(dir, 'release.zip');
       await fs.writeFile(archive, binary, { flag: 'wx' });
       // Extract only the exact root executable. No archive-controlled paths.
-      const executable = asset.name.startsWith('marathon-') ? 'marathon.exe' : 'sc.exe';
-      const spec = powershellCommand("$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $z = [IO.Compression.ZipFile]::OpenRead($env:SUBC_ARCHIVE); try { $e = $z.GetEntry($env:SUBC_EXECUTABLE); if ($null -eq $e) { throw 'Archive has no expected root executable' }; [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $env:SUBC_EXTRACTED, $false) } finally { $z.Dispose() }", { ...env, SUBC_ARCHIVE: archive, SUBC_EXTRACTED: extracted, SUBC_EXECUTABLE: executable });
-      if (await run(spec.command, spec.args, { env: spec.env })) throw new Error('Could not extract the Windows release');
+      const executable = asset.name.startsWith('marathon-')
+        ? 'marathon.exe'
+        : 'sc.exe';
+      const spec = powershellCommand(
+        "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $z = [IO.Compression.ZipFile]::OpenRead($env:SUBC_ARCHIVE); try { $e = $z.GetEntry($env:SUBC_EXECUTABLE); if ($null -eq $e) { throw 'Archive has no expected root executable' }; [IO.Compression.ZipFileExtensions]::ExtractToFile($e, $env:SUBC_EXTRACTED, $false) } finally { $z.Dispose() }",
+        {
+          ...env,
+          SUBC_ARCHIVE: archive,
+          SUBC_EXTRACTED: extracted,
+          SUBC_EXECUTABLE: executable,
+        },
+      );
+      if (await run(spec.command, spec.args, { env: spec.env }))
+        throw new Error('Could not extract the Windows release');
     } else await fs.writeFile(extracted, binary, { flag: 'wx' });
-    const magic = (await fs.readFile(extracted)).subarray(0, 2).toString('ascii');
+    const magic = (await fs.readFile(extracted))
+      .subarray(0, 2)
+      .toString('ascii');
     if (magic !== 'MZ') throw new Error('Release is not a Windows executable');
     await fs.mkdir(installDir, { recursive: true });
     await fs.copyFile(extracted, staging);
@@ -90,8 +174,12 @@ export async function installWindowsAgent(id, env, run = runWindows) {
   if (!spec) throw new Error('Install this agent separately, then rerun subc.');
   if (spec.nativeRelease) return installWindowsSC(env, { run });
   let code;
-  try { code = await run(spec.command, spec.args, { env: spec.env || env }); }
-  catch (error) { if (!spec.fallback) throw error; code = 1; }
+  try {
+    code = await run(spec.command, spec.args, { env: spec.env || env });
+  } catch (error) {
+    if (!spec.fallback) throw error;
+    code = 1;
+  }
   if (code && spec.fallback) {
     console.error('Native installer failed; trying the npm package.');
     code = await run(spec.fallback.command, spec.fallback.args, { env });

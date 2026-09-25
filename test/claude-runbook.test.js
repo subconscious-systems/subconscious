@@ -74,6 +74,7 @@ test('Claude launch picker stays inside SUBCONSCIOUS_MODELS', async () => {
       '  "$ANTHROPIC_DEFAULT_SONNET_MODEL" \\',
       '  "$ANTHROPIC_DEFAULT_HAIKU_MODEL" \\',
       '  "$ANTHROPIC_DEFAULT_FABLE_MODEL" \\',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter, not a JS template
       '  "${ANTHROPIC_CUSTOM_MODEL_OPTION:-}" \\',
       '  "$settings"',
       '',
@@ -90,7 +91,8 @@ test('Claude launch picker stays inside SUBCONSCIOUS_MODELS', async () => {
       GATEWAY_URL: 'https://gateway.example',
       API_KEY: 'sk-test',
       MODEL: 'subconscious/glm-5.3-marathon',
-      SUBCONSCIOUS_MODELS: 'subconscious/glm-5.3-marathon\nsubconscious/tim-qwen3.6-27b',
+      SUBCONSCIOUS_MODELS:
+        'subconscious/glm-5.3-marathon\nsubconscious/tim-qwen3.6-27b',
       ANTHROPIC_DEFAULT_HAIKU_MODEL: 'subconscious/deepseek-v4-flash-marathon',
       ANTHROPIC_DEFAULT_FABLE_MODEL: 'subconscious/glm-5.2',
       ANTHROPIC_CUSTOM_MODEL_OPTION: 'subconscious/glm-5.2',
@@ -99,7 +101,8 @@ test('Claude launch picker stays inside SUBCONSCIOUS_MODELS', async () => {
   });
 
   assert.equal(result.status, 0, result.stderr);
-  const [opus, sonnet, haiku, fable, custom, settingsJson] = result.stdout.split('\n');
+  const [opus, sonnet, haiku, fable, custom, settingsJson] =
+    result.stdout.split('\n');
   assert.equal(opus, 'subconscious/glm-5.3-marathon');
   assert.equal(sonnet, 'subconscious/tim-qwen3.6-27b');
   assert.equal(haiku, 'subconscious/tim-qwen3.6-27b');

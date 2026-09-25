@@ -7,5 +7,8 @@ const { modelCapabilities = {} } = JSON.parse(
 );
 
 export function modelSupportsVision(modelId) {
-  return Object.hasOwn(modelCapabilities, modelId) && modelCapabilities[modelId].vision === true;
+  return (
+    Object.hasOwn(modelCapabilities, modelId) &&
+    modelCapabilities[modelId].vision === true
+  );
 }

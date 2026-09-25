@@ -5,7 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-const installPath = new URL('../bin/runbook/cursor/install.sh', import.meta.url);
+const installPath = new URL(
+  '../bin/runbook/cursor/install.sh',
+  import.meta.url,
+);
 
 function runInstall(home) {
   return new Promise((resolve, reject) => {

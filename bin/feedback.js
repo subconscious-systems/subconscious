@@ -9,9 +9,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import readline from 'node:readline';
 import { createInterface } from 'node:readline/promises';
-import { c } from './colors.js';
 import { getApiKey, getPlatformUrl } from './auth.js';
 import { imageContentType, readClipboardImage } from './clipboard-image.js';
+import { c } from './colors.js';
 import { DEFAULT_PROFILE } from './profiles.js';
 
 export const FEEDBACK_API_PATH = '/api/cli/feedback';
@@ -64,12 +64,19 @@ export async function collectFeedbackContext(options = {}) {
   };
 }
 
-export function buildFeedbackPayload({ subject, message, context, attachments }) {
+export function buildFeedbackPayload({
+  subject,
+  message,
+  context,
+  attachments,
+}) {
   const payload = {
     subject: subject || 'CLI feedback',
     message,
     context: Object.fromEntries(
-      Object.entries(context ?? {}).filter(([, value]) => Boolean(String(value).trim())),
+      Object.entries(context ?? {}).filter(([, value]) =>
+        Boolean(String(value).trim()),
+      ),
     ),
   };
   if (attachments?.length) payload.attachments = attachments;
@@ -79,7 +86,8 @@ export function buildFeedbackPayload({ subject, message, context, attachments })
 export async function loadFeedbackImages(paths) {
   const attachments = [];
   for (const filePath of paths) {
-    if (!filePath?.trim()) throw new Error('An image path is required after --image');
+    if (!filePath?.trim())
+      throw new Error('An image path is required after --image');
     const buffer = await fs.readFile(filePath);
     const contentType = imageContentType(buffer);
     if (!contentType) throw new Error(`${filePath} is not a JPEG or PNG`);
@@ -88,7 +96,12 @@ export async function loadFeedbackImages(paths) {
   return attachments;
 }
 
-export async function submitFeedback(apiKey, platformUrl, payload, fetchImpl = fetch) {
+export async function submitFeedback(
+  apiKey,
+  platformUrl,
+  payload,
+  fetchImpl = fetch,
+) {
   const res = await fetchImpl(
     `${platformUrl.replace(/\/$/, '')}${FEEDBACK_API_PATH}`,
     {
@@ -164,7 +177,9 @@ function readAttachmentLine(onPaste) {
 async function promptForAttachments(already = 0) {
   if (process.stdin.isTTY !== true || already >= MAX_FEEDBACK_IMAGES) return [];
   const attachments = [];
-  console.log(`\n  Attachments (optional). Ctrl+V pastes a screenshot from the clipboard.`);
+  console.log(
+    `\n  Attachments (optional). Ctrl+V pastes a screenshot from the clipboard.`,
+  );
   console.log(`  ${c.dim}Press Enter when you are done.${c.reset}`);
   while (already + attachments.length < MAX_FEEDBACK_IMAGES) {
     const line = await readAttachmentLine(async () => {
@@ -172,11 +187,15 @@ async function promptForAttachments(already = 0) {
       const buffer = await readClipboardImage();
       const contentType = buffer ? imageContentType(buffer) : null;
       if (!contentType || !buffer) {
-        console.log(`\n  ${c.yellow}No JPEG or PNG image on the clipboard.${c.reset}`);
+        console.log(
+          `\n  ${c.yellow}No JPEG or PNG image on the clipboard.${c.reset}`,
+        );
         return;
       }
       attachments.push({ contentType, data: buffer.toString('base64') });
-      console.log(`  ${c.green}Added screenshot ${already + attachments.length}.${c.reset}`);
+      console.log(
+        `  ${c.green}Added screenshot ${already + attachments.length}.${c.reset}`,
+      );
     });
     if (line == null || !line.trim()) break;
   }
@@ -186,7 +205,8 @@ async function promptForAttachments(already = 0) {
 async function promptForFeedback(argv) {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const subject = argv.subject || (await rl.question(`\n  Subject (optional): `)).trim();
+    const subject =
+      argv.subject || (await rl.question(`\n  Subject (optional): `)).trim();
     let message = '';
     while (!message) {
       message = (await rl.question(`  Message: `)).trim();
@@ -208,7 +228,9 @@ export async function feedbackCommand(argv = [], options = {}) {
   const auth = await getApiKey(options.profile);
   if (!auth) {
     console.log(`\n  ${c.dim}Not logged in.${c.reset}`);
-    console.log(`  Run ${c.cyan}subc ${profileFlag}login${c.reset} to get started.\n`);
+    console.log(
+      `  Run ${c.cyan}subc ${profileFlag}login${c.reset} to get started.\n`,
+    );
     return;
   }
 
@@ -216,7 +238,9 @@ export async function feedbackCommand(argv = [], options = {}) {
   if (!feedback.message) {
     if (process.stdin.isTTY !== true) {
       console.error(`\n  ${c.red}A message is required.${c.reset}`);
-      console.error(`  Pass one with ${c.cyan}subc feedback --message "..."${c.reset}\n`);
+      console.error(
+        `  Pass one with ${c.cyan}subc feedback --message "..."${c.reset}\n`,
+      );
       process.exitCode = 1;
       return;
     }
@@ -224,7 +248,10 @@ export async function feedbackCommand(argv = [], options = {}) {
   }
 
   const fromFlags = await loadFeedbackImages(parsed.images);
-  const fromPrompt = feedback.message && parsed.message ? [] : await promptForAttachments(fromFlags.length);
+  const fromPrompt =
+    feedback.message && parsed.message
+      ? []
+      : await promptForAttachments(fromFlags.length);
   const platformUrl = getPlatformUrl(options.profile);
   const payload = buildFeedbackPayload({
     subject: feedback.subject,
@@ -237,9 +264,13 @@ export async function feedbackCommand(argv = [], options = {}) {
     const res = await submitFeedback(auth.key, platformUrl, payload);
 
     if (res.status === 404) {
-      console.error(`\n  ${c.yellow}This platform has no feedback endpoint (404).${c.reset}`);
+      console.error(
+        `\n  ${c.yellow}This platform has no feedback endpoint (404).${c.reset}`,
+      );
       console.error(`  ${c.dim}Host: ${platformUrl}${c.reset}`);
-      console.error(`  ${c.dim}Point PLATFORM_URL at a platform that includes /api/cli/feedback.${c.reset}\n`);
+      console.error(
+        `  ${c.dim}Point PLATFORM_URL at a platform that includes /api/cli/feedback.${c.reset}\n`,
+      );
       process.exitCode = 1;
       return;
     }
@@ -253,14 +284,18 @@ export async function feedbackCommand(argv = [], options = {}) {
 
     if (!res.ok) {
       const detail = typeof data?.error === 'string' ? data.error : '';
-      const invalidKey = detail === 'Invalid or revoked API key' || detail === 'No API key provided';
+      const invalidKey =
+        detail === 'Invalid or revoked API key' ||
+        detail === 'No API key provided';
       console.log(`\n  ${c.red}✗ Couldn't send your message.${c.reset}`);
       if (invalidKey) {
         console.log(
           `  Run ${c.cyan}subc ${profileFlag}logout${c.reset} then ${c.cyan}subc ${profileFlag}login${c.reset} to re-authenticate.`,
         );
       }
-      console.log(`  Please email ${c.cyan}${SUPPORT_EMAIL}${c.reset} directly.\n`);
+      console.log(
+        `  Please email ${c.cyan}${SUPPORT_EMAIL}${c.reset} directly.\n`,
+      );
       process.exitCode = 1;
       return;
     }
@@ -269,12 +304,16 @@ export async function feedbackCommand(argv = [], options = {}) {
     console.log(`  ${c.dim}Our support team will get back to you.\n`);
   } catch (error) {
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      console.log(`\n  ${c.yellow}Could not reach the platform (timed out).${c.reset}`);
+      console.log(
+        `\n  ${c.yellow}Could not reach the platform (timed out).${c.reset}`,
+      );
       console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}`);
     } else {
       console.log(`\n  ${c.red}✗ Couldn't send your message.${c.reset}`);
     }
-    console.log(`  Please email ${c.cyan}${SUPPORT_EMAIL}${c.reset} directly.\n`);
+    console.log(
+      `  Please email ${c.cyan}${SUPPORT_EMAIL}${c.reset} directly.\n`,
+    );
     process.exitCode = 1;
   }
 }

@@ -6,22 +6,29 @@ import { fileURLToPath } from 'node:url';
 
 import { agentList } from './agents.js';
 import { DEFAULT_PLATFORM_URL, getApiKey, getPlatformUrl } from './auth.js';
-import { isAbortError, normalizeModelIds, resolveModelCatalog } from './models.js';
-import { discoverSessions, SESSION_HARNESSES } from './sessions.js';
-import { compareVersions, fetchLatestVersion } from './update-check.js';
+import {
+  isAbortError,
+  normalizeModelIds,
+  resolveModelCatalog,
+} from './models.js';
 import {
   DEFAULT_PROFILE,
   listProfiles,
   loadProfile,
-  resolvedModelSetting,
-  RUNBOOK_DEFAULTS,
   SUPPORTED_MODELS as PACKAGED_MODELS,
+  RUNBOOK_DEFAULTS,
+  resolvedModelSetting,
 } from './profiles.js';
+import { discoverSessions, SESSION_HARNESSES } from './sessions.js';
+import { compareVersions, fetchLatestVersion } from './update-check.js';
 
 const BIN_DIR = path.dirname(fileURLToPath(import.meta.url));
 const TUI_SOURCE_DIR = path.resolve(BIN_DIR, '../tui');
 
-export function nativeTargetName(platform = process.platform, arch = process.arch) {
+export function nativeTargetName(
+  platform = process.platform,
+  arch = process.arch,
+) {
   const goArch = { x64: 'amd64', arm64: 'arm64' }[arch];
   if (!goArch || !['darwin', 'linux', 'win32'].includes(platform)) return null;
   const goOS = platform === 'win32' ? 'windows' : platform;
@@ -34,10 +41,13 @@ export function isTuiResult(result) {
     result !== null &&
     typeof result === 'object' &&
     (result.updatePrompt === true ||
-      (Array.isArray(result.args) && result.args.every((arg) => typeof arg === 'string'))) &&
+      (Array.isArray(result.args) &&
+        result.args.every((arg) => typeof arg === 'string'))) &&
     (result.baseUrl === undefined || typeof result.baseUrl === 'string') &&
-    (result.installedVersion === undefined || typeof result.installedVersion === 'string') &&
-    (result.latestVersion === undefined || typeof result.latestVersion === 'string')
+    (result.installedVersion === undefined ||
+      typeof result.installedVersion === 'string') &&
+    (result.latestVersion === undefined ||
+      typeof result.latestVersion === 'string')
   );
 }
 
@@ -50,9 +60,15 @@ async function pathExists(file) {
   }
 }
 
-export async function tuiSourceIsNewerThan(binary, sourceFile = path.join(TUI_SOURCE_DIR, 'cmd/subc-tui/main.go')) {
+export async function tuiSourceIsNewerThan(
+  binary,
+  sourceFile = path.join(TUI_SOURCE_DIR, 'cmd/subc-tui/main.go'),
+) {
   try {
-    const [binaryStat, sourceStat] = await Promise.all([fs.stat(binary), fs.stat(sourceFile)]);
+    const [binaryStat, sourceStat] = await Promise.all([
+      fs.stat(binary),
+      fs.stat(sourceFile),
+    ]);
     return sourceStat.mtimeMs > binaryStat.mtimeMs;
   } catch {
     return false;
@@ -70,7 +86,11 @@ function sourceTuiCommand() {
 export async function resolveTuiExecutable(options = {}) {
   const override = options.binary || process.env.SUBC_TUI_BIN?.trim();
   if (override) {
-    return { command: override, args: options.binaryArgs || [], cwd: undefined };
+    return {
+      command: override,
+      args: options.binaryArgs || [],
+      cwd: undefined,
+    };
   }
 
   const hasSource = await pathExists(path.join(TUI_SOURCE_DIR, 'go.mod'));
@@ -79,7 +99,10 @@ export async function resolveTuiExecutable(options = {}) {
     const packaged = path.join(BIN_DIR, 'native', target);
     // Source checkouts keep a cached host binary for speed. If TUI source is
     // newer, that cache is stale (for example it will reject --updates).
-    if (await pathExists(packaged) && !(hasSource && (await tuiSourceIsNewerThan(packaged)))) {
+    if (
+      (await pathExists(packaged)) &&
+      !(hasSource && (await tuiSourceIsNewerThan(packaged)))
+    ) {
       return { command: packaged, args: [], cwd: undefined };
     }
   }
@@ -91,7 +114,9 @@ export async function resolveTuiExecutable(options = {}) {
 }
 
 function selectedModelFor(profile) {
-  return resolvedModelSetting(process.env.SUBCONSCIOUS_MODEL || profile.values.MODEL);
+  return resolvedModelSetting(
+    process.env.SUBCONSCIOUS_MODEL || profile.values.MODEL,
+  );
 }
 
 function subagentModelFor(profile) {
@@ -181,16 +206,22 @@ export async function writeAtomicJson(file, value) {
   }
 }
 
-export async function createLocalTuiState(profileName = DEFAULT_PROFILE, options = {}) {
+export async function createLocalTuiState(
+  profileName = DEFAULT_PROFILE,
+  options = {},
+) {
   const activeProfile = options.profile || (await loadProfile(profileName));
-  const names = [...new Set([profileName, ...(await listProfiles())])].sort((a, b) => {
-    if (a === profileName) return -1;
-    if (b === profileName) return 1;
-    return a.localeCompare(b);
-  });
+  const names = [...new Set([profileName, ...(await listProfiles())])].sort(
+    (a, b) => {
+      if (a === profileName) return -1;
+      if (b === profileName) return 1;
+      return a.localeCompare(b);
+    },
+  );
   const profiles = await Promise.all(
     names.map(async (name) => {
-      const profile = name === profileName ? activeProfile : await loadProfile(name);
+      const profile =
+        name === profileName ? activeProfile : await loadProfile(name);
       const auth = await getApiKey(profile);
       return {
         name,
@@ -210,7 +241,10 @@ export async function createLocalTuiState(profileName = DEFAULT_PROFILE, options
     activeProfile: profileName,
     profilePath: activeProfile.path,
     profiles,
-    models: normalizeModelIds([requestedModel, ...PACKAGED_MODELS], requestedModel),
+    models: normalizeModelIds(
+      [requestedModel, ...PACKAGED_MODELS],
+      requestedModel,
+    ),
     selectedModel: requestedModel,
     subagentModel: subagentModelFor(activeProfile),
     gatewayUrl,
@@ -220,7 +254,8 @@ export async function createLocalTuiState(profileName = DEFAULT_PROFILE, options
     gatewayOverridden: Boolean(process.env.SUBCONSCIOUS_BASE_URL?.trim()),
     platformUrl,
     savedPlatformUrl:
-      activeProfile.values.PLATFORM_URL?.trim().replace(/\/+$/, '') || DEFAULT_PLATFORM_URL,
+      activeProfile.values.PLATFORM_URL?.trim().replace(/\/+$/, '') ||
+      DEFAULT_PLATFORM_URL,
     platformOverridden: Boolean(process.env.SUBCONSCIOUS_URL?.trim()),
     modelError: '',
     modelSource: 'packaged',
@@ -274,11 +309,13 @@ export async function loadRemoteTuiUpdates(state, options = {}) {
   const fetchLatest = options.fetchLatestVersion || fetchLatestVersion;
   const readApiKey = options.getApiKey || getApiKey;
   const updateDisabled =
-    options.disableUpdateCheck ?? process.env.SUBC_DISABLE_UPDATE_CHECK?.trim() === '1';
+    options.disableUpdateCheck ??
+    process.env.SUBC_DISABLE_UPDATE_CHECK?.trim() === '1';
 
   const tasks = [
     (async () => {
-      const profile = options.profile || (await loadProfile(state.activeProfile));
+      const profile =
+        options.profile || (await loadProfile(state.activeProfile));
       if (signal?.aborted) return;
       const auth = await readApiKey(profile);
       if (signal?.aborted) return;
@@ -330,7 +367,10 @@ export async function loadRemoteTuiUpdates(state, options = {}) {
           });
           if (signal?.aborted || !latest) return;
           if (compareVersions(latest, state.version) > 0) {
-            await enqueuePatch({ updateAvailable: true, latestVersion: latest });
+            await enqueuePatch({
+              updateAvailable: true,
+              latestVersion: latest,
+            });
           }
         } catch (error) {
           if (isAbortError(error) || signal?.aborted) return;
@@ -347,7 +387,10 @@ export async function loadRemoteTuiUpdates(state, options = {}) {
   }
 }
 
-export async function createTuiState(profileName = DEFAULT_PROFILE, options = {}) {
+export async function createTuiState(
+  profileName = DEFAULT_PROFILE,
+  options = {},
+) {
   const state = await createLocalTuiState(profileName, options);
   let next = { ...state };
   await loadRemoteTuiUpdates(state, {
@@ -383,7 +426,8 @@ export async function runTui(options = {}) {
   if (!executable) return null;
 
   const providedState = options.state;
-  const state = providedState || (await createLocalTuiState(options.profileName, options));
+  const state =
+    providedState || (await createLocalTuiState(options.profileName, options));
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-tui-'));
   const statePath = path.join(tempDir, 'state.json');
   const resultPath = path.join(tempDir, 'result.json');
@@ -403,20 +447,35 @@ export async function runTui(options = {}) {
 
   const remote = providedState
     ? Promise.resolve()
-    : loadRemoteTuiUpdates(state, { ...options, signal: controller.signal, writePatch });
+    : loadRemoteTuiUpdates(state, {
+        ...options,
+        signal: controller.signal,
+        writePatch,
+      });
 
   try {
     // This state intentionally contains only display data. API keys are used
     // by the Node command engine and are never passed into the TUI process.
-    await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, { mode: 0o600 });
+    await fs.writeFile(statePath, `${JSON.stringify(state)}\n`, {
+      mode: 0o600,
+    });
     const code = await spawnAndWait(
       executable.command,
-      [...executable.args, '--state', statePath, '--result', resultPath, '--updates', updatesPath],
+      [
+        ...executable.args,
+        '--state',
+        statePath,
+        '--result',
+        resultPath,
+        '--updates',
+        updatesPath,
+      ],
       { cwd: executable.cwd, spawn: options.spawn, stdio: options.stdio },
     );
     controller.abort();
     await remote.catch(() => {});
-    if (code !== 0) throw new Error(`Subconscious TUI exited with status ${code}`);
+    if (code !== 0)
+      throw new Error(`Subconscious TUI exited with status ${code}`);
 
     try {
       const result = JSON.parse(await fs.readFile(resultPath, 'utf-8'));

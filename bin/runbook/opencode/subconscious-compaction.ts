@@ -22,27 +22,27 @@
  * `opencode/install.sh` does this for you.
  */
 
-import type { Plugin } from "@opencode-ai/plugin"
+import type { Plugin } from '@opencode-ai/plugin';
 
-const TIMEOUT_MS = 2000
+const TIMEOUT_MS = 2000;
 
 function gatewayUrl(): string | undefined {
-  const raw = process.env.SUBCONSCIOUS_GATEWAY_URL ?? process.env.GATEWAY_URL
-  return raw ? raw.replace(/\/+$/, "") : undefined
+  const raw = process.env.SUBCONSCIOUS_GATEWAY_URL ?? process.env.GATEWAY_URL;
+  return raw ? raw.replace(/\/+$/, '') : undefined;
 }
 
 function apiKey(): string | undefined {
-  return process.env.SUBCONSCIOUS_API_KEY ?? process.env.API_KEY
+  return process.env.SUBCONSCIOUS_API_KEY ?? process.env.API_KEY;
 }
 
 async function report(
   sessionID: string,
-  phase: "start" | "end",
+  phase: 'start' | 'end',
   hookEventName: string,
 ): Promise<void> {
-  const url = gatewayUrl()
-  const key = apiKey()
-  if (!url || !key || !sessionID) return
+  const url = gatewayUrl();
+  const key = apiKey();
+  if (!url || !key || !sessionID) return;
 
   // Idempotency key for this one event. It must be unique per compaction but stable for
   // a redelivery of this same POST, so it is derived from the wall clock rather than any
@@ -50,51 +50,51 @@ async function report(
   // compacting again would then reuse a key the gateway has already seen and silently
   // drop the signal. Computed once here, before the request, so a transport-level retry
   // carries the identical body.
-  const dedupeKey = `${sessionID}:${phase}:${Date.now()}`
+  const dedupeKey = `${sessionID}:${phase}:${Date.now()}`;
 
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
     await fetch(`${url}/v1/agent-hooks`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "content-type": "application/json",
+        'content-type': 'application/json',
         authorization: `Bearer ${key}`,
-        "x-subconscious-client": "opencode",
+        'x-subconscious-client': 'opencode',
       },
       body: JSON.stringify({
-        event: "conversation_compaction",
+        event: 'conversation_compaction',
         conversation_id: sessionID,
         phase,
         hook_event_name: hookEventName,
         dedupe_key: dedupeKey,
       }),
       signal: controller.signal,
-    })
+    });
   } catch {
     // Fail open on timeout, offline gateway, or auth failure.
   } finally {
-    clearTimeout(timer)
+    clearTimeout(timer);
   }
 }
 
 export const SubconsciousCompaction: Plugin = async () => {
   return {
-    "experimental.session.compacting": async (input) => {
+    'experimental.session.compacting': async (input) => {
       // Deliberately does not touch `output`: mutating `context` would change the
       // customer's compaction prompt, and setting `prompt` would replace it entirely.
-      await report(input.sessionID, "start", "session.compacting")
+      await report(input.sessionID, 'start', 'session.compacting');
     },
     event: async ({ event }) => {
-      if (event.type === "session.compacted") {
-        const sessionID = (event as { properties?: { sessionID?: string } }).properties
-          ?.sessionID
+      if (event.type === 'session.compacted') {
+        const sessionID = (event as { properties?: { sessionID?: string } })
+          .properties?.sessionID;
         if (sessionID) {
           // No shared id with the matching `start` is needed: the gateway pairs a start
           // with the next end by server-stamped time, not by key.
-          await report(sessionID, "end", "session.compacted")
+          await report(sessionID, 'end', 'session.compacted');
         }
       }
     },
-  }
-}
+  };
+};

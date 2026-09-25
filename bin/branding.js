@@ -28,6 +28,8 @@ export function renderBanner(options = {}) {
   // still get the same logo without ANSI styling.
   if (!isTTY || term === 'dumb') return `  ${title}`;
 
-  const logo = color ? `${BRAND_ORANGE}${LOGO_ART_SMALL}${RESET}` : LOGO_ART_SMALL;
+  const logo = color
+    ? `${BRAND_ORANGE}${LOGO_ART_SMALL}${RESET}`
+    : LOGO_ART_SMALL;
   return `${logo}\n\n  ${title}`;
 }

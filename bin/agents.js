@@ -10,25 +10,28 @@
  * single source of truth `agents/registry.json`. Run `node scripts/generate-agents.js` to update.
  */
 
-import { spawn, execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { execFileSync, spawn } from 'node:child_process';
+import { constants as fsConstants, readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
-import { constants as fsConstants } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { c } from './colors.js';
-import { runWindowsAgent } from './windows/agents.js';
 import { getApiKey } from './auth.js';
+import { c } from './colors.js';
+import {
+  isLiveModelSource,
+  PUBLIC_CATALOG_FALLBACK_MESSAGE,
+  resolveModelCatalog,
+} from './models.js';
 import {
   isUnsetSetting,
   profileSettingsForAgent,
   resolvedModelSetting,
   resolvedProfileValues,
 } from './profiles.js';
-import { isLiveModelSource, PUBLIC_CATALOG_FALLBACK_MESSAGE, resolveModelCatalog } from './models.js';
 import { compareVersions } from './update-check.js';
+import { runWindowsAgent } from './windows/agents.js';
 
 export const MIN_CLAUDE_CODE_VERSION = '2.1.242';
 
@@ -74,7 +77,8 @@ function substitute(value, ctx) {
       return JSON.stringify(substitute(value.$json, ctx));
     }
     const out = {};
-    for (const key of keys) out[substituteString(key, ctx)] = substitute(value[key], ctx);
+    for (const key of keys)
+      out[substituteString(key, ctx)] = substitute(value[key], ctx);
     return out;
   }
   return value;
@@ -87,8 +91,10 @@ function substitute(value, ctx) {
  * Returns `{ command, fallback }` where `fallback` may be undefined.
  */
 function resolveInstall(install) {
-  if (typeof install === 'string') return { command: install, fallback: undefined };
-  if (!install || typeof install !== 'object') return { command: undefined, fallback: undefined };
+  if (typeof install === 'string')
+    return { command: install, fallback: undefined };
+  if (!install || typeof install !== 'object')
+    return { command: undefined, fallback: undefined };
   const command =
     install[process.platform] ||
     install.linux ||
@@ -103,7 +109,12 @@ const AGENTS = registry.agents
   .filter((agent) => agent.cli !== false)
   .map((agent) => {
     const { command, fallback } = resolveInstall(agent.install);
-    return { ...agent, bin: agent.binByPlatform?.[process.platform] || agent.bin, install: command, installFallback: fallback };
+    return {
+      ...agent,
+      bin: agent.binByPlatform?.[process.platform] || agent.bin,
+      install: command,
+      installFallback: fallback,
+    };
   });
 const BY_ALIAS = new Map();
 for (const agent of AGENTS) {
@@ -131,7 +142,9 @@ const SETUP_ACTIONS = new Set(['install', 'status', 'uninstall']);
 const DROPPED_SETUP_HELPERS = new Set(['use', 'env', 'unset']);
 
 export function agentSetupActions(agent) {
-  return Array.isArray(agent.runbook?.setupActions) ? agent.runbook.setupActions : [];
+  return Array.isArray(agent.runbook?.setupActions)
+    ? agent.runbook.setupActions
+    : [];
 }
 
 export function agentCommandName(agent) {
@@ -180,13 +193,19 @@ const AGENT_HELP = {
       'Launches the native Subconscious coding agent with the selected profile gateway, credential, and model.',
     options: [
       ['help', 'Show this help'],
-      ['install', process.platform === 'win32' ? 'Install a verified Windows release, when published upstream' : 'Install the latest precompiled Linux or macOS release'],
+      [
+        'install',
+        process.platform === 'win32'
+          ? 'Install a verified Windows release, when published upstream'
+          : 'Install the latest precompiled Linux or macOS release',
+      ],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['ARGS...', 'Pass arguments directly to Marathon'],
     ],
   },
   'claude-code': {
-    usage: 'subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]',
+    usage:
+      'subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]',
     behavior:
       'Launches Claude Code with the active Subconscious profile and model picker. Persistent files are leftover-only: subc claude uninstall.',
     options: [
@@ -200,34 +219,51 @@ const AGENT_HELP = {
     ],
   },
   codex: {
-    usage: 'subc [-p NAME] codex [help|install|status|uninstall] [Codex arguments...]',
+    usage:
+      'subc [-p NAME] codex [help|install|status|uninstall] [Codex arguments...]',
     behavior:
       'Launches Codex with a temporary Subconscious provider catalog. Compaction hooks are merged into ~/.codex/hooks.json on first launch and removed with subc codex uninstall; Codex will not run them until you trust them with /hooks once.',
     options: [
       ['help', 'Show this help'],
-      ['install', 'Install the Subconscious compaction hooks (then trust with /hooks)'],
+      [
+        'install',
+        'Install the Subconscious compaction hooks (then trust with /hooks)',
+      ],
       ['status', 'Inspect the installed compaction hooks'],
       ['uninstall', 'Remove only the Subconscious Codex hooks'],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['--context-window N', 'Override catalog context_window'],
       ['--max-context-window N', 'Override catalog max_context_window'],
-      ['--auto-compact-token-limit N', 'Override the automatic compaction threshold'],
+      [
+        '--auto-compact-token-limit N',
+        'Override the automatic compaction threshold',
+      ],
       ['--reasoning-effort LEVEL', 'Use none, low, medium, high, or max'],
       ['--external-tools', 'Enable Codex apps/plugins for this launch'],
-      ['--stream-idle-timeout MS', 'Allow a longer silent think before timing out'],
+      [
+        '--stream-idle-timeout MS',
+        'Allow a longer silent think before timing out',
+      ],
       ['--max-subagents N', 'Subagents allowed to run at once (default 4)'],
-      ['--subagent-effort LEVEL', 'Effort for subagents, separate from the parent'],
+      [
+        '--subagent-effort LEVEL',
+        'Effort for subagents, separate from the parent',
+      ],
       ['-- ARGS...', 'Pass remaining arguments to Codex'],
     ],
   },
   opencode: {
-    usage: 'subc [-p NAME] opencode [help|status|uninstall] [OpenCode arguments...]',
+    usage:
+      'subc [-p NAME] opencode [help|status|uninstall] [OpenCode arguments...]',
     behavior:
       'Launches OpenCode with an ephemeral provider containing every Subconscious model. Persistent files are leftover-only: subc opencode uninstall.',
     options: [
       ['help', 'Show this help'],
       ['status', 'Inspect leftover OpenCode Subconscious config'],
-      ['uninstall', 'Remove only the Subconscious OpenCode provider and plugin'],
+      [
+        'uninstall',
+        'Remove only the Subconscious OpenCode provider and plugin',
+      ],
       ['--model MODEL', 'Override the profile model for this launch'],
       ['ARGS...', 'Pass arguments directly to OpenCode'],
     ],
@@ -245,7 +281,8 @@ const AGENT_HELP = {
   },
   copilot: {
     usage: 'subc [-p NAME] copilot [help|install|status|uninstall]',
-    behavior: 'Manages the VS Code model provider and Copilot correlation hooks.',
+    behavior:
+      'Manages the VS Code model provider and Copilot correlation hooks.',
     options: [
       ['help', 'Show this help'],
       ['install', 'Install or update the provider and hooks (default action)'],
@@ -254,7 +291,8 @@ const AGENT_HELP = {
     ],
   },
   pi: {
-    usage: 'subc [-p NAME] pi [help|install|status|uninstall] [Pi arguments...]',
+    usage:
+      'subc [-p NAME] pi [help|install|status|uninstall] [Pi arguments...]',
     behavior:
       'Refreshes the persistent Subconscious provider from the live catalog, then launches Pi.',
     options: [
@@ -267,7 +305,8 @@ const AGENT_HELP = {
     ],
   },
   'deepseek-harness': {
-    usage: 'subc [-p NAME] dsh [web|headless] [--model MODEL] [Harness arguments...]',
+    usage:
+      'subc [-p NAME] dsh [web|headless] [--model MODEL] [Harness arguments...]',
     behavior:
       'Launches DeepSeek Harness with a temporary Subconscious provider containing every live gateway model. Web mode is the default.',
     options: [
@@ -287,7 +326,9 @@ export function isAgentHelpRequest(argv = []) {
 function displayProfileValue(setting, value, values) {
   if (setting.type === 'secret') {
     if (value) return '(set)';
-    return setting.key !== 'API_KEY' && values.API_KEY ? '(shared key)' : '(not set)';
+    return setting.key !== 'API_KEY' && values.API_KEY
+      ? '(shared key)'
+      : '(not set)';
   }
   if (
     !value &&
@@ -306,8 +347,14 @@ export function printAgentHelp(agent, profile) {
   };
   const settings = profileSettingsForAgent(agent.id);
   const values = resolvedProfileValues(profile);
-  const optionWidth = Math.max(0, ...details.options.map(([option]) => option.length));
-  const settingWidth = Math.max(0, ...settings.map((setting) => setting.key.length));
+  const optionWidth = Math.max(
+    0,
+    ...details.options.map(([option]) => option.length),
+  );
+  const settingWidth = Math.max(
+    0,
+    ...settings.map((setting) => setting.key.length),
+  );
 
   console.log(`\n  ${c.bold}${agent.name} + Subconscious${c.reset}\n`);
   console.log(`  ${details.behavior}\n`);
@@ -315,15 +362,23 @@ export function printAgentHelp(agent, profile) {
   if (details.options.length) {
     console.log(`  ${c.bold}Commands and options${c.reset}`);
     for (const [option, description] of details.options) {
-      console.log(`    ${c.cyan}${option.padEnd(optionWidth)}${c.reset}  ${description}`);
+      console.log(
+        `    ${c.cyan}${option.padEnd(optionWidth)}${c.reset}  ${description}`,
+      );
     }
     console.log();
   }
-  console.log(`  ${c.bold}Profile settings${c.reset} ${c.dim}(${profile?.name || 'default'})${c.reset}`);
+  console.log(
+    `  ${c.bold}Profile settings${c.reset} ${c.dim}(${profile?.name || 'default'})${c.reset}`,
+  );
   for (const setting of settings) {
     const value = displayProfileValue(setting, values[setting.key], values);
-    console.log(`    ${c.cyan}${setting.key.padEnd(settingWidth)}${c.reset}  ${value}`);
-    console.log(`    ${' '.repeat(settingWidth)}  ${c.dim}${setting.description}${c.reset}`);
+    console.log(
+      `    ${c.cyan}${setting.key.padEnd(settingWidth)}${c.reset}  ${value}`,
+    );
+    console.log(
+      `    ${' '.repeat(settingWidth)}  ${c.dim}${setting.description}${c.reset}`,
+    );
   }
   const command = agentCommandName(agent);
   const profileFlag = profile?.name || 'default';
@@ -335,7 +390,9 @@ export function printAgentHelp(agent, profile) {
     const installDescription = agent.runbook?.binaryInstallScript
       ? 'Install the agent binary with'
       : 'Install the persistent integration with';
-    console.log(`  ${installDescription} ${c.cyan}subc ${command} install${c.reset}.`);
+    console.log(
+      `  ${installDescription} ${c.cyan}subc ${command} install${c.reset}.`,
+    );
   }
   if (actions.includes('uninstall')) {
     console.log(
@@ -370,7 +427,11 @@ export function extractModel(argv, profile) {
   const environmentModel = resolvedModelSetting(process.env.SUBCONSCIOUS_MODEL);
   const profileModel = resolvedModelSetting(profile?.values?.MODEL);
   let model = environmentModel || profileModel || '';
-  let modelSource = environmentModel ? 'environment' : profileModel ? 'profile' : 'catalog';
+  let modelSource = environmentModel
+    ? 'environment'
+    : profileModel
+      ? 'profile'
+      : 'catalog';
   const rest = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -433,7 +494,9 @@ function candidateBinDirs() {
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
     if (prefix) {
-      dirs.push(process.platform === 'win32' ? prefix : path.join(prefix, 'bin'));
+      dirs.push(
+        process.platform === 'win32' ? prefix : path.join(prefix, 'bin'),
+      );
     }
   } catch {
     // npm not available — skip.
@@ -470,8 +533,12 @@ function binExts() {
  * dirs lets us find binaries installed this session that aren't on PATH yet.
  */
 async function resolveBinPath(bin, preferredDirs = []) {
-  const pathDirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
-  const dirs = [...new Set([...preferredDirs, ...pathDirs, ...candidateBinDirs()])];
+  const pathDirs = (process.env.PATH || '')
+    .split(path.delimiter)
+    .filter(Boolean);
+  const dirs = [
+    ...new Set([...preferredDirs, ...pathDirs, ...candidateBinDirs()]),
+  ];
   const exts = binExts();
   for (const dir of dirs) {
     for (const ext of exts) {
@@ -506,15 +573,20 @@ export function augmentPath(
       extraDirs.indexOf(dir) === index,
   );
   const remaining = current.filter((dir) => dir !== preferredDir);
-  return [...(preferredDir ? [preferredDir] : []), ...prepend, ...remaining].join(
-    path.delimiter,
-  );
+  return [
+    ...(preferredDir ? [preferredDir] : []),
+    ...prepend,
+    ...remaining,
+  ].join(path.delimiter);
 }
 
 /** Ask a yes/no question on the TTY. Empty answer counts as yes. */
 function askYesNo(question) {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
     rl.question(question, (answer) => {
       rl.close();
       const a = answer.trim().toLowerCase();
@@ -525,7 +597,10 @@ function askYesNo(question) {
 
 function waitForEnter(prompt) {
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
     rl.question(prompt, () => {
       rl.close();
       resolve();
@@ -534,9 +609,14 @@ function waitForEnter(prompt) {
 }
 
 /** Run the agent's packaged binary installer, or its shell install command. */
-function runInstaller(agent, install = agent.install, usePackagedScript = true) {
+function runInstaller(
+  agent,
+  install = agent.install,
+  usePackagedScript = true,
+) {
   return new Promise((resolve) => {
-    const installScript = usePackagedScript && agent.runbook?.binaryInstallScript;
+    const installScript =
+      usePackagedScript && agent.runbook?.binaryInstallScript;
     const child = installScript
       ? spawn('bash', [runbookScriptPath(agent, installScript), 'install'], {
           stdio: 'inherit',
@@ -578,7 +658,9 @@ async function ensureInstalled(agent) {
     console.error(
       `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${agent.bin}\` not found on PATH).${c.reset}`,
     );
-    console.error(`  Install ${agent.name} separately, then re-run ${c.cyan}subc ${agent.command || agent.id}${c.reset}.\n`);
+    console.error(
+      `  Install ${agent.name} separately, then re-run ${c.cyan}subc ${agent.command || agent.id}${c.reset}.\n`,
+    );
     process.exit(127);
   }
 
@@ -601,7 +683,9 @@ async function ensureInstalled(agent) {
     process.exit(127);
   }
 
-  console.error(`\n  ${c.dim}Running ${c.reset}${c.cyan}${agent.install}${c.reset}\n`);
+  console.error(
+    `\n  ${c.dim}Running ${c.reset}${c.cyan}${agent.install}${c.reset}\n`,
+  );
   let installed = await runInstaller(agent);
 
   // Primary failed and a fallback exists — try it once.
@@ -635,12 +719,17 @@ export function parseClaudeVersion(text) {
   return match?.[1] ?? null;
 }
 
-export function claudeVersionNeedsUpgrade(installed, minimum = MIN_CLAUDE_CODE_VERSION) {
+export function claudeVersionNeedsUpgrade(
+  installed,
+  minimum = MIN_CLAUDE_CODE_VERSION,
+) {
   return versionNeedsUpgrade(installed, minimum);
 }
 
 export function versionNeedsUpgrade(installed, minimum) {
-  return Boolean(installed && minimum && compareVersions(installed, minimum) < 0);
+  return Boolean(
+    installed && minimum && compareVersions(installed, minimum) < 0,
+  );
 }
 
 export function readClaudeVersion(bin, binDir, options = {}) {
@@ -658,7 +747,9 @@ export function readClaudeVersion(bin, binDir, options = {}) {
       },
       timeout: options.timeoutMs ?? 3000,
     });
-    return parseClaudeVersion(typeof stdout === 'string' ? stdout : stdout?.toString?.());
+    return parseClaudeVersion(
+      typeof stdout === 'string' ? stdout : stdout?.toString?.(),
+    );
   } catch {
     return null;
   }
@@ -711,7 +802,9 @@ function spawnRunbook(agent, args, env, relativeScript) {
     child.on('error', (error) => {
       if (error.code === 'ENOENT') {
         reject(
-          new Error('These coding-agent integrations require `bash`, but it was not found on PATH.'),
+          new Error(
+            'These coding-agent integrations require `bash`, but it was not found on PATH.',
+          ),
         );
         return;
       }
@@ -748,7 +841,8 @@ export async function getAgentApiKey(profile, agent) {
   const specificSetting = agentApiKeySetting(agent);
   const specificKey = specificSetting?.key;
   const specificEnvKey = specificKey && process.env[specificKey]?.trim();
-  if (specificEnvKey) return { key: specificEnvKey, source: `${specificKey} env var` };
+  if (specificEnvKey)
+    return { key: specificEnvKey, source: `${specificKey} env var` };
 
   const sharedEnvKey = process.env.SUBCONSCIOUS_API_KEY?.trim();
   if (sharedEnvKey) {
@@ -836,7 +930,8 @@ function claudeModelPickerEnv(agent, ctx, models) {
   // Pad through Fable so the built-in `fable` alias cannot resolve to Anthropic
   // Fable 5. The /model menu itself is replaced via claudePickerSettings.
   const pickerModels = uniqueCatalogModels(models, ctx.model);
-  while (pickerModels.length < 4) pickerModels.push(pickerModels.at(-1) || ctx.model);
+  while (pickerModels.length < 4)
+    pickerModels.push(pickerModels.at(-1) || ctx.model);
 
   const roles = ['OPUS', 'SONNET', 'HAIKU', 'FABLE'];
   const env = {};
@@ -846,7 +941,8 @@ function claudeModelPickerEnv(agent, ctx, models) {
     if (!model) continue;
     env[`ANTHROPIC_DEFAULT_${role}_MODEL`] = model;
     env[`ANTHROPIC_DEFAULT_${role}_MODEL_NAME`] = model;
-    env[`ANTHROPIC_DEFAULT_${role}_MODEL_DESCRIPTION`] = `Subconscious model ${model}`;
+    env[`ANTHROPIC_DEFAULT_${role}_MODEL_DESCRIPTION`] =
+      `Subconscious model ${model}`;
   }
   const customModel = pickerModels[4];
   if (customModel) {
@@ -855,7 +951,9 @@ function claudeModelPickerEnv(agent, ctx, models) {
     env.ANTHROPIC_CUSTOM_MODEL_OPTION_DESCRIPTION = `Subconscious model ${customModel}`;
   }
   return Object.fromEntries(
-    CLAUDE_MODEL_PICKER_KEYS.map((key) => [key, env[key]]).filter(([, value]) => value),
+    CLAUDE_MODEL_PICKER_KEYS.map((key) => [key, env[key]]).filter(
+      ([, value]) => value,
+    ),
   );
 }
 
@@ -904,7 +1002,9 @@ export function runbookEnv(
       SUBCONSCIOUS_MODELS: models.join('\n'),
       ...(agent.id === 'claude-code'
         ? {
-            SUBC_CLAUDE_SETTINGS: JSON.stringify(claudePickerSettings(models, model)),
+            SUBC_CLAUDE_SETTINGS: JSON.stringify(
+              claudePickerSettings(models, model),
+            ),
             CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '0',
             CLAUDE_CODE_AUTO_MODE_SERVER: '0',
           }
@@ -949,19 +1049,38 @@ export function selectLaunchModel(requestedModel, modelSource, catalog) {
   return useLiveDefault ? first : requestedModel;
 }
 
-async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runbook.script) {
+async function runRunbookSetup(
+  agent,
+  argv,
+  profile,
+  relativeScript = agent.runbook.script,
+) {
   if (isSetupWithoutAuth(argv) || agent.runbook?.setupNeedsAuth === false) {
-    return spawnRunbook(agent, argv, {
-      ...(profile?.values || {}),
-      ...process.env,
-      SUBC_ENV_FILE: os.devNull,
-    }, relativeScript);
+    return spawnRunbook(
+      agent,
+      argv,
+      {
+        ...(profile?.values || {}),
+        ...process.env,
+        SUBC_ENV_FILE: os.devNull,
+      },
+      relativeScript,
+    );
   }
 
-  const { model: requestedModel, modelSource, rest } = extractModel(argv, profile);
-  const apiKey = optionValue(rest, '--api-key') || (await requireApiKey(profile, agent));
+  const {
+    model: requestedModel,
+    modelSource,
+    rest,
+  } = extractModel(argv, profile);
+  const apiKey =
+    optionValue(rest, '--api-key') || (await requireApiKey(profile, agent));
   if (!apiKey) return 1;
-  const catalog = await resolvedModelsForLaunch(profile, apiKey, requestedModel);
+  const catalog = await resolvedModelsForLaunch(
+    profile,
+    apiKey,
+    requestedModel,
+  );
   const model = selectLaunchModel(requestedModel, modelSource, catalog);
   if (requestedModel && model !== requestedModel) {
     console.error(
@@ -984,7 +1103,9 @@ async function runRunbookSetup(agent, argv, profile, relativeScript = agent.runb
   if (code !== 0 || !installed) return code;
 
   if (agent.id === 'pi') {
-    console.log(`\n  ${c.dim}Start a fresh session with ${c.reset}${c.cyan}subc pi${c.reset}${c.dim}.${c.reset}\n`);
+    console.log(
+      `\n  ${c.dim}Start a fresh session with ${c.reset}${c.cyan}subc pi${c.reset}${c.dim}.${c.reset}\n`,
+    );
   }
   return code;
 }
@@ -1002,19 +1123,30 @@ export async function runAgent(agent, argv, options = {}) {
 
   if (process.platform === 'win32') {
     return runWindowsAgent(agent, argv, {
-      profile, parseAgentAction, extractModel, requireApiKey,
-      resolvedModelsForLaunch, selectLaunchModel, runbookEnv,
-      minimumClaudeVersion: MIN_CLAUDE_CODE_VERSION, parseClaudeVersion, claudeVersionNeedsUpgrade,
+      profile,
+      parseAgentAction,
+      extractModel,
+      requireApiKey,
+      resolvedModelsForLaunch,
+      selectLaunchModel,
+      runbookEnv,
+      minimumClaudeVersion: MIN_CLAUDE_CODE_VERSION,
+      parseClaudeVersion,
+      claudeVersionNeedsUpgrade,
     });
   }
 
   const parsed = parseAgentAction(agent, argv);
   if (parsed.action !== 'launch') {
     if (!agent.runbook?.setupScript) {
-      throw new Error(`No persistent integration is available for ${agent.name}`);
+      throw new Error(
+        `No persistent integration is available for ${agent.name}`,
+      );
     }
     const setupArgs =
-      parsed.args[0] === parsed.action ? parsed.args : [parsed.action, ...parsed.args];
+      parsed.args[0] === parsed.action
+        ? parsed.args
+        : [parsed.action, ...parsed.args];
     const code = await runRunbookSetup(
       agent,
       setupArgs,
@@ -1033,13 +1165,21 @@ export async function runAgent(agent, argv, options = {}) {
     return code;
   }
 
-  const { model: requestedModel, modelSource, rest } = extractModel(argv, profile);
+  const {
+    model: requestedModel,
+    modelSource,
+    rest,
+  } = extractModel(argv, profile);
   const apiKey = await requireApiKey(profile, agent);
   if (!apiKey) return 1;
 
   const binDir = await ensureInstalled(agent);
   await ensureClaudeCompatible(agent, binDir);
-  const catalog = await resolvedModelsForLaunch(profile, apiKey, requestedModel);
+  const catalog = await resolvedModelsForLaunch(
+    profile,
+    apiKey,
+    requestedModel,
+  );
   const model = selectLaunchModel(requestedModel, modelSource, catalog);
   if (requestedModel && model !== requestedModel) {
     console.error(

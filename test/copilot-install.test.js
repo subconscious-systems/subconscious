@@ -5,9 +5,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 
-const installPath = new URL('../bin/runbook/copilot/install.sh', import.meta.url);
+const installPath = new URL(
+  '../bin/runbook/copilot/install.sh',
+  import.meta.url,
+);
 
-function runInstall(home, gatewayUrl = 'https://gateway.example', overrides = {}) {
+function runInstall(
+  home,
+  gatewayUrl = 'https://gateway.example',
+  overrides = {},
+) {
   return new Promise((resolve, reject) => {
     const child = spawn('bash', [installPath.pathname, 'install'], {
       env: {
@@ -38,25 +45,33 @@ function runInstall(home, gatewayUrl = 'https://gateway.example', overrides = {}
 }
 
 async function createVsCodeUserDirectory(home) {
-  const suffix = process.platform === 'darwin'
-    ? ['Library', 'Application Support', 'Code', 'User']
-    : ['.config', 'Code', 'User'];
+  const suffix =
+    process.platform === 'darwin'
+      ? ['Library', 'Application Support', 'Code', 'User']
+      : ['.config', 'Code', 'User'];
   const directory = path.join(home, ...suffix);
   await fs.mkdir(directory, { recursive: true });
   return directory;
 }
 
 test('Copilot installer advertises thinking within the deployed context window', async () => {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-install-'));
+  const home = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'subc-copilot-install-'),
+  );
   try {
     const userDirectory = await createVsCodeUserDirectory(home);
     const result = await runInstall(home);
     assert.equal(result.code, 0, result.stderr);
 
     const configuration = JSON.parse(
-      await fs.readFile(path.join(userDirectory, 'chatLanguageModels.json'), 'utf8'),
+      await fs.readFile(
+        path.join(userDirectory, 'chatLanguageModels.json'),
+        'utf8',
+      ),
     );
-    const provider = configuration.find(({ name }) => name === 'Subconscious Gateway');
+    const provider = configuration.find(
+      ({ name }) => name === 'Subconscious Gateway',
+    );
     assert.ok(provider);
     assert.equal(provider.apiType, 'messages');
     assert.equal(provider.models.length, 1);
@@ -76,17 +91,35 @@ test('Copilot installer advertises thinking within the deployed context window',
 test('Copilot enables vision for DeepSeek V4.1 without enabling it for other models', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-vision-'));
   const visionModel = 'subconscious/deepseek-v4.1-flash-marathon';
-  const models = [visionModel, 'subconscious/deepseek-v4-flash-marathon', `${visionModel}-other`, 'custom/model'];
+  const models = [
+    visionModel,
+    'subconscious/deepseek-v4-flash-marathon',
+    `${visionModel}-other`,
+    'custom/model',
+  ];
   try {
     const userDirectory = await createVsCodeUserDirectory(home);
     const result = await runInstall(home, 'https://gateway.example', {
-      MODEL: visionModel, SUBCONSCIOUS_MODELS: models.join('\n'), SUBC_ENV_FILE: os.devNull,
+      MODEL: visionModel,
+      SUBCONSCIOUS_MODELS: models.join('\n'),
+      SUBC_ENV_FILE: os.devNull,
     });
     assert.equal(result.code, 0, result.stderr);
-    const providers = JSON.parse(await fs.readFile(path.join(userDirectory, 'chatLanguageModels.json'), 'utf8'));
-    const provider = providers.find(({ name }) => name === 'Subconscious Gateway');
-    assert.deepEqual(provider.models.map(model => model.id), models);
-    for (const model of provider.models) assert.equal(model.vision, model.id === visionModel, model.id);
+    const providers = JSON.parse(
+      await fs.readFile(
+        path.join(userDirectory, 'chatLanguageModels.json'),
+        'utf8',
+      ),
+    );
+    const provider = providers.find(
+      ({ name }) => name === 'Subconscious Gateway',
+    );
+    assert.deepEqual(
+      provider.models.map((model) => model.id),
+      models,
+    );
+    for (const model of provider.models)
+      assert.equal(model.vision, model.id === visionModel, model.id);
   } finally {
     await fs.rm(home, { recursive: true, force: true });
   }
@@ -106,9 +139,14 @@ test('Copilot installer normalizes gateway origins and API paths', async () => {
       const result = await runInstall(home, gatewayUrl);
       assert.equal(result.code, 0, result.stderr);
       const configuration = JSON.parse(
-        await fs.readFile(path.join(userDirectory, 'chatLanguageModels.json'), 'utf8'),
+        await fs.readFile(
+          path.join(userDirectory, 'chatLanguageModels.json'),
+          'utf8',
+        ),
       );
-      const provider = configuration.find(({ name }) => name === 'Subconscious Gateway');
+      const provider = configuration.find(
+        ({ name }) => name === 'Subconscious Gateway',
+      );
       assert.equal(
         provider.models[0].url,
         'https://api-dev.subconscious.dev/v1/messages',

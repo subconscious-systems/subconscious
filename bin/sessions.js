@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
-import { spawnWindowsSync } from './windows/process.js';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { resolveAgent, runAgent } from './agents.js';
 
 import { c } from './colors.js';
-import { resolveAgent, runAgent } from './agents.js';
+import { spawnWindowsSync } from './windows/process.js';
 
 const MAX_CANDIDATE_FILES = 160;
 const MAX_READ_BYTES = 2 * 1024 * 1024;
@@ -26,7 +26,7 @@ export const SESSION_HARNESSES = Object.freeze({
 
 function cleanText(value) {
   return String(value || '')
-    .replace(/\u0000/g, '')
+    .replaceAll('\0', '')
     .replace(/\r\n/g, '\n')
     .trim();
 }
@@ -194,8 +194,15 @@ function codexMessages(records) {
   return records.flatMap((record) => {
     if (record.type !== 'event_msg') return [];
     const eventType = record.payload?.type;
-    const role = eventType === 'user_message' ? 'user' : eventType === 'agent_message' ? 'assistant' : '';
-    const text = cleanText(record.payload?.message || record.payload?.last_agent_message);
+    const role =
+      eventType === 'user_message'
+        ? 'user'
+        : eventType === 'agent_message'
+          ? 'assistant'
+          : '';
+    const text = cleanText(
+      record.payload?.message || record.payload?.last_agent_message,
+    );
     return role && text ? [{ role, text }] : [];
   });
 }
@@ -227,12 +234,22 @@ async function parseFileSession(entry, harness) {
     const messages = claudeMessages(records);
     const metadata = records.find((record) => record.cwd) || {};
     const identity = records.find((record) => record.sessionId) || {};
-    const id = metadata.sessionId || identity.sessionId || filename.split('.orphaned-')[0];
+    const id =
+      metadata.sessionId ||
+      identity.sessionId ||
+      filename.split('.orphaned-')[0];
     const titleRecord = records.find((record) => record.type === 'ai-title');
-    const lastPrompt = [...records].reverse().find((record) => record.type === 'last-prompt');
-    const assistant = records.find((record) => record.message?.role === 'assistant');
+    const lastPrompt = [...records]
+      .reverse()
+      .find((record) => record.type === 'last-prompt');
+    const assistant = records.find(
+      (record) => record.message?.role === 'assistant',
+    );
     return sessionRecord(harness, id, {
-      title: titleRecord?.aiTitle || messages.find((message) => message.role === 'user')?.text || lastPrompt?.lastPrompt,
+      title:
+        titleRecord?.aiTitle ||
+        messages.find((message) => message.role === 'user')?.text ||
+        lastPrompt?.lastPrompt,
       cwd: metadata.cwd,
       model: assistant?.message?.model,
       updated: entry.updated,
@@ -241,10 +258,14 @@ async function parseFileSession(entry, harness) {
   }
 
   if (harness === 'codex') {
-    const meta = records.find((record) => record.type === 'session_meta')?.payload || {};
+    const meta =
+      records.find((record) => record.type === 'session_meta')?.payload || {};
     const messages = codexMessages(records);
-    const id = meta.id || filename.match(/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i)?.[1];
-    const context = records.find((record) => record.type === 'turn_context')?.payload || {};
+    const id =
+      meta.id ||
+      filename.match(/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i)?.[1];
+    const context =
+      records.find((record) => record.type === 'turn_context')?.payload || {};
     return sessionRecord(harness, id, {
       title: messages.find((message) => message.role === 'user')?.text,
       cwd: meta.cwd,
@@ -257,7 +278,9 @@ async function parseFileSession(entry, harness) {
   if (harness === 'pi') {
     const meta = records.find((record) => record.type === 'session') || {};
     const messages = piMessages(records);
-    const assistant = records.find((record) => record.message?.role === 'assistant');
+    const assistant = records.find(
+      (record) => record.message?.role === 'assistant',
+    );
     return sessionRecord(harness, meta.id || filename.split('_').at(-1), {
       title: messages.find((message) => message.role === 'user')?.text,
       cwd: meta.cwd,
@@ -294,11 +317,17 @@ async function discoverFileSessions(root, harness, limit) {
 function sessionIdFromFile(file, harness) {
   const name = path.basename(file, '.jsonl');
   if (harness === 'claude') {
-    if (name.includes('.orphaned-') || file.split(path.sep).includes('subagents')) return '';
+    if (
+      name.includes('.orphaned-') ||
+      file.split(path.sep).includes('subagents')
+    )
+      return '';
     return name;
   }
   if (harness === 'codex') {
-    return name.match(/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i)?.[1] || '';
+    return (
+      name.match(/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i)?.[1] || ''
+    );
   }
   return '';
 }
@@ -359,10 +388,16 @@ async function discoverCodexIndex(root, indexFile, max) {
     const updated = Date.parse(record.updated_at || '') || 0;
     const current = byID.get(record.id);
     if (!current || updated >= current.updated) {
-      byID.set(record.id, { id: record.id, title: record.thread_name, updated });
+      byID.set(record.id, {
+        id: record.id,
+        title: record.thread_name,
+        updated,
+      });
     }
   }
-  const selected = [...byID.values()].sort((a, b) => b.updated - a.updated).slice(0, max);
+  const selected = [...byID.values()]
+    .sort((a, b) => b.updated - a.updated)
+    .slice(0, max);
   return selected.map((record) =>
     sessionRecord('codex', record.id, {
       ...record,
@@ -400,7 +435,12 @@ function discoverOpenCodeSessions(execute, max) {
     'from session where time_archived is null',
     `order by time_updated desc limit ${Math.max(1, Math.min(500, max))}`,
   ].join(' ');
-  const output = commandResult(execute, 'opencode', ['db', '--format', 'json', query]);
+  const output = commandResult(execute, 'opencode', [
+    'db',
+    '--format',
+    'json',
+    query,
+  ]);
   if (!output) return [];
   try {
     return JSON.parse(output).map((record) =>
@@ -419,7 +459,9 @@ function discoverOpenCodeSessions(execute, max) {
 export async function discoverSessions(options = {}) {
   const home = options.home || os.homedir();
   const max = options.max || 500;
-  const execute = options.execute || (process.platform === 'win32' ? spawnWindowsSync : spawnSync);
+  const execute =
+    options.execute ||
+    (process.platform === 'win32' ? spawnWindowsSync : spawnSync);
   const roots = options.roots || {
     claude: path.join(home, '.claude', 'projects'),
     codex: path.join(home, '.codex', 'sessions'),
@@ -467,11 +509,19 @@ async function openCodeMessages(session, execute) {
     "and json_extract(part.data, '$.type') = 'text'",
     'order by message.time_created asc, part.time_created asc',
   ].join(' ');
-  const output = commandResult(execute, 'opencode', ['db', '--format', 'json', query]);
+  const output = commandResult(execute, 'opencode', [
+    'db',
+    '--format',
+    'json',
+    query,
+  ]);
   if (!output) return [];
   try {
     return JSON.parse(output)
-      .filter((row) => ['user', 'assistant'].includes(row.role) && cleanText(row.text))
+      .filter(
+        (row) =>
+          ['user', 'assistant'].includes(row.role) && cleanText(row.text),
+      )
       .map((row) => ({ role: row.role, text: cleanText(row.text) }));
   } catch {
     return [];
@@ -480,7 +530,11 @@ async function openCodeMessages(session, execute) {
 
 export async function readSessionMessages(session, options = {}) {
   if (session.harness === 'opencode') {
-    return openCodeMessages(session, options.execute || (process.platform === 'win32' ? spawnWindowsSync : spawnSync));
+    return openCodeMessages(
+      session,
+      options.execute ||
+        (process.platform === 'win32' ? spawnWindowsSync : spawnSync),
+    );
   }
   if (!session.sourcePath) return [];
   const records = parseLines(await readBounded(session.sourcePath));
@@ -492,11 +546,14 @@ export async function readSessionMessages(session, options = {}) {
 }
 
 async function hydrateSession(session) {
-  if (session.harness !== 'codex' || !session.sourcePath || session.cwd) return session;
+  if (session.harness !== 'codex' || !session.sourcePath || session.cwd)
+    return session;
   try {
     const head = parseLines(await readHead(session.sourcePath));
-    const meta = head.find((item) => item.type === 'session_meta')?.payload || {};
-    const context = head.find((item) => item.type === 'turn_context')?.payload || {};
+    const meta =
+      head.find((item) => item.type === 'session_meta')?.payload || {};
+    const context =
+      head.find((item) => item.type === 'turn_context')?.payload || {};
     return { ...session, cwd: meta.cwd || '', model: context.model || '' };
   } catch {
     return session;
@@ -518,7 +575,9 @@ export function buildHandoffPrompt(session, messages) {
   }
   selected.reverse();
   if (!selected.length) {
-    throw new Error(`No portable user/assistant messages were found in ${session.harnessName}.`);
+    throw new Error(
+      `No portable user/assistant messages were found in ${session.harnessName}.`,
+    );
   }
 
   return [
@@ -539,7 +598,8 @@ export function nativeResumeArgs(session) {
   if (session.harness === 'claude') return ['--resume', session.id];
   if (session.harness === 'codex') return ['resume', session.id];
   if (session.harness === 'opencode') return ['--session', session.id];
-  if (session.harness === 'pi') return ['--session', session.sourcePath || session.id];
+  if (session.harness === 'pi')
+    return ['--session', session.sourcePath || session.id];
   if (session.harness === 'sc') return ['--resume', session.sourcePath];
   throw new Error(`Native resume is not supported for ${session.harnessName}.`);
 }
@@ -547,11 +607,14 @@ export function nativeResumeArgs(session) {
 export function handoffLaunchArgs(targetHarness, prompt) {
   if (targetHarness === 'opencode') return ['--prompt', prompt];
   if (['claude', 'codex', 'pi'].includes(targetHarness)) return [prompt];
-  throw new Error(`${SESSION_HARNESSES[targetHarness]?.name || targetHarness} cannot start an interactive handoff yet.`);
+  throw new Error(
+    `${SESSION_HARNESSES[targetHarness]?.name || targetHarness} cannot start an interactive handoff yet.`,
+  );
 }
 
 function sessionByKey(sessions, key) {
-  if (!SESSION_KEY_PATTERN.test(key || '')) throw new Error('Invalid session key.');
+  if (!SESSION_KEY_PATTERN.test(key || ''))
+    throw new Error('Invalid session key.');
   return sessions.find((session) => session.key === key) || null;
 }
 
@@ -564,11 +627,15 @@ function formatWhen(timestamp) {
 export function printSessions(sessions) {
   console.log(`\n  ${c.bold}Coding sessions${c.reset}\n`);
   if (!sessions.length) {
-    console.log(`  ${c.dim}No supported local coding sessions were found.${c.reset}\n`);
+    console.log(
+      `  ${c.dim}No supported local coding sessions were found.${c.reset}\n`,
+    );
     return;
   }
   for (const session of sessions) {
-    console.log(`  ${c.cyan}${session.key}${c.reset}  ${c.bold}${session.title}${c.reset}`);
+    console.log(
+      `  ${c.cyan}${session.key}${c.reset}  ${c.bold}${session.title}${c.reset}`,
+    );
     console.log(
       `    ${c.dim}${session.harnessName} · ${formatWhen(session.updatedAt)}${session.cwd ? ` · ${session.cwd}` : ''}${c.reset}`,
     );
@@ -585,15 +652,21 @@ export async function sessionsCommand(argv, options = {}) {
     printSessions(sessions);
     return 0;
   }
-  if (action !== 'resume') throw new Error(`Unknown sessions action: ${action}`);
+  if (action !== 'resume')
+    throw new Error(`Unknown sessions action: ${action}`);
 
   const key = argv[1];
   let session = sessionByKey(sessions, key);
-  if (!session) throw new Error(`Session '${key}' was not found. Run subc sessions to refresh the list.`);
+  if (!session)
+    throw new Error(
+      `Session '${key}' was not found. Run subc sessions to refresh the list.`,
+    );
   session = await hydrateSession(session);
   const harnessIndex = argv.indexOf('--harness');
-  const requestedHarness = harnessIndex >= 0 ? argv[harnessIndex + 1] : session.harness;
-  const targetHarness = requestedHarness === 'marathon' ? 'sc' : requestedHarness;
+  const requestedHarness =
+    harnessIndex >= 0 ? argv[harnessIndex + 1] : session.harness;
+  const targetHarness =
+    requestedHarness === 'marathon' ? 'sc' : requestedHarness;
   const target = SESSION_HARNESSES[targetHarness];
   if (!target) throw new Error(`Unknown destination harness: ${targetHarness}`);
 
@@ -602,22 +675,34 @@ export async function sessionsCommand(argv, options = {}) {
       const stat = await fs.stat(session.cwd);
       if (stat.isDirectory()) process.chdir(session.cwd);
     } catch {
-      console.error(`  ${c.yellow}The original directory is unavailable; resuming in ${process.cwd()}.${c.reset}\n`);
+      console.error(
+        `  ${c.yellow}The original directory is unavailable; resuming in ${process.cwd()}.${c.reset}\n`,
+      );
     }
   }
 
   const agent = resolveAgent(target.command);
-  if (!agent) throw new Error(`${target.name} is not registered with this CLI.`);
+  if (!agent)
+    throw new Error(`${target.name} is not registered with this CLI.`);
   if (targetHarness === session.harness) {
-    console.log(`\n  ${c.dim}Resuming in ${c.reset}${c.bold}${session.harnessName}${c.reset}${c.dim}: ${session.title}${c.reset}\n`);
-    return runAgent(agent, nativeResumeArgs(session), { profile: options.profile });
+    console.log(
+      `\n  ${c.dim}Resuming in ${c.reset}${c.bold}${session.harnessName}${c.reset}${c.dim}: ${session.title}${c.reset}\n`,
+    );
+    return runAgent(agent, nativeResumeArgs(session), {
+      profile: options.profile,
+    });
   }
-  if (!target.portable) throw new Error(`${target.name} cannot receive cross-harness sessions yet.`);
+  if (!target.portable)
+    throw new Error(
+      `${target.name} cannot receive cross-harness sessions yet.`,
+    );
 
   const messages = await readSessionMessages(session, options);
   const prompt = buildHandoffPrompt(session, messages);
   console.log(
     `\n  ${c.dim}Handing off ${c.reset}${c.bold}${session.harnessName}${c.reset}${c.dim} → ${c.reset}${c.bold}${target.name}${c.reset}${c.dim}: ${session.title}${c.reset}\n`,
   );
-  return runAgent(agent, handoffLaunchArgs(targetHarness, prompt), { profile: options.profile });
+  return runAgent(agent, handoffLaunchArgs(targetHarness, prompt), {
+    profile: options.profile,
+  });
 }

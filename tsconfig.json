@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": [
+    "bin/runbook/opencode/subconscious-compaction.ts",
+    "bin/runbook/opencode/opencode-plugin.d.ts",
+    "bin/runbook/pi/subconscious-compaction.ts",
+    "bin/windows/pi-compaction.ts"
+  ]
+}

@@ -2,8 +2,8 @@
  * Usage display for `subc usage` — fetches billing/quota from the platform API.
  */
 
-import { c } from './colors.js';
 import { getApiKey, getPlatformUrl } from './auth.js';
+import { c } from './colors.js';
 import { DEFAULT_PROFILE } from './profiles.js';
 import { printLoginUpgradeWarning } from './upgrade.js';
 
@@ -33,13 +33,18 @@ export function formatCurrency(value) {
 
 export function shortModelSlug(slug) {
   const text = String(slug ?? '').trim();
-  return text.startsWith('subconscious/') ? text.slice('subconscious/'.length) : text;
+  return text.startsWith('subconscious/')
+    ? text.slice('subconscious/'.length)
+    : text;
 }
 
 export function isLegacyUsagePayload(data) {
   if (!data || typeof data !== 'object') return true;
-  if ('credits' in data && data.plan && typeof data.plan === 'object') return false;
-  return 'dailyTokenCeiling' in data || 'consumedToday' in data || !('plan' in data);
+  if ('credits' in data && data.plan && typeof data.plan === 'object')
+    return false;
+  return (
+    'dailyTokenCeiling' in data || 'consumedToday' in data || !('plan' in data)
+  );
 }
 
 export function meterColor(percentage) {
@@ -120,7 +125,9 @@ export function formatUsageDisplay(data) {
         );
       } else {
         const label =
-          described.kind === 'credit' ? 'of daily credit used' : 'of daily tokens used';
+          described.kind === 'credit'
+            ? 'of daily credit used'
+            : 'of daily tokens used';
         lines.push(
           `  ${renderProgressBar(described.percent)}  ${formatAllowancePercent(described.percent)} ${label}`,
         );
@@ -155,9 +162,7 @@ export function formatUsageDisplay(data) {
     );
     for (const model of models) {
       const label = shortModelSlug(model.slug).padEnd(slugWidth);
-      lines.push(
-        `    ${label}  ${formatTokens(model.consumedToday ?? 0)}`,
-      );
+      lines.push(`    ${label}  ${formatTokens(model.consumedToday ?? 0)}`);
     }
   }
 
@@ -166,10 +171,13 @@ export function formatUsageDisplay(data) {
 }
 
 export async function fetchUsage(apiKey, platformUrl, fetchImpl = fetch) {
-  const res = await fetchImpl(`${platformUrl.replace(/\/$/, '')}${USAGE_API_PATH}`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-    signal: AbortSignal.timeout(5000),
-  });
+  const res = await fetchImpl(
+    `${platformUrl.replace(/\/$/, '')}${USAGE_API_PATH}`,
+    {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(5000),
+    },
+  );
   return res;
 }
 
@@ -183,7 +191,9 @@ export async function usageCommand(argv = [], options = {}) {
   const auth = await getApiKey(options.profile);
   if (!auth) {
     console.log(`\n  ${c.dim}Not logged in.${c.reset}`);
-    console.log(`  Run ${c.cyan}subc ${profileFlag}login${c.reset} to get started.\n`);
+    console.log(
+      `  Run ${c.cyan}subc ${profileFlag}login${c.reset} to get started.\n`,
+    );
     return;
   }
 
@@ -236,7 +246,9 @@ export async function usageCommand(argv = [], options = {}) {
     console.log(formatUsageDisplay(data));
   } catch (error) {
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
-      console.log(`\n  ${c.yellow}Could not reach the platform (timed out).${c.reset}`);
+      console.log(
+        `\n  ${c.yellow}Could not reach the platform (timed out).${c.reset}`,
+      );
       console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}\n`);
       return;
     }

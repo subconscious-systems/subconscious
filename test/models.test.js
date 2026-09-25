@@ -28,7 +28,13 @@ function catalogResponse(ids) {
 test('normalizeModelIds reorders a present selected model and removes invalid duplicates', () => {
   assert.deepEqual(
     normalizeModelIds(
-      ['subconscious/two', 'subconscious/one', 'bad model', '', 'subconscious/two'],
+      [
+        'subconscious/two',
+        'subconscious/one',
+        'bad model',
+        '',
+        'subconscious/two',
+      ],
       'subconscious/one',
     ),
     ['subconscious/one', 'subconscious/two'],
@@ -166,7 +172,10 @@ test('resolveModelCatalog falls back to the public catalog without auth when /av
   assert.equal(result.error, null);
   assert.deepEqual(result.models, ['subconscious/two', 'subconscious/one']);
   assert.deepEqual(requests, [
-    { url: 'https://gateway.example/v1/models/available', authorization: 'Bearer sk-test' },
+    {
+      url: 'https://gateway.example/v1/models/available',
+      authorization: 'Bearer sk-test',
+    },
     { url: 'https://gateway.example/v1/models', authorization: undefined },
   ]);
 });
@@ -219,7 +228,10 @@ test('resolveModelCatalog treats an empty public catalog as a packaged fallback'
 
   assert.equal(result.source, 'packaged');
   assert.match(result.error.message, /no usable model IDs/);
-  assert.deepEqual(result.models, ['subconscious/custom', 'subconscious/default']);
+  assert.deepEqual(result.models, [
+    'subconscious/custom',
+    'subconscious/default',
+  ]);
 });
 
 test('resolveModelCatalog does not fall back when the caller aborts', async () => {
