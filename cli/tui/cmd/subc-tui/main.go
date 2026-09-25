@@ -206,11 +206,11 @@ func newModel(state inputState) model {
 		menuItem{Section: "Account & configuration", Name: "Available models", Command: "models", Action: "Inspect", Description: "Fetch and display the live model catalog from the selected gateway.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Set default model", Command: "config", Action: "Configure", Description: "Choose and save the default model for the selected profile, or UNSET to follow the live catalog.", Kind: itemSetDefaultModel},
 		menuItem{Section: "Account & configuration", Name: "Set subagent model", Command: "config", Action: "Configure", Description: "Choose the model Claude Code uses for subagents, or UNSET to follow the default model.", Kind: itemSetSubagentModel},
-		menuItem{Section: "Account & configuration", Name: "Update base URL", Command: "update-url", Action: "Configure", Description: "Validate and save a new gateway base URL without leaving the TUI.", Kind: itemUpdateBaseURL},
-		menuItem{Section: "Account & configuration", Name: "Update platform URL", Command: "update-platform-url", Action: "Configure", Description: "Validate and save the platform URL used for login, whoami, and usage.", Kind: itemUpdatePlatformURL},
 		menuItem{Section: "Account & configuration", Name: "Create profile", Command: "config", Action: "Create", Description: "Create an isolated profile with its own gateway, model, and agent settings.", Kind: itemCreateProfile},
 		menuItem{Section: "Account & configuration", Name: "Profile settings", Command: "config", Action: "Configure", Description: "View the selected profile, gateway URL, model, and agent settings.", Kind: itemCommand},
 		menuItem{Section: "Account & configuration", Name: "Upgrade CLI", Command: "upgrade", Action: "Update", Description: "Check npm and install the latest published Subconscious CLI.", Kind: itemCommand},
+		menuItem{Section: "Account & configuration", Name: "Update base URL", Command: "update-url", Action: "Configure", Description: "Validate and save a new gateway base URL without leaving the TUI.", Kind: itemUpdateBaseURL},
+		menuItem{Section: "Account & configuration", Name: "Update platform URL", Command: "update-platform-url", Action: "Configure", Description: "Validate and save the platform URL used for login, whoami, and usage.", Kind: itemUpdatePlatformURL},
 	)
 
 	profileCursor := indexProfile(state.Profiles, state.ActiveProfile)
