@@ -11,7 +11,6 @@ import readline from 'node:readline/promises';
 import { c } from './colors.js';
 import { getApiKey, getPlatformUrl } from './auth.js';
 import { DEFAULT_PROFILE } from './profiles.js';
-import { printLoginUpgradeWarning } from './upgrade.js';
 
 export const FEEDBACK_API_PATH = '/api/cli/feedback';
 export const SUPPORT_EMAIL = 'support@subconscious.dev';
@@ -134,7 +133,10 @@ export async function feedbackCommand(argv = [], options = {}) {
     const res = await submitFeedback(auth.key, platformUrl, payload);
 
     if (res.status === 404) {
-      printLoginUpgradeWarning();
+      console.error(`\n  ${c.yellow}This platform has no feedback endpoint (404).${c.reset}`);
+      console.error(`  ${c.dim}Host: ${platformUrl}${c.reset}`);
+      console.error(`  ${c.dim}Point PLATFORM_URL at a platform that includes /api/cli/feedback.${c.reset}\n`);
+      process.exitCode = 1;
       return;
     }
 
