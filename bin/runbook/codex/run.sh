@@ -168,7 +168,9 @@ write_model_catalog() {
   {
     printf '{\n  "models": [\n'
     for model_id in "${SUPPORTED_MODELS[@]}"; do
-      vision_fields=""
+      # Codex assumes ["text", "image"] when the field is missing, so a
+      # text-only model must say so or Codex sends it images anyway.
+      vision_fields=', "input_modalities": ["text"]'
       if subc_model_supports_vision "$model_id"; then
         vision_fields=', "input_modalities": ["text", "image"]'
       fi

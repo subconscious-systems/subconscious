@@ -149,9 +149,10 @@ export async function windowsLaunch(
         truncation_policy: { mode: 'tokens', limit: 10000 },
         supports_parallel_tool_calls: true,
         experimental_supported_tools: [],
-        ...(modelSupportsVision(id)
-          ? { input_modalities: ['text', 'image'] }
-          : {}),
+        // Codex assumes ['text', 'image'] when the field is missing.
+        input_modalities: modelSupportsVision(id)
+          ? ['text', 'image']
+          : ['text'],
       })),
     };
     // Validate all flags before creating a temporary directory.

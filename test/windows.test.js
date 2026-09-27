@@ -479,7 +479,7 @@ for (const selectedVision of [true, false])
     for (const model of catalog.models)
       assert.deepEqual(
         model.input_modalities,
-        model.slug === visionModel ? ['text', 'image'] : undefined,
+        model.slug === visionModel ? ['text', 'image'] : ['text'],
         model.slug,
       );
 

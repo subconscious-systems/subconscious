@@ -63,7 +63,7 @@ test('Codex advertises image input for DeepSeek V4.1 only, selected or in the pi
     for (const model of catalog.models) {
       assert.deepEqual(
         model.input_modalities,
-        model.slug === visionModel ? ['text', 'image'] : undefined,
+        model.slug === visionModel ? ['text', 'image'] : ['text'],
         model.slug,
       );
     }
