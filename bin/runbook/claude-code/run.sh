@@ -19,6 +19,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../model-capabilities.generated.sh"
 
 # Load shared env from SUBC_ENV_FILE, or a sibling .env / env.example.
 SHARED_ENV="${SUBC_ENV_FILE:-${SCRIPT_DIR}/../.env}"
@@ -222,6 +223,15 @@ export CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY="${CLAUDE_CODE_ENABLE_GATEWAY_
 # https://code.claude.com/docs/en/auto-mode-classifier-billing
 export CLAUDE_CODE_AUTO_MODE_SERVER="${CLAUDE_CODE_AUTO_MODE_SERVER:-0}"
 export CLAUDE_CODE_SUBAGENT_MODEL="${CLAUDE_CODE_SUBAGENT_MODEL:-$MODEL}"
+# Claude Code caps a request at 100 images unless the model has 1M context,
+# then 600. At image 101 it drops the oldest 21 at once, and the whole
+# context is prefilled again. With the 1M beta it keeps every image and the
+# gateway's window drops one per turn, which Subconscious Cache reuses. A beta
+# rather than the "[1m]" model suffix, so no model name changes anywhere.
+LONG_CONTEXT_BETA="context-1m-2025-08-07"
+if subc_model_supports_vision "$MODEL" && [[ ",${ANTHROPIC_BETAS:-}," != *",${LONG_CONTEXT_BETA},"* ]]; then
+  export ANTHROPIC_BETAS="${ANTHROPIC_BETAS:+${ANTHROPIC_BETAS},}${LONG_CONTEXT_BETA}"
+fi
 export CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS="${MAX_CONCURRENT_SUBAGENTS}"
 export CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH="${MAX_SUBAGENT_SPAWN_DEPTH}"
 export CLAUDE_CODE_AUTO_COMPACT_WINDOW="${COMPACT_WINDOW}"

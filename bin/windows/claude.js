@@ -1,11 +1,25 @@
 // Windows-only equivalent of the existing Claude shell launch.
 import { readFileSync } from 'node:fs';
+import { modelSupportsVision } from '../model-capabilities.js';
 import { resolvedModelSetting } from '../profiles.js';
 import { parseOptions, positiveInteger } from './common.js';
 
 const DEFAULTS = JSON.parse(
   readFileSync(new URL('../registry.generated.json', import.meta.url), 'utf8'),
 ).defaults;
+
+// Claude Code caps a request at 100 images unless the model has 1M context,
+// then 600; the 1M beta lifts it without changing any model name. Same rule
+// as bin/runbook/claude-code/run.sh.
+const LONG_CONTEXT_BETA = 'context-1m-2025-08-07';
+
+function claudeBetas(model, existing) {
+  const betas = existing?.trim() ? existing.trim().split(',') : [];
+  if (modelSupportsVision(model) && !betas.includes(LONG_CONTEXT_BETA))
+    betas.push(LONG_CONTEXT_BETA);
+  return betas.length ? betas.join(',') : undefined;
+}
+
 function claudePickerSettings(models) {
   return {
     availableModels: models,
@@ -74,6 +88,7 @@ export function claudeNativeLaunch(argv, environment) {
     CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY:
       environment.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY?.trim() || '0',
     CLAUDE_CODE_SUBAGENT_MODEL: subagentModel,
+    ANTHROPIC_BETAS: claudeBetas(model, environment.ANTHROPIC_BETAS),
     CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS:
       environment.MAX_CONCURRENT_SUBAGENTS?.trim() || '4',
     CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH:

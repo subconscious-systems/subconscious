@@ -136,3 +136,83 @@ test('Claude launch passes an independently configured subagent model', () => {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, 'false\nsubconscious/subagent-model\n0');
 });
+
+// For a vision model subc turns on Claude Code's 1M-context beta, which
+// raises its per-request image cap from 100 to 600. Without it Claude Code
+// drops 21 images at once at image 101 and the whole context is prefilled
+// again. Internal only: every model id and display name stays plain.
+async function launchWithEnvDump(env) {
+  const dumpDir = path.join(testDir, 'dump-bin');
+  await fs.mkdir(dumpDir, { recursive: true });
+  await fs.writeFile(
+    path.join(dumpDir, 'claude'),
+    [
+      '#!/bin/sh',
+      'settings=""',
+      'while [ $# -gt 0 ]; do',
+      '  if [ "$1" = "--settings" ]; then settings="$2"; shift 2; continue; fi',
+      '  shift',
+      'done',
+      'node -e \'console.log(JSON.stringify({env: process.env, settings: JSON.parse(process.argv[1])}))\' "$settings"',
+      '',
+    ].join('\n'),
+    { mode: 0o755 },
+  );
+  const runbook = new URL('../bin/runbook/claude-code/run.sh', import.meta.url);
+  const result = spawnSync('bash', [runbook.pathname], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${dumpDir}:${process.env.PATH}`,
+      GATEWAY_URL: 'https://gateway.example',
+      API_KEY: 'sk-test',
+      CLAUDE_CODE_SUBAGENT_MODEL: '',
+      ANTHROPIC_BETAS: '',
+      SUBC_ENV_FILE: os.devNull,
+      ...env,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+const VISION = 'subconscious/deepseek-v4.1-flash-marathon';
+const LONG_CONTEXT_BETA = 'context-1m-2025-08-07';
+
+test('Claude launch lifts the image cap for vision models, invisibly', async () => {
+  const { env, settings } = await launchWithEnvDump({ MODEL: VISION });
+  assert.equal(env.ANTHROPIC_BETAS, LONG_CONTEXT_BETA);
+  for (const name of [
+    'ANTHROPIC_MODEL',
+    'ANTHROPIC_SMALL_FAST_MODEL',
+    'CLAUDE_CODE_SUBAGENT_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL',
+    'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME',
+  ])
+    assert.equal(env[name], VISION, name);
+  assert.deepEqual(settings.availableModels, [VISION]);
+  assert.equal(settings.modelPicker.options[0].model, VISION);
+});
+
+test('Claude launch leaves text-only models without the beta', async () => {
+  const { env } = await launchWithEnvDump({
+    MODEL: 'subconscious/glm-5.3-marathon',
+  });
+  assert.equal(env.ANTHROPIC_BETAS, '');
+});
+
+test('Claude launch keeps betas the user already set', async () => {
+  const { env } = await launchWithEnvDump({
+    MODEL: VISION,
+    ANTHROPIC_BETAS: 'some-beta-2026-01-01',
+  });
+  assert.equal(
+    env.ANTHROPIC_BETAS,
+    `some-beta-2026-01-01,${LONG_CONTEXT_BETA}`,
+  );
+  const again = await launchWithEnvDump({
+    MODEL: VISION,
+    ANTHROPIC_BETAS: LONG_CONTEXT_BETA,
+  });
+  assert.equal(again.env.ANTHROPIC_BETAS, LONG_CONTEXT_BETA);
+});

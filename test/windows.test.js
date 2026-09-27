@@ -1238,3 +1238,33 @@ test('Windows host: CLI routes every agent with a Bash-free PATH and preserves e
     assert.equal(result.code, 0, `${command}: ${result.stderr}`);
   }
 });
+
+// Vision models get Claude Code's 1M-context beta (image cap 100 -> 600);
+// model ids and labels stay plain. Same rule as the shell runbook.
+test('Windows Claude launch lifts the image cap for vision models, invisibly', async () => {
+  const vision = 'subconscious/deepseek-v4.1-flash-marathon';
+  const beta = 'context-1m-2025-08-07';
+  const base = { GATEWAY_URL: 'https://gateway.example', API_KEY: 'sk-test' };
+  const { args, env } = await windowsLaunch('claude-code', [], {
+    ...base,
+    MODEL: vision,
+  });
+  assert.equal(env.ANTHROPIC_BETAS, beta);
+  assert.equal(env.ANTHROPIC_MODEL, vision);
+  assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, vision);
+  const settings = JSON.parse(args[args.indexOf('--settings') + 1]);
+  assert.deepEqual(settings.availableModels, [vision]);
+
+  const textOnly = await windowsLaunch('claude-code', [], {
+    ...base,
+    MODEL: 'subconscious/glm-5.3-marathon',
+  });
+  assert.equal(textOnly.env.ANTHROPIC_BETAS, undefined);
+
+  const withOwn = await windowsLaunch('claude-code', [], {
+    ...base,
+    MODEL: vision,
+    ANTHROPIC_BETAS: 'some-beta-2026-01-01',
+  });
+  assert.equal(withOwn.env.ANTHROPIC_BETAS, `some-beta-2026-01-01,${beta}`);
+});
