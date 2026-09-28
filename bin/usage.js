@@ -9,27 +9,30 @@ import { printLoginUpgradeWarning } from './upgrade.js';
 
 export const USAGE_API_PATH = '/api/v1/usage';
 
-// Largest first: [size, suffix, decimal places].
+// Largest first: [size, suffix].
 const TOKEN_UNITS = [
-  [1_000_000_000, 'B', 1],
-  [1_000_000, 'M', 1],
-  [1_000, 'K', 0],
+  [1_000_000_000, 'B'],
+  [1_000_000, 'M'],
+  [1_000, 'K'],
 ];
 
-export function formatTokens(value) {
+export function formatTokens(value, { sigFigs = 3 } = {}) {
   const n = Number(value);
+
   if (!Number.isFinite(n) || n < 0) return '0';
+
   let index = TOKEN_UNITS.findIndex(([size]) => n >= size);
   if (index === -1) return n.toLocaleString('en-US');
-  let [size, suffix, digits] = TOKEN_UNITS[index];
-  let scaled = Number((n / size).toFixed(digits));
+
+  // Number() also turns toPrecision's exponent form ("1.00e+3") back into 1000.
+
+  let scaled = Number((n / TOKEN_UNITS[index][0]).toPrecision(sigFigs));
   // Rounding can reach the next unit: 999_500 is 1M, not 1000K.
   if (scaled >= 1_000 && index > 0) {
     index -= 1;
-    [size, suffix, digits] = TOKEN_UNITS[index];
-    scaled = Number((n / size).toFixed(digits));
+    scaled = Number((n / TOKEN_UNITS[index][0]).toPrecision(sigFigs));
   }
-  return `${scaled}${suffix}`;
+  return `${scaled}${TOKEN_UNITS[index][1]}`;
 }
 
 export function formatCurrency(value) {

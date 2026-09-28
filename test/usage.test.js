@@ -14,9 +14,21 @@ import {
 
 test('formatTokens abbreviates large counts', () => {
   assert.equal(formatTokens(500), '500');
-  assert.equal(formatTokens(12_400), '12K');
+  assert.equal(formatTokens(12_400), '12.4K');
   assert.equal(formatTokens(12_400_000), '12.4M');
   assert.equal(formatTokens(2_000_000_000), '2B');
+});
+
+test('formatTokens shows three significant figures by default', () => {
+  assert.equal(formatTokens(1_234), '1.23K');
+  assert.equal(formatTokens(123_456), '123K');
+  assert.equal(formatTokens(4_560_000), '4.56M');
+});
+
+test('formatTokens accepts a sigFigs option', () => {
+  assert.equal(formatTokens(1_234, { sigFigs: 2 }), '1.2K');
+  assert.equal(formatTokens(1_234, { sigFigs: 4 }), '1.234K');
+  assert.equal(formatTokens(999_500, { sigFigs: 4 }), '999.5K');
 });
 
 test('formatTokens moves to the next unit when rounding reaches 1000', () => {
