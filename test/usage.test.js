@@ -19,6 +19,20 @@ test('formatTokens abbreviates large counts', () => {
   assert.equal(formatTokens(2_000_000_000), '2B');
 });
 
+test('formatTokens moves to the next unit when rounding reaches 1000', () => {
+  assert.equal(formatTokens(999_499), '999K');
+  assert.equal(formatTokens(999_500), '1M');
+  assert.equal(formatTokens(999_999), '1M');
+  assert.equal(formatTokens(999_960_000), '1B');
+  assert.equal(formatTokens(999_999_999), '1B');
+});
+
+test('formatTokens drops a trailing .0', () => {
+  assert.equal(formatTokens(1_999_999), '2M');
+  assert.equal(formatTokens(12_000_001), '12M');
+  assert.equal(formatTokens(1_000_000_001), '1B');
+});
+
 test('formatCurrency renders signed dollars', () => {
   assert.equal(formatCurrency(42.5), '$42.50');
   assert.equal(formatCurrency(-1.2), '-$1.20');
