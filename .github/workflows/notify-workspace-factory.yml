@@ -1,0 +1,31 @@
+name: Notify workspace factory
+
+# The product factory lives in subconscious-workspace. Telling it when main
+# moves lets a break surface with the change that caused it.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: Tell subconscious-workspace that main moved
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send repository_dispatch
+        env:
+          # Fine-grained PAT with Contents: write on subconscious-workspace.
+          # GITHUB_TOKEN cannot dispatch to another repository.
+          GH_TOKEN: ${{ secrets.WORKSPACE_E2E_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "WORKSPACE_E2E_DISPATCH_TOKEN is not set. The factory still runs on workflow_dispatch."
+            exit 0
+          fi
+          gh api repos/subconscious-systems/subconscious-workspace/dispatches \
+            -f event_type=cli-main \
+            -f "client_payload[sha]=$GITHUB_SHA" \
+            -f "client_payload[repo]=subconscious"
