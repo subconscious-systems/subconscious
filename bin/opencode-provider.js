@@ -1,6 +1,10 @@
+import { fileURLToPath } from 'node:url';
 import { modelSupportsVision } from './model-capabilities.js';
 
 export const OPENCODE_PROVIDER_ID = 'subconscious';
+const OPENCODE_IMAGE_WINDOW_PLUGIN = fileURLToPath(
+  new URL('./runbook/opencode/subconscious-image-window.ts', import.meta.url),
+);
 export const OPENCODE_PROVIDER_NAME = 'Subconscious Gateway';
 
 const ACRONYMS = new Set([
@@ -64,6 +68,8 @@ export function buildOpenCodeConfig({
   return {
     $schema: 'https://opencode.ai/config.json',
     disabled_providers: ['subconscious-cli'],
+    // Trims each request to the newest 100 images before upload.
+    plugin: [OPENCODE_IMAGE_WINDOW_PLUGIN],
     provider: {
       [OPENCODE_PROVIDER_ID]: {
         npm: '@ai-sdk/openai-compatible',

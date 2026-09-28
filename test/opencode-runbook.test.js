@@ -193,3 +193,25 @@ test('OpenCode model display names are capitalized from the id', () => {
     'GPT OSS 20B',
   );
 });
+
+// OpenCode resends every screenshot each turn; the plugin trims the upload to
+// the newest 100 (bin/runbook/image-window). Loaded by path, nothing written.
+test('OpenCode launch loads the image window plugin', async () => {
+  const runbook = new URL('../bin/runbook/opencode/run.sh', import.meta.url);
+  const result = spawnSync('bash', [runbook.pathname], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      PATH: `${testDir}:${process.env.PATH}`,
+      GATEWAY_URL: 'https://gateway.example',
+      API_KEY: 'sk-test',
+      MODEL: 'subconscious/deepseek-v4.1-flash-marathon',
+      SUBC_ENV_FILE: os.devNull,
+    },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(result.stdout);
+  assert.equal(config.plugin.length, 1);
+  assert.match(config.plugin[0], /opencode\/subconscious-image-window\.ts$/);
+  await fs.access(config.plugin[0]);
+});

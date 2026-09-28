@@ -5,6 +5,8 @@
 # readable.
 SUBC_OPENCODE_PROVIDER_ID="subconscious"
 SUBC_OPENCODE_PROVIDER_NAME="Subconscious Gateway"
+# Trims each request to the newest 100 images before upload; loaded by path.
+SUBC_OPENCODE_IMAGE_WINDOW_PLUGIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/subconscious-image-window.ts"
 
 subc_opencode_model_display_name() {
   local slug="${1:-}"
@@ -66,7 +68,7 @@ subc_opencode_build_config_json() {
   local base_url="${1:?base url required}"
   local model="${2:?model required}"
   cat <<EOF
-{"\$schema":"https://opencode.ai/config.json","disabled_providers":["subconscious-cli"],"provider":{"${SUBC_OPENCODE_PROVIDER_ID}":{"npm":"@ai-sdk/openai-compatible","name":"${SUBC_OPENCODE_PROVIDER_NAME}","whitelist":${WHITELIST_JSON},"options":{"baseURL":"${base_url}","apiKey":"{env:SUBCONSCIOUS_API_KEY}","headers":{"x-subconscious-client":"opencode"},"modelsDiscovery":{"enabled":false}},"models":{${MODELS_JSON}}}},"model":"${SUBC_OPENCODE_PROVIDER_ID}/${model}"}
+{"\$schema":"https://opencode.ai/config.json","disabled_providers":["subconscious-cli"],"plugin":["${SUBC_OPENCODE_IMAGE_WINDOW_PLUGIN}"],"provider":{"${SUBC_OPENCODE_PROVIDER_ID}":{"npm":"@ai-sdk/openai-compatible","name":"${SUBC_OPENCODE_PROVIDER_NAME}","whitelist":${WHITELIST_JSON},"options":{"baseURL":"${base_url}","apiKey":"{env:SUBCONSCIOUS_API_KEY}","headers":{"x-subconscious-client":"opencode"},"modelsDiscovery":{"enabled":false}},"models":{${MODELS_JSON}}}},"model":"${SUBC_OPENCODE_PROVIDER_ID}/${model}"}
 EOF
 }
 

@@ -49,6 +49,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../model-capabilities.generated.sh"
 EXTENSION_SRC="${SCRIPT_DIR}/subconscious-compaction.ts"
+IMAGE_WINDOW_SRC="${SCRIPT_DIR}/../image-window"
 
 # Load shared env from SUBC_ENV_FILE, or a sibling .env / env.example.
 SHARED_ENV="${SUBC_ENV_FILE:-${SCRIPT_DIR}/../.env}"
@@ -160,6 +161,8 @@ PI_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
 MODELS_JSON="${PI_DIR}/models.json"
 EXTENSIONS_DIR="${PI_DIR}/extensions"
 EXTENSION_DST="${EXTENSIONS_DIR}/subconscious-compaction.ts"
+# Keeps requests at the newest 100 images so a long session's upload stops growing.
+IMAGE_WINDOW_DST="${EXTENSIONS_DIR}/subconscious-image-window"
 ENV_FILE="${PI_DIR}/subconscious.env"
 MARKER='x-subconscious-client'
 
@@ -222,6 +225,8 @@ write_extension() {
   fi
   mkdir -p "$EXTENSIONS_DIR"
   cp "$EXTENSION_SRC" "$EXTENSION_DST"
+  rm -rf "$IMAGE_WINDOW_DST"
+  cp -R "$IMAGE_WINDOW_SRC" "$IMAGE_WINDOW_DST"
 }
 
 uninstall_config() {
@@ -235,6 +240,7 @@ uninstall_config() {
     echo "No Pi models.json at $MODELS_JSON"
   fi
   rm -f "$EXTENSION_DST" "$ENV_FILE"
+  rm -rf "$IMAGE_WINDOW_DST"
 }
 
 status() {
@@ -252,6 +258,11 @@ status() {
     echo "compaction extension: $EXTENSION_DST (installed)"
   else
     echo "compaction extension: not installed"
+  fi
+  if [[ -d "$IMAGE_WINDOW_DST" ]]; then
+    echo "image window extension: $IMAGE_WINDOW_DST (installed)"
+  else
+    echo "image window extension: not installed"
   fi
   if [[ -f "$ENV_FILE" ]]; then
     echo "env: $ENV_FILE (present)"

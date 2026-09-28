@@ -262,6 +262,12 @@ export async function windowsSetup(
       'extensions',
       'subconscious-compaction.ts',
     );
+    // Keeps requests at the newest 100 images; same files as the shell runbook.
+    const imageWindow = path.join(
+      dir,
+      'extensions',
+      'subconscious-image-window',
+    );
     const config = path.join(dir, 'subconscious-windows.json');
     if (installing) {
       const context = positiveInteger(
@@ -294,10 +300,17 @@ export async function windowsSetup(
         new URL('./pi-compaction.ts', import.meta.url),
         extension,
       );
+      await fs.rm(imageWindow, { recursive: true, force: true });
+      await fs.cp(
+        new URL('../runbook/image-window', import.meta.url),
+        imageWindow,
+        { recursive: true },
+      );
       await writeJson(config, { gatewayUrl, apiKey });
     } else {
       delete providers.subconscious;
       await fs.rm(extension, { force: true });
+      await fs.rm(imageWindow, { recursive: true, force: true });
       await fs.rm(config, { force: true });
     }
     if (installing || (await exists(modelsFile)))

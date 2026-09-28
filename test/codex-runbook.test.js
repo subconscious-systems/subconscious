@@ -251,3 +251,26 @@ test('Codex launch no longer pins a legacy Codex for subagents', async () => {
     args.join(' '),
   );
 });
+
+// Codex resends every screenshot each turn; for vision models subc routes it
+// through a local proxy (image-proxy.js) that trims the upload to 100 images.
+test('Codex launch routes vision models through the local image proxy', async () => {
+  const baseUrl = (args) =>
+    args.find((arg) =>
+      arg.startsWith('model_providers.subconscious.base_url='),
+    );
+  const vision = await captureArgs({
+    MODEL: 'subconscious/deepseek-v4.1-flash-marathon',
+  });
+  assert.match(
+    baseUrl(vision),
+    /^model_providers\.subconscious\.base_url=http:\/\/127\.0\.0\.1:\d+\/v1$/,
+  );
+  const textOnly = await captureArgs({
+    MODEL: 'subconscious/glm-5.3-marathon',
+  });
+  assert.equal(
+    baseUrl(textOnly),
+    'model_providers.subconscious.base_url=https://gateway.example/v1',
+  );
+});

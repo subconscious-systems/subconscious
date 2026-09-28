@@ -303,6 +303,28 @@ if [[ "${BASH_SOURCE[0]:-$0}" != "${0}" ]]; then
   return 0 2>/dev/null || true
 fi
 
+# Codex resends its whole history, every screenshot included, on every turn,
+# so a long session's upload grows until the gateway refuses it. For vision
+# models Codex talks to a local proxy that keeps each request at the newest 100
+# images (image-proxy.js). It exits with this process (exec below keeps the pid).
+PROVIDER_BASE_URL="${GATEWAY_URL%/}"
+if subc_model_supports_vision "$MODEL"; then
+  PROXY_INFO="$(mktemp -t subc-codex-proxy.XXXXXX)"
+  node "${SCRIPT_DIR}/image-proxy.js" --upstream "${GATEWAY_URL%/}" --parent-pid "$$" \
+    >"$PROXY_INFO" 2>/dev/null &
+  for _ in $(seq 1 50); do
+    [[ -s "$PROXY_INFO" ]] && break
+    sleep 0.1
+  done
+  PROXY_URL="$(sed -n 's/.*"url":"\([^"]*\)".*/\1/p' "$PROXY_INFO")"
+  rm -f "$PROXY_INFO"
+  if [[ -n "$PROXY_URL" ]]; then
+    PROVIDER_BASE_URL="$PROXY_URL"
+  else
+    echo "warning: image proxy did not start; Codex will talk to the gateway directly" >&2
+  fi
+fi
+
 # Ephemeral config via -c flags — nothing is written to ~/.codex/config.toml.
 exec codex \
   -c model="${MODEL}" \
@@ -313,7 +335,7 @@ exec codex \
   ${EXTERNAL_TOOL_ARGS[@]+"${EXTERNAL_TOOL_ARGS[@]}"} \
   ${SUBAGENT_ARGS[@]+"${SUBAGENT_ARGS[@]}"} \
   -c model_providers.subconscious.name=Subconscious \
-  -c model_providers.subconscious.base_url="${GATEWAY_URL}/v1" \
+  -c model_providers.subconscious.base_url="${PROVIDER_BASE_URL}/v1" \
   -c model_providers.subconscious.wire_api=responses \
   -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY \
   -c model_providers.subconscious.stream_idle_timeout_ms="${CODEX_STREAM_IDLE_TIMEOUT_MS}" \
