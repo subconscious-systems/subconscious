@@ -24,7 +24,7 @@ jobs:
       # govulncheck v1.8.0 needs Go 1.26 to build. The scans below put the
       # tree's own Go on PATH, because JSON mode reports standard-library
       # findings for `go env GOVERSION`, not for the scanner's compile version.
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "1.26.8"
       - name: Install govulncheck
@@ -45,7 +45,7 @@ jobs:
       - name: Record main SHA
         id: scanned-main
         run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: ${{ steps.published.outputs.dir }}/go.mod
           cache-dependency-path: ${{ steps.published.outputs.dir }}/go.sum
@@ -59,7 +59,7 @@ jobs:
           if [ "$code" -ne 0 ] && [ "$code" -ne 3 ]; then
             exit "$code"
           fi
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: tui/go.mod
           cache-dependency-path: tui/go.sum
