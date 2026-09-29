@@ -19,17 +19,17 @@
 // window never removes more than one screenshot per turn. A big screenshot can
 // take the total over SOFT_IMAGE_BYTES for a few turns while the window
 // catches up one screenshot at a time. Only if a request would pass
-// HARD_IMAGE_BYTES (kept under Baseten's 64 MiB request limit) does it drop
+// HARD_IMAGE_BYTES does it drop
 // straight back to the soft limit, which costs that turn's cache hit instead
 // of failing the request.
 
-export const MAX_IMAGES = 100;
+export const MAX_IMAGES = 30;
 export const IMAGE_LABEL = 'image';
 const MIB = 1024 * 1024;
 /** Where trimming starts; room below the hard limit to catch up. */
-export const DEFAULT_SOFT_IMAGE_MIB = 50;
-/** Never forwarded above this: under Baseten's 64 MiB, with room for text. */
-export const DEFAULT_HARD_IMAGE_MIB = 62;
+export const DEFAULT_SOFT_IMAGE_MIB = 25;
+/** Never forwarded above this. */
+export const DEFAULT_HARD_IMAGE_MIB = 30;
 export const SOFT_IMAGE_BYTES =
   positiveNumber(
     process.env.SUBCONSCIOUS_IMAGE_WINDOW_SOFT_MIB,

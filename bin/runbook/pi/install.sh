@@ -161,7 +161,7 @@ PI_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
 MODELS_JSON="${PI_DIR}/models.json"
 EXTENSIONS_DIR="${PI_DIR}/extensions"
 EXTENSION_DST="${EXTENSIONS_DIR}/subconscious-compaction.ts"
-# Keeps requests at the newest 100 images so a long session's upload stops growing.
+# Keeps requests at the newest 30 images so a long session's upload stops growing.
 IMAGE_WINDOW_DST="${EXTENSIONS_DIR}/subconscious-image-window"
 ENV_FILE="${PI_DIR}/subconscious.env"
 MARKER='x-subconscious-client'

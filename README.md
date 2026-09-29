@@ -163,14 +163,14 @@ The packaged integrations live in `bin/runbook`.
 
 ## Long screenshot sessions
 
-Coding agents resend every screenshot on every turn, so a long computer-use or screenshot session grows until the gateway refuses it. For vision models, subc applies one rule in Pi and OpenCode before a request leaves the machine: keep the newest screenshots, up to 100 and about 50 MiB in total, and put the text `image` where older ones were. It never removes more than one screenshot per turn, because Subconscious Cache reuses around one removed screenshot, not several; a big screenshot can take the total past 50 MiB for a few turns while it catches up, and only past 62 MiB (under Baseten's 64 MiB limit) does it drop straight back to 50. The gateway applies the same rule, so it receives exactly what its own window would produce, and Subconscious Cache still reuses the rest of the conversation: each turn only reads the new screenshot.
+Coding agents resend every screenshot on every turn, so a long computer-use or screenshot session grows until the gateway refuses it. For vision models, subc applies one rule in Pi and OpenCode before a request leaves the machine: keep the newest screenshots, up to 30 and about 25 MiB in total, and put the text `image` where older ones were. It never removes more than one screenshot per turn, because Subconscious Cache reuses around one removed screenshot, not several; a big screenshot can take the total past 25 MiB for a few turns while it catches up, and only past 30 MiB does it drop straight back to 25. The gateway applies the same rule, so it receives exactly what its own window would produce, and Subconscious Cache still reuses the rest of the conversation: each turn only reads the new screenshot.
 
 | Agent | How subc applies it |
 | --- | --- |
 | OpenCode | A plugin loaded from the launch config (`bin/runbook/opencode/subconscious-image-window.ts`) that gives the provider a trimming `fetch`. |
 | Pi | An extension installed with the provider (`bin/runbook/image-window/index.ts`, on `before_provider_request`). |
 
-The rule is in `bin/runbook/image-window/window.js`. `SUBCONSCIOUS_IMAGE_WINDOW_SOFT_MIB` and `SUBCONSCIOUS_IMAGE_WINDOW_HARD_MIB` change the two limits (defaults 50 and 62). Text-only models are left alone, and a request the integrations do not recognize is sent unchanged.
+The rule is in `bin/runbook/image-window/window.js`. `SUBCONSCIOUS_IMAGE_WINDOW_SOFT_MIB` and `SUBCONSCIOUS_IMAGE_WINDOW_HARD_MIB` change the two limits (defaults 25 and 30). Text-only models are left alone, and a request the integrations do not recognize is sent unchanged.
 
 ## Sessions and cross-harness handoff
 

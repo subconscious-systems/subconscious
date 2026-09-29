@@ -5,7 +5,7 @@
 # readable.
 SUBC_OPENCODE_PROVIDER_ID="subconscious"
 SUBC_OPENCODE_PROVIDER_NAME="Subconscious Gateway"
-# Trims each request to the newest 100 images before upload; loaded by path.
+# Trims each request to the newest 30 images before upload; loaded by path.
 SUBC_OPENCODE_IMAGE_WINDOW_PLUGIN="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/subconscious-image-window.ts"
 
 subc_opencode_model_display_name() {

@@ -68,7 +68,7 @@ export function buildOpenCodeConfig({
   return {
     $schema: 'https://opencode.ai/config.json',
     disabled_providers: ['subconscious-cli'],
-    // Trims each request to the newest 100 images before upload.
+    // Trims each request to the newest 30 images before upload.
     plugin: [OPENCODE_IMAGE_WINDOW_PLUGIN],
     provider: {
       [OPENCODE_PROVIDER_ID]: {

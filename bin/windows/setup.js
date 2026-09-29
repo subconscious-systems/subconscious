@@ -262,7 +262,7 @@ export async function windowsSetup(
       'extensions',
       'subconscious-compaction.ts',
     );
-    // Keeps requests at the newest 100 images; same files as the shell runbook.
+    // Keeps requests at the newest 30 images; same files as the shell runbook.
     const imageWindow = path.join(
       dir,
       'extensions',

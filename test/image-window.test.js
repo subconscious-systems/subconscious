@@ -133,10 +133,10 @@ test('reaching the hard limit drops straight back to the soft limit', () => {
 });
 
 test('the count limit still removes exactly one per new screenshot', () => {
-  const sizes = Array.from({ length: 150 }, () => 1);
+  const sizes = Array.from({ length: MAX_IMAGES + 50 }, () => 1);
   assert.equal(imagesToDrop(sizes, MAX_IMAGES, 1e9, 1e9), 50);
   assert.deepEqual(
-    new Set(removalsPerTurn(sizes, 1e9, 1e9).slice(100)),
+    new Set(removalsPerTurn(sizes, 1e9, 1e9).slice(MAX_IMAGES)),
     new Set([1]),
   );
 });

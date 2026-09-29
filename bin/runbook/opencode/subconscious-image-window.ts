@@ -1,5 +1,5 @@
 /**
- * Keep OpenCode's requests to Subconscious at the newest 100 images.
+ * Keep OpenCode's requests to Subconscious at the newest 30 images.
  *
  * OpenCode resends every screenshot on every turn, so a long session's upload
  * grows until the gateway refuses it. This gives the `subconscious` provider a
