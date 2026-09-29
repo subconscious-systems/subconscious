@@ -616,11 +616,21 @@ export async function clearProfileApiKey(name = DEFAULT_PROFILE) {
   return true;
 }
 
-function isSecretKey(key) {
+// PI_MAX_TOKENS=65536 is a budget, not a credential. Anything else under a
+// *_TOKENS name, such as a key pasted onto the wrong line, stays redacted.
+function isTokenBudget(key, value) {
+  return (
+    /_TOKENS$|_TOKEN_LIMIT$/i.test(key) &&
+    /^\d+$/.test(value) &&
+    Number.isSafeInteger(Number(value))
+  );
+}
+
+function isSecretKey(key, value) {
   const upper = key.toUpperCase();
   return (
     upper.endsWith('API_KEY') ||
-    upper.includes('TOKEN') ||
+    (upper.includes('TOKEN') && !isTokenBudget(key, value)) ||
     upper.includes('SECRET') ||
     upper.includes('PASSWORD') ||
     upper.includes('AUTH')
@@ -628,7 +638,7 @@ function isSecretKey(key) {
 }
 
 function redact(key, value) {
-  if (!isSecretKey(key) || !value) return value;
+  if (!value || !isSecretKey(key, value)) return value;
   return value.length <= 8
     ? '********'
     : `${value.slice(0, 4)}…${value.slice(-4)}`;
@@ -641,7 +651,7 @@ function redactEnvLine(line) {
   if (!match) return line;
   const [, prefix, key, raw] = match;
   const value = decodeValue(raw);
-  if (!isSecretKey(key) || !value) return line;
+  if (!value || !isSecretKey(key, value)) return line;
   return `${prefix}${key}=${redact(key, value)}`;
 }
 

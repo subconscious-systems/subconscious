@@ -310,6 +310,65 @@ test('extra profile keys survive known-field updates and appear in config show',
   assert.doesNotMatch(shown.stdout, /secret-key-value/);
 });
 
+test('config show prints token budgets but still redacts secrets', async () => {
+  const created = await profiles.ensureProfile('budgets', 'budget-api-key');
+  const text = `${await fs.readFile(created.path, 'utf-8')}GITHUB_TOKEN=ghp-extra-token-value\nMAX_THINKING_TOKENS=16000\nMAX_OUTPUT_TOKENS=sk-pasted-into-a-budget\nOAUTH_REFRESH_TOKENS=8374650192837465\nMAX_INPUT_TOKENS=12345678901234567890123456789\n`;
+  await fs.writeFile(created.path, text, { encoding: 'utf-8', mode: 0o600 });
+  const { values } = await profiles.loadProfile('budgets');
+
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../bin/cli.js', import.meta.url);
+  const shown = spawnSync(
+    process.execPath,
+    [cli.pathname, '-p', 'budgets', 'config'],
+    {
+      encoding: 'utf-8',
+      env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
+    },
+  );
+  assert.equal(shown.status, 0);
+  for (const key of [
+    'CLAUDE_CODE_MAX_CONTEXT_TOKENS',
+    'CODEX_AUTO_COMPACT_TOKEN_LIMIT',
+    'COPILOT_MAX_INPUT_TOKENS',
+    'COPILOT_MAX_OUTPUT_TOKENS',
+    'DEEPSEEK_HARNESS_MAX_TOKENS',
+    'PI_MAX_TOKENS',
+  ]) {
+    assert.ok(values[key], `${key} should have a default`);
+    assert.match(shown.stdout, new RegExp(`${key}=${values[key]}\\b`));
+  }
+  assert.match(shown.stdout, /MAX_THINKING_TOKENS=16000\b/);
+  assert.doesNotMatch(shown.stdout, /budget-api-key/);
+  assert.doesNotMatch(shown.stdout, /ghp-extra-token-value/);
+  assert.doesNotMatch(shown.stdout, /sk-pasted-into-a-budget/);
+  assert.doesNotMatch(shown.stdout, /8374650192837465/);
+  assert.doesNotMatch(shown.stdout, /12345678901234567890123456789/);
+});
+
+test('config show redacts a secret pasted into a token budget setting', async () => {
+  const created = await profiles.ensureProfile('pasted', 'pasted-api-key');
+  const text = (await fs.readFile(created.path, 'utf-8')).replace(
+    /^PI_MAX_TOKENS=.*$/m,
+    'PI_MAX_TOKENS=sk-live-pasted-key-value',
+  );
+  await fs.writeFile(created.path, text, { encoding: 'utf-8', mode: 0o600 });
+
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../bin/cli.js', import.meta.url);
+  const shown = spawnSync(
+    process.execPath,
+    [cli.pathname, '-p', 'pasted', 'config'],
+    {
+      encoding: 'utf-8',
+      env: { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' },
+    },
+  );
+  assert.equal(shown.status, 0);
+  assert.match(shown.stdout, /PI_MAX_TOKENS=/);
+  assert.doesNotMatch(shown.stdout, /sk-live-pasted-key-value/);
+});
+
 test('config edit requires a terminal and rejects unknown editors', async () => {
   await profiles.ensureProfile('editme', 'edit-secret');
   const { spawnSync } = await import('node:child_process');
