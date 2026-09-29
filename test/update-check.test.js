@@ -22,6 +22,13 @@ test('compareVersions follows semantic version precedence', () => {
   assert.equal(compareVersions('4.0.0', '4.0.0-beta.2'), 1);
 });
 
+test('compareVersions orders prerelease identifiers by ASCII', () => {
+  assert.equal(compareVersions('1.0.0-Beta', '1.0.0-alpha'), -1);
+  assert.equal(compareVersions('1.0.0-alpha', '1.0.0-Beta'), 1);
+  assert.equal(compareVersions('1.0.0-RC.1', '1.0.0-rc.1'), -1);
+  assert.equal(compareVersions('1.0.0-beta', '1.0.0-beta'), 0);
+});
+
 test('fetchLatestVersion checks the npm latest endpoint without caching', async () => {
   let request;
   const version = await fetchLatestVersion({

@@ -102,7 +102,7 @@ function comparePrerelease(a, b) {
       return Math.sign(aNumber - bNumber);
     if (aNumber !== null) return -1;
     if (bNumber !== null) return 1;
-    return a[index].localeCompare(b[index]);
+    return a[index] < b[index] ? -1 : 1;
   }
   return 0;
 }
