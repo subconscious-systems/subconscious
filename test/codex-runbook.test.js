@@ -232,6 +232,16 @@ test('Codex launch allows a silent think longer than five minutes', async () => 
   assert.ok(ms > 300000, `expected more than 300000ms, got ${ms}`);
 });
 
+test('Codex talks to Subconscious over a WebSocket', async () => {
+  // Over HTTP Codex resends its whole history, screenshots included, every
+  // turn; over the WebSocket it sends only what is new.
+  const args = await captureArgs();
+  assert.ok(
+    args.includes('model_providers.subconscious.supports_websockets=true'),
+    args.join(' '),
+  );
+});
+
 test('CODEX_STREAM_IDLE_TIMEOUT_MS overrides the stream idle timeout', async () => {
   const args = await captureArgs({ CODEX_STREAM_IDLE_TIMEOUT_MS: '1800000' });
   assert.ok(

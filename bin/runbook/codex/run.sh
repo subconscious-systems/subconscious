@@ -315,6 +315,7 @@ exec codex \
   -c model_providers.subconscious.name=Subconscious \
   -c model_providers.subconscious.base_url="${GATEWAY_URL}/v1" \
   -c model_providers.subconscious.wire_api=responses \
+  -c model_providers.subconscious.supports_websockets=true \
   -c model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY \
   -c model_providers.subconscious.stream_idle_timeout_ms="${CODEX_STREAM_IDLE_TIMEOUT_MS}" \
   ${PASSTHRU[@]+"${PASSTHRU[@]}"}

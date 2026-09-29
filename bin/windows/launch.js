@@ -174,6 +174,9 @@ export async function windowsLaunch(
         'model_providers.subconscious.name': 'Subconscious',
         'model_providers.subconscious.base_url': `${base}/v1`,
         'model_providers.subconscious.wire_api': 'responses',
+        // Over a WebSocket Codex sends only what is new each turn, not its
+        // whole history, so a long screenshot session's upload stays small.
+        'model_providers.subconscious.supports_websockets': true,
         'model_providers.subconscious.env_key': 'SUBCONSCIOUS_API_KEY',
         'model_providers.subconscious.stream_idle_timeout_ms': 300000,
       };
