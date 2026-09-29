@@ -86,6 +86,10 @@ function parseVersion(version) {
   };
 }
 
+export function isVersion(version) {
+  return parseVersion(version) !== null;
+}
+
 function comparePrerelease(a, b) {
   if (!a.length && !b.length) return 0;
   if (!a.length) return 1;

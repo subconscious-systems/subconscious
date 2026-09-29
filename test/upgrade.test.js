@@ -3,7 +3,6 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import { test } from 'node:test';
 import {
-  compareVersions,
   detectInstallCommand,
   installLatest,
   PACKAGE_NAME,
@@ -74,12 +73,6 @@ test('detectInstallCommand picks the package manager from the install path', () 
     ),
     `npm install -g --prefix /usr/local ${PACKAGE_NAME}@latest`,
   );
-});
-
-test('compareVersions orders semver-ish strings', () => {
-  assert.equal(compareVersions('4.0.0', '0.3.1'), 1);
-  assert.equal(compareVersions('0.3.1', '4.0.0'), -1);
-  assert.equal(compareVersions('4.0.0', '4.0.0'), 0);
 });
 
 test('printLoginUpgradeWarning tells the user to run subc upgrade --latest', () => {
@@ -169,6 +162,108 @@ test('installLatest skips npm when this version is already newest', async () => 
     assert.match(logs.join('\n'), /Already up to date/);
   } finally {
     console.log = orig;
+  }
+});
+
+test('installLatest upgrades a prerelease install to its release', async () => {
+  let installed = false;
+  const logs = [];
+  const orig = console.log;
+  console.log = (msg = '') => logs.push(String(msg));
+  try {
+    const ok = await installLatest({
+      currentVersion: '4.1.0-windows.0',
+      fetchLatest: async () => '4.1.0',
+      command: 'npm install -g subconscious-cli@latest',
+      install: async () => {
+        installed = true;
+        return true;
+      },
+      readVersion: async () => '4.1.0',
+    });
+    assert.equal(ok, true);
+    assert.equal(installed, true);
+    assert.doesNotMatch(logs.join('\n'), /Already up to date/);
+  } finally {
+    console.log = orig;
+  }
+});
+
+test('installLatest installs anyway when npm returns a non-semver version', async () => {
+  let installed = false;
+  const errors = [];
+  const logs = [];
+  const origError = console.error;
+  const origLog = console.log;
+  console.error = (msg = '') => errors.push(String(msg));
+  console.log = (msg = '') => logs.push(String(msg));
+  try {
+    const ok = await installLatest({
+      currentVersion: '6.0.1',
+      fetchLatest: async () => '6.1',
+      command: 'npm install -g subconscious-cli@latest',
+      install: async () => {
+        installed = true;
+        return true;
+      },
+      readVersion: async () => {
+        throw new Error('should not compare against an invalid version');
+      },
+    });
+    assert.equal(ok, true);
+    assert.equal(installed, true);
+    assert.doesNotMatch(logs.join('\n'), /Already up to date/);
+    assert.match(errors.join('\n'), /npm returned an invalid version \(6\.1\)/);
+    assert.match(errors.join('\n'), /Installing @latest anyway/);
+  } finally {
+    console.error = origError;
+    console.log = origLog;
+  }
+});
+
+test('installLatest installs when the current version is not semver', async () => {
+  let installed = false;
+  const logs = [];
+  const orig = console.log;
+  console.log = (msg = '') => logs.push(String(msg));
+  try {
+    const ok = await installLatest({
+      currentVersion: '6.0',
+      fetchLatest: async () => '6.0.1',
+      command: 'npm install -g subconscious-cli@latest',
+      install: async () => {
+        installed = true;
+        return true;
+      },
+      readVersion: async () => '6.0.1',
+    });
+    assert.equal(ok, true);
+    assert.equal(installed, true);
+    assert.doesNotMatch(logs.join('\n'), /Already up to date/);
+  } finally {
+    console.log = orig;
+  }
+});
+
+test('installLatest fails when the installed version is not semver', async () => {
+  const errors = [];
+  const origError = console.error;
+  const origLog = console.log;
+  console.error = (msg = '') => errors.push(String(msg));
+  console.log = () => {};
+  try {
+    const ok = await installLatest({
+      currentVersion: '6.0.0',
+      fetchLatest: async () => '6.0.1',
+      command: 'npm install -g subconscious-cli@latest',
+      install: async () => true,
+      readVersion: async () => '6.0',
+    });
+    assert.equal(ok, false);
+    assert.match(errors.join('\n'), /Could not verify the updated CLI/);
+  } finally {
+    console.error = origError;
+    console.log = origLog;
   }
 });
 

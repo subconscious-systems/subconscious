@@ -20,6 +20,9 @@ test('compareVersions follows semantic version precedence', () => {
   assert.equal(compareVersions('4.0.0', '4.0.0'), 0);
   assert.equal(compareVersions('4.0.0-beta.2', '4.0.0-beta.1'), 1);
   assert.equal(compareVersions('4.0.0', '4.0.0-beta.2'), 1);
+  assert.equal(compareVersions('4.1.0-windows.0', '4.1.0'), -1);
+  assert.equal(compareVersions('4.1.0-windows.0', '4.0.18'), 1);
+  assert.equal(compareVersions('v6.0.1', '6.0.0'), 1);
 });
 
 test('fetchLatestVersion checks the npm latest endpoint without caching', async () => {

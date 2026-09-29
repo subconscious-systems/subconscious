@@ -10,7 +10,11 @@ import fs from 'node:fs/promises';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
-import { detectInstallTarget } from './update-check.js';
+import {
+  compareVersions,
+  detectInstallTarget,
+  isVersion,
+} from './update-check.js';
 import { runWindows } from './windows/process.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
@@ -36,23 +40,6 @@ export async function currentCliVersion() {
     await fs.readFile(new URL('../package.json', import.meta.url), 'utf-8'),
   );
   return pkg.version;
-}
-
-export function compareVersions(a, b) {
-  const pa = String(a)
-    .split('.')
-    .map((part) => Number.parseInt(part, 10) || 0);
-  const pb = String(b)
-    .split('.')
-    .map((part) => Number.parseInt(part, 10) || 0);
-  const n = Math.max(pa.length, pb.length);
-  for (let i = 0; i < n; i++) {
-    const da = pa[i] || 0;
-    const db = pb[i] || 0;
-    if (da > db) return 1;
-    if (da < db) return -1;
-  }
-  return 0;
 }
 
 export async function fetchLatestVersion(fetchImpl = fetch) {
@@ -121,13 +108,17 @@ export async function installLatest(options = {}) {
 
   let latest;
   try {
-    latest = await fetchLatest();
+    const version = await fetchLatest();
+    if (!isVersion(version)) {
+      throw new Error(`npm returned an invalid version (${version}).`);
+    }
+    latest = version;
   } catch (error) {
     console.error(`  ${c.yellow}${error.message}${c.reset}`);
     console.error(`  ${c.dim}Installing @latest anyway.${c.reset}\n`);
   }
 
-  if (latest && compareVersions(current, latest) >= 0) {
+  if (latest && isVersion(current) && compareVersions(current, latest) >= 0) {
     console.log(
       `\n  ${c.green}Already up to date${c.reset} ${c.dim}(${current}).${c.reset}\n`,
     );
@@ -153,20 +144,22 @@ export async function installLatest(options = {}) {
   }
 
   if (latest) {
+    const readVersion = options.readVersion || currentCliVersion;
+    let installedVersion;
     try {
-      const readVersion = options.readVersion || currentCliVersion;
-      const installedVersion = await readVersion();
-      if (compareVersions(installedVersion, latest) < 0) {
-        console.error(
-          `\n  ${c.red}Upgrade command completed, but this installation is still ${installedVersion}.${c.reset}`,
-        );
-        console.error(`  Run the exact detected command manually:\n`);
-        console.error(`    ${c.cyan}${command}${c.reset}\n`);
-        return false;
-      }
-    } catch {
+      installedVersion = await readVersion();
+    } catch {}
+    if (!isVersion(installedVersion)) {
       console.error(
         `\n  ${c.red}Could not verify the updated CLI installation.${c.reset}`,
+      );
+      console.error(`  Run the exact detected command manually:\n`);
+      console.error(`    ${c.cyan}${command}${c.reset}\n`);
+      return false;
+    }
+    if (compareVersions(installedVersion, latest) < 0) {
+      console.error(
+        `\n  ${c.red}Upgrade command completed, but this installation is still ${installedVersion}.${c.reset}`,
       );
       console.error(`  Run the exact detected command manually:\n`);
       console.error(`    ${c.cyan}${command}${c.reset}\n`);
