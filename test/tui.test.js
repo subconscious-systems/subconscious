@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { after, test } from 'node:test';
 
 const testConfigDir = await fs.mkdtemp(
   path.join(os.tmpdir(), 'subc-tui-test-'),
@@ -11,7 +11,8 @@ process.env.SUBC_CONFIG_DIR = testConfigDir;
 process.env.NO_COLOR = '1';
 process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
 
-// profiles.js reads SUBC_CONFIG_DIR on import, so import after setting it.
+// profiles.js reads SUBC_CONFIG_DIR and colors.js reads NO_COLOR when they
+// load, and tui.js pulls in both, so import them after setting the env.
 const profiles = await import('../bin/profiles.js');
 const {
   createLocalTuiState,
@@ -25,16 +26,19 @@ const {
   writeAtomicJson,
 } = await import('../bin/tui.js');
 
+// Fail the whole file before any test can write outside the temp dir.
+assert.equal(profiles.PROFILES_DIR, path.join(testConfigDir, 'profiles'));
+
+after(async () => {
+  await fs.rm(testConfigDir, { recursive: true, force: true });
+});
+
 async function writeFakeTui(script) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-fake-tui-'));
   const file = path.join(dir, 'fake-tui.mjs');
   await fs.writeFile(file, script);
   return file;
 }
-
-test('profile writes stay in the test config dir', () => {
-  assert.ok(profiles.PROFILES_DIR.startsWith(testConfigDir));
-});
 
 test('nativeTargetName maps npm platforms and architectures to Go binaries', () => {
   assert.equal(nativeTargetName('darwin', 'arm64'), 'subc-tui-darwin-arm64');
