@@ -89,11 +89,11 @@
       "homepage": "https://docs.anthropic.com/en/docs/claude-code",
       "bin": "claude",
       "install": {
-        "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
-        "linux": "curl -fsSL https://claude.ai/install.sh | bash",
-        "win32": "powershell -ExecutionPolicy Bypass -Command \"irm https://claude.ai/install.ps1 | iex\"",
-        "fallback": "npm i -g @anthropic-ai/claude-code"
+        "darwin": "npm i -g @anthropic-ai/claude-code",
+        "linux": "npm i -g @anthropic-ai/claude-code",
+        "win32": "npm i -g @anthropic-ai/claude-code"
       },
+      "installUrl": "https://docs.anthropic.com/en/docs/claude-code/setup",
       "runbook": {
         "mode": "launch",
         "script": "claude-code/run.sh",
@@ -157,6 +157,7 @@
         "linux": "npm i -g @openai/codex",
         "win32": "npm i -g @openai/codex"
       },
+      "installUrl": "https://developers.openai.com/codex/",
       "runbook": {
         "mode": "launch",
         "script": "codex/run.sh",
@@ -199,6 +200,7 @@
         "linux": "npm i -g opencode-ai",
         "win32": "npm i -g opencode-ai"
       },
+      "installUrl": "https://opencode.ai/docs/installation",
       "runbook": {
         "mode": "launch",
         "script": "opencode/run.sh",
@@ -397,6 +399,7 @@
         "linux": "npm i -g @deepseek-ai/dsh",
         "win32": "npm i -g @deepseek-ai/dsh"
       },
+      "installUrl": "https://www.deepseek.com/harness/en/",
       "runbook": {
         "mode": "launch",
         "script": "deepseek-harness/run.sh"

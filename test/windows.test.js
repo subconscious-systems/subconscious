@@ -944,11 +944,13 @@ test('hook gateway timeouts are bounded and permissive', async (t) => {
   assert.ok(Date.now() - started < 5000);
 });
 
-test('Windows installers never select Unix commands and check upstream asset support', () => {
+test('Windows install specs are npm-display only for third-party harnesses', () => {
   for (const id of ['claude-code', 'codex', 'opencode', 'deepseek-harness']) {
     const spec = windowsInstallSpec(id, {});
+    assert.equal(spec.command, 'npm');
     assert.doesNotMatch(spec.command, /bash|curl/);
-    if (id === 'claude-code') assert.equal(spec.fallback.command, 'npm');
+    assert.doesNotMatch(spec.display, /\|\s*(bash|iex)/);
+    assert.ok(spec.installUrl, `${id} should carry an official install URL`);
   }
   assert.equal(windowsInstallSpec('pi'), null);
   assert.throws(

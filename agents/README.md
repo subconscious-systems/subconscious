@@ -38,21 +38,23 @@ Values may contain placeholder tokens that the CLI substitutes at runtime:
 
 `{env:...}` is OpenCode's own templating and is preserved verbatim. It is never substituted by us.
 
-## Per-OS install commands
+## Install commands and URLs
 
-Each auto-installed terminal agent's `install` is an object keyed by Node's `process.platform` values, with an optional `fallback`:
+`subc` never installs third-party harnesses. When a harness binary is missing, the CLI prints the vendor's `install` command (display-only, never executed) plus the vendor's official install page from `installUrl`. Only first-party binaries (Subconscious Code / Marathon) may be installed by `subc` itself.
+
+Each terminal agent's `install` is an object keyed by Node's `process.platform` values. These strings are **display-only** and must be actionable npm (or pip) commands — never pipe-to-shell (`curl ... | bash`, `irm ... | iex`), which we do not ship for third-party software:
 
 ```json
 "install": {
-  "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
-  "linux":  "curl -fsSL https://claude.ai/install.sh | bash",
-  "win32":  "powershell -ExecutionPolicy Bypass -Command \"irm https://claude.ai/install.ps1 | iex\"",
-  "fallback": "npm i -g @anthropic-ai/claude-code"
-}
+  "darwin": "npm i -g @anthropic-ai/claude-code",
+  "linux":  "npm i -g @anthropic-ai/claude-code",
+  "win32":  "npm i -g @anthropic-ai/claude-code"
+},
+"installUrl": "https://docs.anthropic.com/en/docs/claude-code/setup"
 ```
 
 - The CLI resolves `install[process.platform]` at runtime, falling back to `install.linux` if the exact platform key is missing.
-- `fallback` (optional) is tried once if the primary install command fails. Only Claude Code defines one (the native installer with npm as a backup); the other agents omit it.
+- `installUrl` (required for third-party agents with a binary) links to the vendor's official install/download page and is printed as "Other install options".
 - For agents whose command is identical across OSes (OpenCode, Codex) all three keys are written out explicitly for clarity.
 
 An env value of shape `{ "$json": { ... } }` means: substitute inside the object, then `JSON.stringify` it to a single string.
