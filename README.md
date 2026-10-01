@@ -4,12 +4,31 @@ Log in to Subconscious, then run coding agents against the Subconscious gateway.
 
 ## Quick start
 
+Install with npm:
+
 ```bash
 npm install -g subconscious-cli
+```
+
+or with curl, no npm required:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/subconscious-systems/subconscious/main/scripts/install.sh | bash
+```
+
+Then:
+
+```bash
 subc login
 subc marathon
 subc claude
 ```
+
+The curl installer downloads the `subconscious-cli` package straight from the
+npm registry into `~/.local`, so npm registry/proxy policies (for example
+corporate "access denied" on `npm install -g`) never block it. Node.js >= 18 is
+still required to run the CLI. `SUBC_VERSION`, `SUBC_INSTALL_DIR`, and
+`SUBC_BIN_DIR` override the defaults.
 
 Every interactive `subc` command checks npm for a newer CLI release. When an
 update is available, a notice shows the installed and latest versions and lets
@@ -105,8 +124,10 @@ Update with `npm.cmd install -g subconscious-cli@latest` or `subc.cmd upgrade --
 
 If PowerShell's execution policy blocks npm-generated `.ps1` entry points, use
 `npm.cmd` and `subc.cmd` or run the same commands in Command Prompt. No policy
-change is required. Pi must already be installed; other terminal agents offer
-their Windows installer when missing in an interactive terminal.
+change is required. Pi must already be installed; for other third-party
+terminal agents subc prints the vendor's install command and official install
+page instead of installing them. Only `subc marathon install` installs an
+agent binary directly (our own native Marathon release).
 
 Native executables and standard npm `.cmd` shims are supported. The launcher
 invokes the underlying executable or Node entry point directly, preserving
@@ -201,8 +222,11 @@ conversation stores do not expose a stable local resume interface. A session
 whose local transcript is missing remains available for native resume but does
 not offer cross-harness destinations.
 
-If Subconscious Code, Claude Code, Codex, OpenCode, or DeepSeek Harness is missing, an interactive terminal offers
-to install it before launching. Pi refreshes its Subconscious provider on every
+If a third-party harness (Claude Code, Codex, OpenCode, DeepSeek Harness) is
+missing, subc never installs it: it prints the vendor's npm command and a link
+to the official install page, and exits 127. Only Subconscious Code, our own
+agent, offers an interactive `subc marathon install`. Pi refreshes its
+Subconscious provider on every
 `subc pi` launch while preserving all other providers in `models.json`; its
 executable must already be installed.
 
