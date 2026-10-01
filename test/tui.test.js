@@ -2,10 +2,19 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import { after, test } from 'node:test';
 
-import * as profiles from '../bin/profiles.js';
-import {
+const testConfigDir = await fs.mkdtemp(
+  path.join(os.tmpdir(), 'subc-tui-test-'),
+);
+process.env.SUBC_CONFIG_DIR = testConfigDir;
+process.env.NO_COLOR = '1';
+process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
+
+// profiles.js reads SUBC_CONFIG_DIR and colors.js reads NO_COLOR when they
+// load, and tui.js pulls in both, so import them after setting the env.
+const profiles = await import('../bin/profiles.js');
+const {
   createLocalTuiState,
   createTuiState,
   isTuiResult,
@@ -15,14 +24,14 @@ import {
   runTui,
   tuiSourceIsNewerThan,
   writeAtomicJson,
-} from '../bin/tui.js';
+} = await import('../bin/tui.js');
 
-const testConfigDir = await fs.mkdtemp(
-  path.join(os.tmpdir(), 'subc-tui-test-'),
-);
-process.env.SUBC_CONFIG_DIR = testConfigDir;
-process.env.NO_COLOR = '1';
-process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
+// Fail the whole file before any test can write outside the temp dir.
+assert.equal(profiles.PROFILES_DIR, path.join(testConfigDir, 'profiles'));
+
+after(async () => {
+  await fs.rm(testConfigDir, { recursive: true, force: true });
+});
 
 async function writeFakeTui(script) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-fake-tui-'));
