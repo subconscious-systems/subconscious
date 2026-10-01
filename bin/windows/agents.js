@@ -114,27 +114,33 @@ export async function runWindowsAgent(agent, argv, dependencies) {
     });
     if (!executable) {
       const installer = windowsInstallSpec(agent.id, environment);
-      if (
-        !installer ||
-        !process.stdin.isTTY ||
-        !process.stdout.isTTY ||
-        !(await askInstall(agent.name))
-      ) {
+      // Only our own agents (Marathon) may be installed by subc; third-party
+      // harnesses are never installed — inform, don't install.
+      const ownBinary = agent.id === 'subconscious-code';
+      if (ownBinary && process.stdin.isTTY && process.stdout.isTTY) {
+        if (!(await askInstall(agent.name))) {
+          console.error('  Install it yourself, then rerun subc.');
+          return finish(127);
+        }
+        const installed = await installWindowsAgent(agent.id, environment);
+        if (installed) return finish(installed);
+        executable = resolveWindowsExecutable(agent.bin, {
+          env: environment,
+          preferredDirs,
+        });
+        if (!executable) {
+          console.error(
+            `Installed ${agent.name}, but ${agent.bin} was not found. Add its installation directory to PATH or restart your terminal.`,
+          );
+          return finish(127);
+        }
+      } else {
+        const installUrl = installer?.installUrl || agent.homepage;
         console.error(
-          `${agent.name} isn't installed. ${installer ? `Install it with: ${installer.display}` : 'Install it separately, then rerun subc.'}`,
+          `${agent.name} isn't installed. subc doesn't install third-party harnesses.`,
         );
-        return finish(127);
-      }
-      const installed = await installWindowsAgent(agent.id, environment);
-      if (installed) return finish(installed);
-      executable = resolveWindowsExecutable(agent.bin, {
-        env: environment,
-        preferredDirs,
-      });
-      if (!executable) {
-        console.error(
-          `Installed ${agent.name}, but ${agent.bin} was not found. Add its installation directory to PATH or restart your terminal.`,
-        );
+        if (installer) console.error(`  Install it with: ${installer.display}`);
+        if (installUrl) console.error(`  Other install options: ${installUrl}`);
         return finish(127);
       }
     }

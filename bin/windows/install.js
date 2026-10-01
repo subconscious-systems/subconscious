@@ -17,26 +17,16 @@ function npmInstall(command) {
   return match ? { command: 'npm', args: ['install', '-g', match[1]] } : null;
 }
 
-export function windowsInstallSpec(id, env = process.env) {
-  const install = registry.agents.find((agent) => agent.id === id)?.install;
+export function windowsInstallSpec(id) {
+  const agent = registry.agents.find((candidate) => candidate.id === id);
+  const install = agent?.install;
   const command = typeof install === 'object' ? install.win32 : undefined;
   if (id === 'subconscious-code')
     return { nativeRelease: true, display: 'subc marathon install' };
   if (!command) return null; // Never fall back to a Linux installer.
-  if (id === 'claude-code') {
-    const primary = powershellCommand(
-      "$ErrorActionPreference = 'Stop'; Invoke-RestMethod 'https://claude.ai/install.ps1' | Invoke-Expression; if (-not $?) { exit 1 }",
-      env,
-    );
-    return {
-      ...primary,
-      display: command,
-      fallback: npmInstall(install.fallback),
-    };
-  }
   const spec = npmInstall(command);
   if (!spec) throw new Error(`No safe Windows installer is defined for ${id}`);
-  return { ...spec, display: command };
+  return { ...spec, display: command, installUrl: agent?.installUrl };
 }
 
 export function windowsReleaseAsset(release, arch = process.arch) {
@@ -173,16 +163,5 @@ export async function installWindowsAgent(id, env, run = runWindows) {
   const spec = windowsInstallSpec(id, env);
   if (!spec) throw new Error('Install this agent separately, then rerun subc.');
   if (spec.nativeRelease) return installWindowsSC(env, { run });
-  let code;
-  try {
-    code = await run(spec.command, spec.args, { env: spec.env || env });
-  } catch (error) {
-    if (!spec.fallback) throw error;
-    code = 1;
-  }
-  if (code && spec.fallback) {
-    console.error('Native installer failed; trying the npm package.');
-    code = await run(spec.fallback.command, spec.fallback.args, { env });
-  }
-  return code;
+  return await run(spec.command, spec.args, { env: spec.env || env });
 }

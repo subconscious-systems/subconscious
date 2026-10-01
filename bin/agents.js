@@ -88,32 +88,27 @@ function substitute(value, ctx) {
  * Resolve the install command for the current OS from a per-OS install object.
  * Falls back to the linux command, then any string value present, if the exact
  * `process.platform` key is missing. Tolerates a legacy plain-string `install`.
- * Returns `{ command, fallback }` where `fallback` may be undefined.
  */
 function resolveInstall(install) {
-  if (typeof install === 'string')
-    return { command: install, fallback: undefined };
-  if (!install || typeof install !== 'object')
-    return { command: undefined, fallback: undefined };
-  const command =
+  if (typeof install === 'string') return install;
+  if (!install || typeof install !== 'object') return undefined;
+  return (
     install[process.platform] ||
     install.linux ||
-    Object.values(install).find((v) => typeof v === 'string');
-  return { command, fallback: install.fallback };
+    Object.values(install).find((v) => typeof v === 'string')
+  );
 }
 
 // --- Build the in-memory registry + alias index.
-// Each agent gets a resolved per-OS `install` (string) plus optional
-// `installFallback`, while keeping the original per-OS object available.
+// Each agent gets a resolved per-OS `install` (string) while keeping the
+// original per-OS object available.
 const AGENTS = registry.agents
   .filter((agent) => agent.cli !== false)
   .map((agent) => {
-    const { command, fallback } = resolveInstall(agent.install);
     return {
       ...agent,
       bin: agent.binByPlatform?.[process.platform] || agent.bin,
-      install: command,
-      installFallback: fallback,
+      install: resolveInstall(agent.install),
     };
   });
 const BY_ALIAS = new Map();
@@ -627,22 +622,27 @@ function runInstaller(
   });
 }
 
-/** Print the resolved install command (plus any fallback) for an agent. */
+/** Print the resolved install command (plus any vendor install page) for an agent. */
 function printInstallCommands(agent) {
-  console.error(`    ${c.cyan}${agent.install}${c.reset}`);
-  if (agent.installFallback) {
-    console.error(`  ${c.dim}or, as a fallback:${c.reset}`);
-    console.error(`    ${c.cyan}${agent.installFallback}${c.reset}`);
+  if (agent.install) {
+    console.error(`    ${c.cyan}${agent.install}${c.reset}`);
+  }
+  const installUrl = agent.installUrl || agent.homepage;
+  if (installUrl) {
+    console.error(
+      `  ${c.dim}Other install options: ${c.reset}${c.cyan}${installUrl}${c.reset}`,
+    );
   }
   console.error('');
 }
 
 /**
  * Ensure the agent's binary is resolvable. If missing:
- *   - interactive TTY: offer to run the per-OS installer (with fallback), then
- *     re-resolve against PATH + candidate dirs.
- *   - non-interactive: print the resolved install command (+ fallback) and
- *     exit 127 without running anything.
+ *   - our own agents (packaged binary install scripts) keep the interactive
+ *     install offer in interactive shells;
+ *   - third-party harnesses are NEVER installed by subc: we print the
+ *     vendor's npm command and install page and exit 127, in both
+ *     interactive and non-interactive shells.
  *
  * Returns the directory containing the bin (to prepend to the child's PATH) on
  * success. May exit the process on failure or when manual action is needed.
@@ -652,15 +652,31 @@ async function ensureInstalled(agent) {
   const existing = await resolveBinPath(agent.bin, preferredDirs);
   if (existing) return existing;
 
+  // Our own packaging (e.g. Marathon) may include a binary install script;
+  // for those agents the interactive install offer stays.
+  const isOwnBinary = Boolean(agent.runbook?.binaryInstallScript);
+
   // Agents without an installer are launch-only. Their setup integration may
   // configure the provider, but `subc <agent>` must never install the binary.
-  if (!agent.install) {
+  if (!agent.install && !isOwnBinary) {
     console.error(
       `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${agent.bin}\` not found on PATH).${c.reset}`,
     );
     console.error(
       `  Install ${agent.name} separately, then re-run ${c.cyan}subc ${agent.command || agent.id}${c.reset}.\n`,
     );
+    process.exit(127);
+  }
+
+  // Third-party harnesses: inform, never install.
+  if (!isOwnBinary) {
+    console.error(
+      `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${agent.bin}\` not found on PATH).${c.reset}`,
+    );
+    console.error(
+      `  ${c.dim}subc doesn't install third-party harnesses. Install it yourself:${c.reset}\n`,
+    );
+    printInstallCommands(agent);
     process.exit(127);
   }
 
@@ -686,15 +702,7 @@ async function ensureInstalled(agent) {
   console.error(
     `\n  ${c.dim}Running ${c.reset}${c.cyan}${agent.install}${c.reset}\n`,
   );
-  let installed = await runInstaller(agent);
-
-  // Primary failed and a fallback exists — try it once.
-  if (!installed && agent.installFallback) {
-    console.error(
-      `\n  ${c.dim}That didn't work. Trying the fallback: ${c.reset}${c.cyan}${agent.installFallback}${c.reset}\n`,
-    );
-    installed = await runInstaller(agent, agent.installFallback, false);
-  }
+  const installed = await runInstaller(agent);
 
   if (!installed) {
     console.error(`\n  ${c.red}Install failed.${c.reset} Try it manually:\n`);
@@ -772,9 +780,11 @@ async function ensureClaudeCompatible(agent, binDir) {
   );
   console.error(`  Upgrade it with:`);
   console.error(`    ${c.cyan}${agent.install}${c.reset}`);
-  if (agent.installFallback) {
-    console.error(`  or`);
-    console.error(`    ${c.cyan}${agent.installFallback}${c.reset}`);
+  const upgradeUrl = agent.installUrl || agent.homepage;
+  if (upgradeUrl) {
+    console.error(
+      `  ${c.dim}Other options: ${c.reset}${c.cyan}${upgradeUrl}${c.reset}`,
+    );
   }
   console.error('');
   if (process.stdin.isTTY === true && process.stdout.isTTY === true) {
