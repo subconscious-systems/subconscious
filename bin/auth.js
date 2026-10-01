@@ -401,7 +401,7 @@ export async function whoamiCommand(_argv = [], options = {}) {
       }
       console.log(`  ${c.dim}Key:    ${masked}${c.reset}`);
       console.log(`  ${c.dim}Source: ${source}${c.reset}`);
-    } else {
+    } else if (res.status === 401) {
       console.log(`  ${c.red}✗ Key is invalid or revoked${c.reset}`);
       console.log(`  ${c.dim}Key:    ${masked}${c.reset}`);
       console.log(`  ${c.dim}Source: ${source}${c.reset}`);
@@ -409,6 +409,14 @@ export async function whoamiCommand(_argv = [], options = {}) {
       console.log(
         `  Run ${c.cyan}subc ${profileFlag}logout${c.reset} then ${c.cyan}subc ${profileFlag}login${c.reset} to re-authenticate.`,
       );
+    } else {
+      // Only a 401 means the key was rejected. A 5xx or 429 says nothing
+      // about the key, so don't tell the user to log out.
+      console.log(
+        `  ${c.yellow}Could not verify the key (platform returned HTTP ${res.status})${c.reset}`,
+      );
+      console.log(`  ${c.dim}Key:    ${masked}${c.reset}`);
+      console.log(`  ${c.dim}Source: ${source}${c.reset}`);
     }
   } catch {
     console.log(
