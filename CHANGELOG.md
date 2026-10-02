@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.1.0](https://github.com/subconscious-systems/subconscious/compare/v6.0.1...v6.1.0) (2026-10-02)
+
+
+### Features
+
+* trim screenshots before upload in Pi and OpenCode (SUBCON-678) ([#95](https://github.com/subconscious-systems/subconscious/issues/95)) ([15306e6](https://github.com/subconscious-systems/subconscious/commit/15306e6e65830ce411c09a6d1653d7193b8dc7ec))
+
 ## [6.0.1](https://github.com/subconscious-systems/subconscious/compare/v6.0.0...v6.0.1) (2026-09-28)
 
 
