@@ -251,3 +251,43 @@ test('Codex launch no longer pins a legacy Codex for subagents', async () => {
     args.join(' '),
   );
 });
+
+test('Codex launch adds its hooks next to the ones already in hooks.json', async () => {
+  const codexDir = path.join(testDir, 'codex-merge');
+  const hooksJson = path.join(codexDir, 'hooks.json');
+  const userGroup = {
+    hooks: [{ type: 'command', command: '/usr/local/bin/guard.sh' }],
+  };
+  await fs.mkdir(codexDir, { recursive: true });
+  await fs.writeFile(
+    hooksJson,
+    JSON.stringify({ hooks: { PreToolUse: [userGroup] } }),
+  );
+
+  await captureCatalog({ CODEX_DIR: codexDir });
+
+  const { hooks } = JSON.parse(await fs.readFile(hooksJson, 'utf8'));
+  assert.deepEqual(hooks.PreToolUse, [userGroup]);
+  for (const event of ['PreCompact', 'PostCompact']) {
+    assert.equal(hooks[event].length, 1, event);
+    assert.ok(
+      hooks[event][0].hooks[0].command.endsWith('subconscious-hook.sh'),
+      event,
+    );
+  }
+});
+
+test('Codex launch leaves a hooks.json it cannot merge into unchanged', async () => {
+  // Valid JSON, but the merge cannot walk a string where it expects a list of
+  // hook groups. The launch merges best-effort, so jq failing used to leave
+  // its empty output in place of the user's file.
+  const codexDir = path.join(testDir, 'codex-unmergeable');
+  const hooksJson = path.join(codexDir, 'hooks.json');
+  const original = '{"hooks":{"Stop":"/usr/local/bin/notify.sh"}}\n';
+  await fs.mkdir(codexDir, { recursive: true });
+  await fs.writeFile(hooksJson, original);
+
+  await captureCatalog({ CODEX_DIR: codexDir });
+
+  assert.equal(await fs.readFile(hooksJson, 'utf8'), original);
+});
