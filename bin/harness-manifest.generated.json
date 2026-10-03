@@ -1,0 +1,2276 @@
+{
+  "_generated": "Source of truth: agents/registry.json. Do not edit by hand.",
+  "schema_version": 1,
+  "cli_package": "subconscious-cli",
+  "tokens": {
+    "{baseUrl}": "Gateway origin, without a trailing slash.",
+    "{baseUrlV1}": "Gateway origin followed by /v1.",
+    "{apiKey}": "Gateway API key.",
+    "{model}": "Launch model ID.",
+    "{catalog}": "Every live catalog model ID, newline-separated.",
+    "{catalog[N]}": "Catalog model at index N, clamped to the last entry; {model} when the catalog is empty.",
+    "{args}": "Arguments passed through from subc.",
+    "{tempFile}": "Temporary file the runbook writes and removes on exit.",
+    "{tmp}": "System temporary directory.",
+    "{json}": "JSON document described by the matching config entry.",
+    "{claudeSettings}": "JSON document described by the --settings config entry.",
+    "{configOverrides}": "The -c key=value pairs listed under config.",
+    "{target}": "Release target triple, one of install.targets or install.windows_targets.",
+    "{binDir}": "Directory the agent's binary was found in.",
+    "{PATH}": "The caller's PATH.",
+    "<install dirs>": "Common install directories subc adds to PATH.",
+    "<agent key>": "The agent-specific API key input, for example CODEX_API_KEY.",
+    "<id>": "Any model ID in the catalog; the field repeats for each model.",
+    "models[]": "Every element of the models array.",
+    "<runbook>": "Absolute path of the installed bin/runbook directory.",
+    "<VS Code user dir>": "The VS Code user settings directory, for example ~/Library/Application Support/Code/User."
+  },
+  "runbook_env": {
+    "order": "Later layers win: Claude picker env (claude-code only), then profile values, then process.env, then the fixed values. For claude-code, picker slots whose value is not in the live catalog are then reset to the catalog.",
+    "inherited": [
+      {
+        "source": "profile",
+        "controls": "Every key in the selected profile env file, for example CODEX_CONTEXT_WINDOW."
+      },
+      {
+        "source": "process.env",
+        "controls": "The caller's whole environment. It overrides profile values."
+      }
+    ],
+    "fixed": [
+      {
+        "name": "GATEWAY_URL",
+        "value": "{baseUrl}",
+        "controls": "SUBCONSCIOUS_BASE_URL, then profile GATEWAY_URL, then the packaged default. Trailing slashes are removed."
+      },
+      {
+        "name": "API_KEY",
+        "value": "{apiKey}",
+        "controls": "Gateway credential."
+      },
+      {
+        "name": "<agent key>",
+        "value": "{apiKey}",
+        "controls": "The agent-specific key input (for example CODEX_API_KEY), set to the same credential."
+      },
+      {
+        "name": "MODEL",
+        "value": "{model}",
+        "controls": "--model, then SUBCONSCIOUS_MODEL, then profile MODEL; UNSET or blank uses the first catalog model. A profile or default model missing from a live catalog is replaced by the first live model."
+      },
+      {
+        "name": "SUBCONSCIOUS_MODELS",
+        "value": "{catalog}",
+        "controls": "Newline-separated live model catalog. Runbooks fall back to a packaged list when it is unset."
+      },
+      {
+        "name": "SUBC_ENV_FILE",
+        "value": "/dev/null",
+        "controls": "Stops the runbook from sourcing a sibling .env file."
+      },
+      {
+        "name": "PATH",
+        "value": "{binDir}:<install dirs>:{PATH}",
+        "controls": "The caller's PATH with the agent's install directory and common install directories prepended."
+      }
+    ],
+    "per_harness": {
+      "claude-code": [
+        {
+          "name": "SUBC_CLAUDE_SETTINGS",
+          "value": "{claudeSettings}",
+          "controls": "Picker settings JSON that run.sh passes to --settings."
+        },
+        {
+          "name": "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+          "value": "0",
+          "controls": "Always 0; profile and environment values are ignored."
+        },
+        {
+          "name": "CLAUDE_CODE_AUTO_MODE_SERVER",
+          "value": "0",
+          "controls": "Always 0; profile and environment values are ignored."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_OPUS_MODEL",
+          "value": "{catalog[0]}",
+          "controls": "Model behind the opus alias. Set from the catalog, padded to four entries; a profile or environment value is kept only when it is in the live catalog."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+          "value": "{catalog[0]}",
+          "controls": "Picker label for the opus alias."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[0]}",
+          "controls": "Picker description for the opus alias."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+          "value": "{catalog[1]}",
+          "controls": "Model behind the sonnet alias. Set from the catalog, padded to four entries; a profile or environment value is kept only when it is in the live catalog."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+          "value": "{catalog[1]}",
+          "controls": "Picker label for the sonnet alias."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[1]}",
+          "controls": "Picker description for the sonnet alias."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+          "value": "{catalog[2]}",
+          "controls": "Model behind the haiku alias. Set from the catalog, padded to four entries; a profile or environment value is kept only when it is in the live catalog."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+          "value": "{catalog[2]}",
+          "controls": "Picker label for the haiku alias."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[2]}",
+          "controls": "Picker description for the haiku alias."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_FABLE_MODEL",
+          "value": "{catalog[3]}",
+          "controls": "Model behind the fable alias. Set from the catalog, padded to four entries; a profile or environment value is kept only when it is in the live catalog."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+          "value": "{catalog[3]}",
+          "controls": "Picker label for the fable alias."
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[3]}",
+          "controls": "Picker description for the fable alias."
+        },
+        {
+          "name": "ANTHROPIC_CUSTOM_MODEL_OPTION",
+          "value": "{catalog[4]}",
+          "controls": "Fifth picker entry, with _NAME and _DESCRIPTION. Only when the catalog has five or more models."
+        }
+      ]
+    }
+  },
+  "harnesses": {
+    "subconscious-code": {
+      "id": "subconscious-code",
+      "name": "Marathon",
+      "command": "subc marathon",
+      "aliases": [
+        "sc",
+        "subconscious-code"
+      ],
+      "mode": "launch",
+      "protocol": "openai",
+      "runbook": {
+        "dir": "subconscious-code",
+        "launch": "subconscious-code/run.sh",
+        "setup": "subconscious-code/install.sh",
+        "setup_actions": [
+          "install"
+        ]
+      },
+      "binary": "marathon",
+      "install": {
+        "method": "github-release",
+        "repository": "subconscious-systems/subconscious-code",
+        "version": "latest",
+        "pin_env": "SC_CODE_VERSION",
+        "asset": "marathon-{target}.tar.gz",
+        "checksum": "marathon-{target}.tar.gz.sha256",
+        "legacy_asset": "sc-{target}.tar.gz",
+        "targets": [
+          "aarch64-apple-darwin",
+          "x86_64-apple-darwin",
+          "aarch64-unknown-linux-musl",
+          "x86_64-unknown-linux-musl"
+        ],
+        "install_dir": "~/.local/bin",
+        "install_dir_env": "SC_INSTALL_DIR",
+        "minimum_version": null,
+        "verified": true,
+        "windows_targets": [
+          "x86_64-pc-windows-msvc",
+          "aarch64-pc-windows-msvc"
+        ],
+        "windows_assets": [
+          "marathon-{target}.zip",
+          "marathon-{target}.exe",
+          "sc-{target}.zip",
+          "sc-{target}.exe"
+        ],
+        "note": "Windows installs come from the native launcher, which takes the first asset in windows_assets that the release has, plus its .sha256.",
+        "commands": {
+          "darwin": "subc marathon install",
+          "linux": "subc marathon install",
+          "win32": "subc marathon install"
+        }
+      },
+      "prerequisites": [
+        {
+          "command": "gh|curl",
+          "needed_for": "install",
+          "required": true,
+          "verified": true
+        },
+        {
+          "command": "sha256sum|shasum",
+          "needed_for": "install",
+          "required": true,
+          "verified": true
+        },
+        {
+          "command": "tar",
+          "needed_for": "install",
+          "required": true,
+          "verified": true
+        }
+      ],
+      "launch": {
+        "argv": [
+          "marathon",
+          "{args}"
+        ],
+        "persistent_setup": false
+      },
+      "inputs": [
+        {
+          "name": "SC_API_KEY",
+          "default": "{apiKey}",
+          "controls": "Marathon-specific credential; blank uses API_KEY.",
+          "source": "subconscious-code/run.sh"
+        }
+      ],
+      "env": [
+        {
+          "name": "SC_API_KEY",
+          "value": "{apiKey}",
+          "source": "subconscious-code/run.sh",
+          "controls": "Gateway credential.",
+          "override": [
+            "SC_API_KEY",
+            "API_KEY"
+          ],
+          "verified": true
+        },
+        {
+          "name": "SC_BASE_URL",
+          "value": "{baseUrlV1}",
+          "source": "subconscious-code/run.sh",
+          "controls": "OpenAI-compatible base URL for model requests.",
+          "override": [],
+          "verified": true
+        },
+        {
+          "name": "SC_DLR_URL",
+          "value": "{baseUrl}",
+          "source": "subconscious-code/run.sh",
+          "controls": "Gateway origin for Marathon's DLR feature.",
+          "override": [],
+          "verified": false,
+          "note": "run.sh sets it; what DLR does is defined in the Marathon binary, not in this repo."
+        },
+        {
+          "name": "SC_DLR_ENABLED",
+          "value": "true",
+          "source": "subconscious-code/run.sh",
+          "controls": "Turns Marathon's DLR feature on.",
+          "override": [],
+          "verified": false,
+          "note": "run.sh sets it; what DLR does is defined in the Marathon binary, not in this repo."
+        },
+        {
+          "name": "SC_MODEL",
+          "value": "{model}",
+          "source": "subconscious-code/run.sh",
+          "controls": "Model for the session.",
+          "override": [],
+          "verified": true
+        }
+      ],
+      "config": [],
+      "capabilities": {
+        "compaction": {
+          "default": "unknown",
+          "on": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "run.sh sets no compaction knob; Marathon's built-in behaviour applies."
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "No off knob is set or documented by subc."
+          },
+          "threshold": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "No threshold knob is set or documented by subc."
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "subc configures no MCP servers. Transports Marathon supports are not described in this repo."
+        },
+        "headers": [],
+        "hooks": []
+      }
+    },
+    "claude-code": {
+      "id": "claude-code",
+      "name": "Claude Code",
+      "command": "subc claude",
+      "aliases": [
+        "claude-code",
+        "claudecode"
+      ],
+      "mode": "launch",
+      "protocol": "anthropic",
+      "runbook": {
+        "dir": "claude-code",
+        "launch": "claude-code/run.sh",
+        "setup": "claude-code/install.sh",
+        "setup_actions": [
+          "status",
+          "uninstall"
+        ]
+      },
+      "binary": "claude",
+      "install": {
+        "method": "script",
+        "package": "@anthropic-ai/claude-code",
+        "version": null,
+        "channel": "installer default (unpinned)",
+        "minimum_version": "2.1.242",
+        "verified": true,
+        "note": "subc warns, and does not block, below minimum_version.",
+        "commands": {
+          "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
+          "linux": "curl -fsSL https://claude.ai/install.sh | bash",
+          "win32": "powershell -ExecutionPolicy Bypass -Command \"irm https://claude.ai/install.ps1 | iex\"",
+          "fallback": "npm i -g @anthropic-ai/claude-code"
+        }
+      },
+      "prerequisites": [],
+      "launch": {
+        "argv": [
+          "claude",
+          "--settings",
+          "{claudeSettings}",
+          "{args}"
+        ],
+        "persistent_setup": false
+      },
+      "inputs": [
+        {
+          "name": "CLAUDE_GATEWAY_URL",
+          "default": "{baseUrl}",
+          "controls": "Claude-only gateway origin; blank uses GATEWAY_URL.",
+          "source": "claude-code/run.sh"
+        },
+        {
+          "name": "CLAUDE_CODE_API_KEY",
+          "default": "{apiKey}",
+          "controls": "Claude-specific credential; blank uses API_KEY.",
+          "source": "claude-code/run.sh"
+        },
+        {
+          "name": "CLAUDE_CODE_SUBAGENT_MODEL",
+          "default": "{model}",
+          "controls": "Subagent model; blank follows MODEL.",
+          "source": "claude-code/run.sh"
+        },
+        {
+          "name": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+          "default": "1000000",
+          "controls": "Auto-compact window. Also --compact-window.",
+          "source": "claude-code/run.sh"
+        },
+        {
+          "name": "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+          "default": "3000000",
+          "controls": "Maximum context tokens. Also --max-context-tokens.",
+          "source": "claude-code/run.sh"
+        },
+        {
+          "name": "MAX_CONCURRENT_SUBAGENTS",
+          "default": "4",
+          "controls": "Concurrent subagents.",
+          "source": "claude-code/run.sh"
+        },
+        {
+          "name": "MAX_SUBAGENT_SPAWN_DEPTH",
+          "default": "1",
+          "controls": "Subagent nesting depth.",
+          "source": "claude-code/run.sh"
+        },
+        {
+          "name": "SUBC_CLAUDE_SETTINGS",
+          "default": "",
+          "source": "claude-code/run.sh",
+          "controls": "JSON passed to --settings. subc always sets it; run.sh builds it from the catalog when it is empty."
+        }
+      ],
+      "env": [
+        {
+          "name": "ANTHROPIC_BASE_URL",
+          "value": "{baseUrl}",
+          "source": "claude-code/run.sh",
+          "controls": "Anthropic Messages endpoint origin.",
+          "override": [
+            "CLAUDE_GATEWAY_URL",
+            "--gateway-url"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_AUTH_TOKEN",
+          "value": "{apiKey}",
+          "source": "claude-code/run.sh",
+          "controls": "Bearer credential. ANTHROPIC_API_KEY is not set.",
+          "override": [
+            "CLAUDE_CODE_API_KEY",
+            "--api-key"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_MODEL",
+          "value": "{model}",
+          "source": "claude-code/run.sh",
+          "controls": "Main model.",
+          "override": [
+            "ANTHROPIC_MODEL",
+            "--model"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_SMALL_FAST_MODEL",
+          "value": "{model}",
+          "source": "claude-code/run.sh",
+          "controls": "Small/fast background model.",
+          "override": [
+            "ANTHROPIC_SMALL_FAST_MODEL"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_OPUS_MODEL",
+          "value": "{catalog[0]}",
+          "source": "claude-code/run.sh",
+          "controls": "Model behind the opus alias.",
+          "override": [
+            "ANTHROPIC_DEFAULT_OPUS_MODEL"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+          "value": "{catalog[0]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker label.",
+          "override": [
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[0]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker description.",
+          "override": [
+            "ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_SONNET_MODEL",
+          "value": "{catalog[1]}",
+          "source": "claude-code/run.sh",
+          "controls": "Model behind the sonnet alias.",
+          "override": [
+            "ANTHROPIC_DEFAULT_SONNET_MODEL"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+          "value": "{catalog[1]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker label.",
+          "override": [
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[1]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker description.",
+          "override": [
+            "ANTHROPIC_DEFAULT_SONNET_MODEL_DESCRIPTION"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+          "value": "{catalog[2]}",
+          "source": "claude-code/run.sh",
+          "controls": "Model behind the haiku alias.",
+          "override": [
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+          "value": "{catalog[2]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker label.",
+          "override": [
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[2]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker description.",
+          "override": [
+            "ANTHROPIC_DEFAULT_HAIKU_MODEL_DESCRIPTION"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_FABLE_MODEL",
+          "value": "{catalog[3]}",
+          "source": "claude-code/run.sh",
+          "controls": "Model behind the fable alias.",
+          "override": [
+            "ANTHROPIC_DEFAULT_FABLE_MODEL"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME",
+          "value": "{catalog[3]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker label.",
+          "override": [
+            "ANTHROPIC_DEFAULT_FABLE_MODEL_NAME"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION",
+          "value": "Subconscious model {catalog[3]}",
+          "source": "claude-code/run.sh",
+          "controls": "Picker description.",
+          "override": [
+            "ANTHROPIC_DEFAULT_FABLE_MODEL_DESCRIPTION"
+          ],
+          "verified": true
+        },
+        {
+          "name": "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+          "value": "0",
+          "source": "claude-code/run.sh",
+          "controls": "Turns off gateway model discovery; the picker comes from --settings.",
+          "override": [],
+          "verified": true,
+          "note": "subc always passes 0, so no override reaches run.sh."
+        },
+        {
+          "name": "CLAUDE_CODE_AUTO_MODE_SERVER",
+          "value": "0",
+          "source": "claude-code/run.sh",
+          "controls": "Runs the auto-mode classifier locally instead of Anthropic's server-side check.",
+          "override": [],
+          "verified": true,
+          "note": "subc always passes 0, so no override reaches run.sh."
+        },
+        {
+          "name": "CLAUDE_CODE_SUBAGENT_MODEL",
+          "value": "{model}",
+          "source": "claude-code/run.sh",
+          "controls": "Subagent model.",
+          "override": [
+            "CLAUDE_CODE_SUBAGENT_MODEL"
+          ],
+          "verified": true
+        },
+        {
+          "name": "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+          "value": "4",
+          "source": "claude-code/run.sh",
+          "controls": "Concurrent subagents.",
+          "override": [
+            "MAX_CONCURRENT_SUBAGENTS"
+          ],
+          "verified": true
+        },
+        {
+          "name": "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH",
+          "value": "1",
+          "source": "claude-code/run.sh",
+          "controls": "Subagent nesting depth.",
+          "override": [
+            "MAX_SUBAGENT_SPAWN_DEPTH"
+          ],
+          "verified": true
+        },
+        {
+          "name": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+          "value": "1000000",
+          "source": "claude-code/run.sh",
+          "controls": "Token window at which auto-compaction runs.",
+          "override": [
+            "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+            "COMPACT_WINDOW",
+            "--compact-window"
+          ],
+          "verified": true
+        },
+        {
+          "name": "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+          "value": "3000000",
+          "source": "claude-code/run.sh",
+          "controls": "Maximum context Claude Code assumes.",
+          "override": [
+            "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+            "MAX_CONTEXT_TOKENS",
+            "--max-context-tokens"
+          ],
+          "verified": true
+        },
+        {
+          "name": "CLAUDE_CODE_ENABLE_TELEMETRY",
+          "value": "1",
+          "source": "claude-code/run.sh",
+          "controls": "Enables OTEL api_request logs, which the gateway uses for purpose attribution.",
+          "override": [
+            "CLAUDE_CODE_ENABLE_TELEMETRY"
+          ],
+          "verified": true
+        },
+        {
+          "name": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+          "value": "1",
+          "source": "claude-code/run.sh",
+          "controls": "Disables non-essential network traffic.",
+          "override": [
+            "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"
+          ],
+          "verified": true
+        },
+        {
+          "name": "ENABLE_CLAUDEAI_MCP_SERVERS",
+          "value": "false",
+          "source": "claude-code/run.sh",
+          "controls": "Disables claude.ai connectors, which need subscription OAuth.",
+          "override": [],
+          "verified": true
+        },
+        {
+          "name": "OTEL_LOGS_EXPORTER",
+          "value": "otlp",
+          "source": "claude-code/run.sh",
+          "controls": "Log exporter.",
+          "override": [
+            "OTEL_LOGS_EXPORTER"
+          ],
+          "verified": true
+        },
+        {
+          "name": "OTEL_EXPORTER_OTLP_PROTOCOL",
+          "value": "http/json",
+          "source": "claude-code/run.sh",
+          "controls": "OTLP protocol.",
+          "override": [
+            "OTEL_EXPORTER_OTLP_PROTOCOL"
+          ],
+          "verified": true
+        },
+        {
+          "name": "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+          "value": "{baseUrl}/v1/logs",
+          "source": "claude-code/run.sh",
+          "controls": "Gateway log endpoint.",
+          "override": [],
+          "verified": true
+        },
+        {
+          "name": "OTEL_EXPORTER_OTLP_HEADERS",
+          "value": "x-api-key={apiKey}",
+          "source": "claude-code/run.sh",
+          "controls": "Credential on log export.",
+          "override": [],
+          "verified": true
+        },
+        {
+          "name": "OTEL_EXPORTER_OTLP_TIMEOUT",
+          "value": "2000",
+          "source": "claude-code/run.sh",
+          "controls": "Export timeout in ms.",
+          "override": [
+            "OTEL_EXPORTER_OTLP_TIMEOUT"
+          ],
+          "verified": true
+        },
+        {
+          "name": "OTEL_LOGS_EXPORT_INTERVAL",
+          "value": "2000",
+          "source": "claude-code/run.sh",
+          "controls": "Export interval in ms.",
+          "override": [
+            "OTEL_LOGS_EXPORT_INTERVAL"
+          ],
+          "verified": true
+        }
+      ],
+      "config": [
+        {
+          "kind": "cli-flag",
+          "name": "--settings",
+          "lifetime": "launch",
+          "value": {
+            "availableModels": "{catalog}",
+            "modelPicker": {
+              "replaceBuiltInOptions": true,
+              "options": "one entry per catalog model"
+            }
+          },
+          "controls": "Replaces the built-in model picker with the live catalog and allowlists only those models.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.claude/subconscious-gateway.env",
+          "lifetime": "legacy",
+          "controls": "Written only by older persistent setup. subc claude uninstall removes it; launch never writes it.",
+          "verified": true
+        }
+      ],
+      "capabilities": {
+        "compaction": {
+          "default": "on",
+          "on": {
+            "set_by_subc": true,
+            "kind": "env",
+            "name": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+            "value": "1000000",
+            "verified": true,
+            "note": "Auto-compaction stays on; subc only moves the window.",
+            "override": [
+              "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+              "COMPACT_WINDOW",
+              "--compact-window"
+            ]
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": "env",
+            "name": "DISABLE_AUTO_COMPACT",
+            "value": "1",
+            "verified": false,
+            "note": "Upstream Claude Code variable. subc never sets it, and this repo does not confirm its behaviour."
+          },
+          "threshold": {
+            "set_by_subc": true,
+            "kind": "env",
+            "name": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+            "value": "1000000",
+            "verified": true,
+            "semantics": "window",
+            "override": [
+              "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+              "COMPACT_WINDOW",
+              "--compact-window"
+            ],
+            "range": {
+              "min": 100000,
+              "max": 1000000,
+              "verified": false,
+              "note": "From run.sh help text, which cites Claude Code docs. run.sh itself does not clamp."
+            }
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "subc adds no MCP servers. It disables claude.ai connectors with ENABLE_CLAUDEAI_MCP_SERVERS=false. User MCP config is left alone."
+        },
+        "headers": [
+          {
+            "name": "x-api-key",
+            "value": "{apiKey}",
+            "on": "OTLP log export to {baseUrl}/v1/logs",
+            "set_by_subc": true,
+            "verified": true
+          },
+          {
+            "name": "x-claude-code-session-id",
+            "value": "session ID",
+            "on": "model requests",
+            "set_by_subc": false,
+            "verified": false,
+            "note": "Sent by Claude Code itself, per a comment in install.sh. Not set by subc."
+          }
+        ],
+        "hooks": []
+      }
+    },
+    "codex": {
+      "id": "codex",
+      "name": "Codex CLI",
+      "command": "subc codex",
+      "aliases": [],
+      "mode": "launch",
+      "protocol": "openai",
+      "runbook": {
+        "dir": "codex",
+        "launch": "codex/run.sh",
+        "setup": "codex/install.sh",
+        "setup_actions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
+      },
+      "binary": "codex",
+      "install": {
+        "method": "npm",
+        "package": "@openai/codex",
+        "version": null,
+        "channel": "latest (unpinned)",
+        "minimum_version": "0.143.0",
+        "verified": true,
+        "note": "Below minimum_version Codex ignores multi_agent_version and runs without subagents. subc warns and does not block.",
+        "commands": {
+          "darwin": "npm i -g @openai/codex",
+          "linux": "npm i -g @openai/codex",
+          "win32": "npm i -g @openai/codex"
+        }
+      },
+      "prerequisites": [
+        {
+          "command": "jq",
+          "needed_for": "hooks",
+          "required": false,
+          "note": "Without jq a launch skips the hooks with a warning, and subc codex install fails.",
+          "verified": true
+        },
+        {
+          "command": "curl",
+          "needed_for": "hooks",
+          "required": false,
+          "note": "Without curl the hook exits without reporting.",
+          "verified": true
+        }
+      ],
+      "launch": {
+        "argv": [
+          "codex",
+          "-c",
+          "{configOverrides}",
+          "{args}"
+        ],
+        "persistent_setup": true,
+        "note": "Each launch merges the compaction hooks into ~/.codex/hooks.json when they are missing or stale (best effort)."
+      },
+      "inputs": [
+        {
+          "name": "CODEX_API_KEY",
+          "default": "{apiKey}",
+          "controls": "Codex-specific credential; blank uses API_KEY.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_CONTEXT_WINDOW",
+          "default": "5000000",
+          "controls": "Catalog context_window. Also --context-window.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_MAX_CONTEXT_WINDOW",
+          "default": "",
+          "controls": "Catalog max_context_window; blank uses CODEX_CONTEXT_WINDOW. Also --max-context-window.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_AUTO_COMPACT_TOKEN_LIMIT",
+          "default": "4500000",
+          "controls": "Catalog auto_compact_token_limit. Also --auto-compact-token-limit.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_REASONING_EFFORT",
+          "default": "max",
+          "controls": "model_reasoning_effort: none, low, medium, high, or max. Also --reasoning-effort.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_SUBAGENT_REASONING_EFFORT",
+          "default": "low",
+          "controls": "agents.default_subagent_reasoning_effort; empty inherits Codex's default. Also --subagent-effort.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_EXTERNAL_TOOLS",
+          "default": "false",
+          "controls": "true keeps Codex apps and plugins on. Also --external-tools.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_STREAM_IDLE_TIMEOUT_MS",
+          "default": "900000",
+          "controls": "Provider stream_idle_timeout_ms. Also --stream-idle-timeout.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "CODEX_MULTI_AGENT_VERSION",
+          "default": "v2",
+          "controls": "Catalog multi_agent_version. Empty turns subagents off with agents.enabled=false.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "MAX_CONCURRENT_SUBAGENTS",
+          "default": "4",
+          "controls": "agents.max_concurrent_threads_per_session. Also --max-subagents.",
+          "source": "codex/run.sh"
+        },
+        {
+          "name": "SUBCONSCIOUS_HOOKS_ENV",
+          "default": "~/.codex/subconscious-hooks.env",
+          "source": "codex/hook.sh",
+          "controls": "Env file the hook sources for the gateway URL and key."
+        },
+        {
+          "name": "SUBCONSCIOUS_CODEX_HOOK_LOG_DIR",
+          "default": "~/.codex/subconscious-hook-logs",
+          "source": "codex/hook.sh",
+          "controls": "Directory for the hook fire log."
+        },
+        {
+          "name": "CODEX_DIR",
+          "default": "~/.codex",
+          "source": "codex/hooks-lib.sh",
+          "controls": "Codex config directory used for the hook files."
+        },
+        {
+          "name": "HOOKS_JSON",
+          "default": "~/.codex/hooks.json",
+          "source": "codex/hooks-lib.sh",
+          "controls": "hooks.json that the hooks are merged into."
+        },
+        {
+          "name": "HOOK_DST",
+          "default": "~/.codex/subconscious-hook.sh",
+          "source": "codex/hooks-lib.sh",
+          "controls": "Where the hook script is copied."
+        },
+        {
+          "name": "HOOKS_ENV_FILE",
+          "default": "~/.codex/subconscious-hooks.env",
+          "source": "codex/hooks-lib.sh",
+          "controls": "Where the hook env file is written."
+        }
+      ],
+      "env": [
+        {
+          "name": "SUBCONSCIOUS_API_KEY",
+          "value": "{apiKey}",
+          "source": "codex/run.sh",
+          "controls": "Credential Codex reads through model_providers.subconscious.env_key.",
+          "override": [
+            "CODEX_API_KEY",
+            "API_KEY"
+          ],
+          "verified": true
+        },
+        {
+          "name": "SUBCONSCIOUS_GATEWAY_URL",
+          "value": "{baseUrl}",
+          "source": "codex/run.sh",
+          "controls": "Gateway origin for the hook environment.",
+          "override": [],
+          "verified": true
+        }
+      ],
+      "config": [
+        {
+          "kind": "cli-config",
+          "name": "model",
+          "value": "{model}",
+          "lifetime": "launch",
+          "controls": "Model.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_provider",
+          "value": "subconscious",
+          "lifetime": "launch",
+          "controls": "Selects the provider below.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_catalog_json",
+          "value": "{tempFile}",
+          "lifetime": "launch",
+          "controls": "Temporary model catalog; see the file entry.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_reasoning_effort",
+          "value": "max",
+          "override": [
+            "CODEX_REASONING_EFFORT"
+          ],
+          "lifetime": "launch",
+          "controls": "Parent reasoning effort.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "web_search",
+          "value": "disabled",
+          "lifetime": "launch",
+          "controls": "Keeps hosted web search, which the gateway cannot run, out of requests.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "features.apps",
+          "value": false,
+          "condition": "CODEX_EXTERNAL_TOOLS != true",
+          "lifetime": "launch",
+          "controls": "Keeps the request under the gateway's 128-tool limit.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "features.plugins",
+          "value": false,
+          "condition": "CODEX_EXTERNAL_TOOLS != true",
+          "lifetime": "launch",
+          "controls": "Keeps the request under the gateway's 128-tool limit.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "apps._default.enabled",
+          "value": false,
+          "condition": "CODEX_EXTERNAL_TOOLS != true",
+          "lifetime": "launch",
+          "controls": "Keeps the request under the gateway's 128-tool limit.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "agents.max_concurrent_threads_per_session",
+          "value": 4,
+          "override": [
+            "MAX_CONCURRENT_SUBAGENTS"
+          ],
+          "condition": "CODEX_MULTI_AGENT_VERSION non-empty",
+          "lifetime": "launch",
+          "controls": "Concurrent subagents.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "agents.interrupt_message",
+          "value": true,
+          "condition": "CODEX_MULTI_AGENT_VERSION non-empty",
+          "lifetime": "launch",
+          "controls": "Subagent interrupt messages.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "agents.default_subagent_reasoning_effort",
+          "value": "low",
+          "override": [
+            "CODEX_SUBAGENT_REASONING_EFFORT"
+          ],
+          "condition": "CODEX_MULTI_AGENT_VERSION and CODEX_SUBAGENT_REASONING_EFFORT non-empty",
+          "lifetime": "launch",
+          "controls": "Subagent reasoning effort.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "agents.enabled",
+          "value": false,
+          "condition": "CODEX_MULTI_AGENT_VERSION empty",
+          "lifetime": "launch",
+          "controls": "Turns subagents off.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_providers.subconscious.name",
+          "value": "Subconscious",
+          "lifetime": "launch",
+          "controls": "Provider display name.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_providers.subconscious.base_url",
+          "value": "{baseUrlV1}",
+          "lifetime": "launch",
+          "controls": "Gateway endpoint; no relay.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_providers.subconscious.wire_api",
+          "value": "responses",
+          "lifetime": "launch",
+          "controls": "Uses the Responses API.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_providers.subconscious.env_key",
+          "value": "SUBCONSCIOUS_API_KEY",
+          "lifetime": "launch",
+          "controls": "Env var holding the credential.",
+          "verified": true
+        },
+        {
+          "kind": "cli-config",
+          "name": "model_providers.subconscious.stream_idle_timeout_ms",
+          "value": 900000,
+          "override": [
+            "CODEX_STREAM_IDLE_TIMEOUT_MS"
+          ],
+          "lifetime": "launch",
+          "controls": "Silent-stream timeout.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "{tmp}/codex-model-catalog.XXXXXX.json",
+          "lifetime": "launch",
+          "value": {
+            "context_window": 5000000,
+            "max_context_window": 5000000,
+            "auto_compact_token_limit": 4500000,
+            "effective_context_window_percent": 95,
+            "multi_agent_version": "v2",
+            "supported_reasoning_levels": [
+              "none",
+              "low",
+              "medium",
+              "high",
+              "max"
+            ],
+            "input_modalities": "[\"text\"], or [\"text\", \"image\"] for vision models"
+          },
+          "controls": "One entry per catalog model; removed on exit.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.codex/hooks.json",
+          "lifetime": "persistent",
+          "controls": "PreCompact and PostCompact entries are merged in; other entries are kept.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.codex/subconscious-hook.sh",
+          "lifetime": "persistent",
+          "controls": "Hook script.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.codex/subconscious-hooks.env",
+          "lifetime": "persistent",
+          "controls": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600).",
+          "verified": true
+        },
+        {
+          "kind": "dir",
+          "path": "~/.codex/subconscious-hook-logs",
+          "lifetime": "persistent",
+          "controls": "Hook fire log, one file per session.",
+          "verified": true
+        }
+      ],
+      "capabilities": {
+        "compaction": {
+          "default": "on",
+          "on": {
+            "set_by_subc": true,
+            "kind": "model-catalog-field",
+            "name": "auto_compact_token_limit",
+            "value": 4500000,
+            "verified": true,
+            "note": "Auto-compaction is on through the catalog threshold.",
+            "config": "{tmp}/codex-model-catalog.XXXXXX.json",
+            "override": [
+              "CODEX_AUTO_COMPACT_TOKEN_LIMIT",
+              "--auto-compact-token-limit"
+            ]
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "run.sh has no off switch. Setting a threshold above context_window may work, but that is not confirmed."
+          },
+          "threshold": {
+            "set_by_subc": true,
+            "kind": "model-catalog-field",
+            "name": "auto_compact_token_limit",
+            "value": 4500000,
+            "override": [
+              "CODEX_AUTO_COMPACT_TOKEN_LIMIT",
+              "--auto-compact-token-limit"
+            ],
+            "verified": true,
+            "note": "Written per model into model_catalog_json. subc does not use the model_auto_compact_token_limit config key.",
+            "semantics": "trigger",
+            "config": "{tmp}/codex-model-catalog.XXXXXX.json"
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "subc adds no MCP servers. User MCP config in ~/.codex/config.toml is left alone."
+        },
+        "headers": [
+          {
+            "name": "x-subconscious-client",
+            "value": "codex",
+            "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+            "set_by_subc": true,
+            "verified": true,
+            "note": "Model requests carry no subc-set header."
+          },
+          {
+            "name": "Authorization",
+            "value": "Bearer {apiKey}",
+            "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+            "set_by_subc": true,
+            "verified": true
+          }
+        ],
+        "hooks": [
+          {
+            "event": "PreCompact",
+            "posts": "conversation_compaction phase=start",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.codex/hooks.json",
+            "installed_by": [
+              "launch",
+              "install"
+            ],
+            "verified": true,
+            "note": "Per install.sh help: Codex runs hooks only once trusted with /hooks, and codex exec needs --dangerously-bypass-hook-trust, which subc never passes."
+          },
+          {
+            "event": "PostCompact",
+            "posts": "conversation_compaction phase=end",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.codex/hooks.json",
+            "installed_by": [
+              "launch",
+              "install"
+            ],
+            "verified": true
+          }
+        ]
+      }
+    },
+    "opencode": {
+      "id": "opencode",
+      "name": "OpenCode",
+      "command": "subc opencode",
+      "aliases": [
+        "open-code"
+      ],
+      "mode": "launch",
+      "protocol": "openai",
+      "runbook": {
+        "dir": "opencode",
+        "launch": "opencode/run.sh",
+        "setup": "opencode/install.sh",
+        "setup_actions": [
+          "status",
+          "uninstall"
+        ]
+      },
+      "binary": "opencode",
+      "install": {
+        "method": "npm",
+        "package": "opencode-ai",
+        "version": null,
+        "channel": "latest (unpinned)",
+        "minimum_version": null,
+        "verified": true,
+        "commands": {
+          "darwin": "npm i -g opencode-ai",
+          "linux": "npm i -g opencode-ai",
+          "win32": "npm i -g opencode-ai"
+        }
+      },
+      "prerequisites": [],
+      "launch": {
+        "argv": [
+          "opencode",
+          "{args}"
+        ],
+        "persistent_setup": false
+      },
+      "inputs": [
+        {
+          "name": "OPENCODE_API_KEY",
+          "default": "{apiKey}",
+          "controls": "OpenCode-specific credential; blank uses API_KEY.",
+          "source": "opencode/run.sh"
+        },
+        {
+          "name": "OPENCODE_CONTEXT_LIMIT",
+          "default": "5000000",
+          "controls": "limit.context on every provider model.",
+          "source": "opencode/run.sh"
+        },
+        {
+          "name": "OPENCODE_OUTPUT_LIMIT",
+          "default": "65536",
+          "controls": "limit.output on every provider model.",
+          "source": "opencode/run.sh"
+        },
+        {
+          "name": "SUBCONSCIOUS_IMAGE_WINDOW_SOFT_MIB",
+          "default": "25",
+          "source": "image-window/window.js",
+          "controls": "Soft image budget in MiB for vision models."
+        },
+        {
+          "name": "SUBCONSCIOUS_IMAGE_WINDOW_HARD_MIB",
+          "default": "30",
+          "source": "image-window/window.js",
+          "controls": "Hard image budget in MiB for vision models."
+        }
+      ],
+      "env": [
+        {
+          "name": "SUBCONSCIOUS_API_KEY",
+          "value": "{apiKey}",
+          "source": "opencode/run.sh",
+          "controls": "Credential, referenced as {env:SUBCONSCIOUS_API_KEY} in the provider config.",
+          "override": [
+            "OPENCODE_API_KEY",
+            "API_KEY"
+          ],
+          "verified": true
+        },
+        {
+          "name": "SUBCONSCIOUS_GATEWAY_URL",
+          "value": "{baseUrl}",
+          "source": "opencode/run.sh",
+          "controls": "Gateway origin for the compaction plugin, when one is installed.",
+          "override": [],
+          "verified": true
+        },
+        {
+          "name": "OPENCODE_CONFIG_CONTENT",
+          "value": "{json}",
+          "source": "opencode/run.sh",
+          "controls": "Whole OpenCode config for this launch; see the config entry.",
+          "override": [],
+          "verified": true
+        }
+      ],
+      "config": [
+        {
+          "kind": "env-json",
+          "name": "OPENCODE_CONFIG_CONTENT",
+          "lifetime": "launch",
+          "value": {
+            "disabled_providers": [
+              "subconscious-cli"
+            ],
+            "plugin": [
+              "<runbook>/opencode/subconscious-image-window.ts"
+            ],
+            "provider.subconscious.npm": "@ai-sdk/openai-compatible",
+            "provider.subconscious.options.baseURL": "{baseUrlV1}",
+            "provider.subconscious.options.apiKey": "{env:SUBCONSCIOUS_API_KEY}",
+            "provider.subconscious.options.headers": {
+              "x-subconscious-client": "opencode"
+            },
+            "provider.subconscious.options.modelsDiscovery.enabled": false,
+            "provider.subconscious.whitelist": "{catalog}",
+            "provider.subconscious.models.<id>.limit": {
+              "context": 5000000,
+              "output": 65536
+            },
+            "provider.subconscious.models.<id>.tools": true,
+            "model": "subconscious/{model}"
+          },
+          "controls": "Provider, models, limits and plugin. Nothing is written to disk.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.config/opencode/plugins/subconscious-compaction.ts",
+          "lifetime": "legacy",
+          "controls": "Compaction plugin from older persistent setup. Launch never writes it; subc opencode uninstall removes it.",
+          "verified": true
+        }
+      ],
+      "capabilities": {
+        "compaction": {
+          "default": "on",
+          "on": {
+            "set_by_subc": true,
+            "kind": "config-field",
+            "name": "provider.subconscious.models.<id>.limit.context",
+            "value": 5000000,
+            "verified": false,
+            "note": "subc sets limit.context (from run.sh). That auto-compaction keys off it comes only from an install.sh comment and the profile setting description.",
+            "config": "OPENCODE_CONFIG_CONTENT",
+            "override": [
+              "OPENCODE_CONTEXT_LIMIT"
+            ]
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": "config-field",
+            "name": "compaction.auto",
+            "value": false,
+            "verified": false,
+            "note": "Upstream OpenCode setting. subc never sets it, and this repo does not confirm its name or behaviour.",
+            "config": "OpenCode config"
+          },
+          "threshold": {
+            "set_by_subc": true,
+            "kind": "config-field",
+            "name": "provider.subconscious.models.<id>.limit.context",
+            "value": 5000000,
+            "override": [
+              "OPENCODE_CONTEXT_LIMIT"
+            ],
+            "verified": false,
+            "semantics": "window",
+            "config": "OPENCODE_CONFIG_CONTENT",
+            "note": "subc sets limit.context (from run.sh). That auto-compaction keys off it comes only from an install.sh comment and the profile setting description."
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "OPENCODE_CONFIG_CONTENT carries no mcp block. Whether OpenCode merges user MCP config with it is not confirmed here."
+        },
+        "headers": [
+          {
+            "name": "x-subconscious-client",
+            "value": "opencode",
+            "on": "model requests",
+            "set_by_subc": true,
+            "verified": true
+          }
+        ],
+        "hooks": []
+      }
+    },
+    "cursor": {
+      "id": "cursor",
+      "name": "Cursor",
+      "command": "subc cursor",
+      "aliases": [],
+      "mode": "setup",
+      "protocol": "openai",
+      "runbook": {
+        "dir": "cursor",
+        "launch": null,
+        "setup": "cursor/install.sh",
+        "setup_actions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
+      },
+      "binary": null,
+      "install": {
+        "method": "user",
+        "package": null,
+        "version": null,
+        "minimum_version": null,
+        "verified": true,
+        "note": "IDE installed by the user. The model endpoint is set by hand in Cursor Settings (OpenAI API Key Override).",
+        "commands": null
+      },
+      "prerequisites": [
+        {
+          "command": "jq",
+          "needed_for": "install",
+          "required": true,
+          "verified": true
+        },
+        {
+          "command": "curl",
+          "needed_for": "install",
+          "required": true,
+          "verified": true
+        }
+      ],
+      "launch": null,
+      "inputs": [
+        {
+          "name": "CURSOR_API_KEY",
+          "default": "{apiKey}",
+          "controls": "Hook credential; blank uses API_KEY.",
+          "source": "cursor/install.sh"
+        },
+        {
+          "name": "SUBCONSCIOUS_HOOKS_ENV",
+          "default": "~/.cursor/subconscious-hooks.env",
+          "source": "cursor/hook.sh",
+          "controls": "Env file the hook sources for the gateway URL and key."
+        }
+      ],
+      "env": [],
+      "config": [
+        {
+          "kind": "file",
+          "path": "~/.cursor/hooks.json",
+          "lifetime": "persistent",
+          "controls": "beforeSubmitPrompt and preCompact entries are merged in; other entries are kept.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.cursor/hooks/subconscious-hook.sh",
+          "lifetime": "persistent",
+          "controls": "Hook script.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.cursor/subconscious-hooks.env",
+          "lifetime": "persistent",
+          "controls": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600).",
+          "verified": true
+        }
+      ],
+      "capabilities": {
+        "compaction": {
+          "default": "unknown",
+          "on": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "subc does not configure Cursor compaction."
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "subc does not configure Cursor compaction."
+          },
+          "threshold": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "subc does not configure Cursor compaction."
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "subc configures no MCP servers."
+        },
+        "headers": [
+          {
+            "name": "x-subconscious-client",
+            "value": "cursor",
+            "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+            "set_by_subc": true,
+            "verified": true,
+            "note": "Cursor cannot add headers to model requests."
+          },
+          {
+            "name": "Authorization",
+            "value": "Bearer {apiKey}",
+            "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+            "set_by_subc": true,
+            "verified": true
+          }
+        ],
+        "hooks": [
+          {
+            "event": "beforeSubmitPrompt",
+            "posts": "conversation_ensure",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.cursor/hooks.json",
+            "installed_by": [
+              "install"
+            ],
+            "verified": true
+          },
+          {
+            "event": "preCompact",
+            "posts": "conversation_compaction phase=point",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.cursor/hooks.json",
+            "installed_by": [
+              "install"
+            ],
+            "verified": true
+          }
+        ]
+      }
+    },
+    "copilot": {
+      "id": "copilot",
+      "name": "GitHub Copilot (VS Code)",
+      "command": "subc copilot",
+      "aliases": [
+        "vscode",
+        "vs-code"
+      ],
+      "mode": "setup",
+      "protocol": "openai",
+      "runbook": {
+        "dir": "copilot",
+        "launch": null,
+        "setup": "copilot/install.sh",
+        "setup_actions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
+      },
+      "binary": null,
+      "install": {
+        "method": "user",
+        "package": null,
+        "version": null,
+        "minimum_version": null,
+        "verified": true,
+        "note": "VS Code installed by the user. The provider API key is entered once in VS Code's Manage Language Models.",
+        "commands": null
+      },
+      "prerequisites": [
+        {
+          "command": "jq",
+          "needed_for": "install",
+          "required": true,
+          "verified": true
+        },
+        {
+          "command": "curl",
+          "needed_for": "install",
+          "required": true,
+          "verified": true
+        }
+      ],
+      "launch": null,
+      "inputs": [
+        {
+          "name": "COPILOT_API_KEY",
+          "default": "{apiKey}",
+          "controls": "Hook credential; blank uses API_KEY.",
+          "source": "copilot/install.sh"
+        },
+        {
+          "name": "COPILOT_MAX_INPUT_TOKENS",
+          "default": "5000000",
+          "controls": "maxInputTokens on every model.",
+          "source": "copilot/install.sh"
+        },
+        {
+          "name": "COPILOT_MAX_OUTPUT_TOKENS",
+          "default": "65536",
+          "controls": "maxOutputTokens on every model.",
+          "source": "copilot/install.sh"
+        },
+        {
+          "name": "VSCODE_APP",
+          "default": "",
+          "controls": "Code, Code - Insiders or VSCodium; blank auto-detects.",
+          "source": "copilot/install.sh"
+        },
+        {
+          "name": "SUBCONSCIOUS_HOOKS_ENV",
+          "default": "~/.copilot/subconscious-hooks.env",
+          "source": "copilot/hook.sh",
+          "controls": "Env file the hook sources for the gateway URL and key."
+        },
+        {
+          "name": "SUBCONSCIOUS_COMPACT_PENDING_DIR",
+          "default": "~/.copilot/subconscious-compact-pending",
+          "source": "copilot/hook.sh",
+          "controls": "Directory that marks a compaction awaiting its end signal."
+        }
+      ],
+      "env": [],
+      "config": [
+        {
+          "kind": "file",
+          "path": "<VS Code user dir>/chatLanguageModels.json",
+          "lifetime": "persistent",
+          "value": {
+            "name": "Subconscious Gateway",
+            "vendor": "customendpoint",
+            "apiType": "messages",
+            "apiKey": "${input:chat.lm.secret.subconscious-gateway}",
+            "models.<id>.url": "{baseUrl}/v1/messages",
+            "models.<id>.maxInputTokens": 5000000,
+            "models.<id>.maxOutputTokens": 65536,
+            "models.<id>.requestHeaders": {
+              "x-subconscious-client": "copilot"
+            }
+          },
+          "controls": "Custom Endpoint provider, merged into the user's list.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.copilot/hooks/subconscious-hooks.json",
+          "lifetime": "persistent",
+          "controls": "UserPromptSubmit and PreCompact hooks.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.copilot/hooks/subconscious-hook.sh",
+          "lifetime": "persistent",
+          "controls": "Hook script.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.copilot/subconscious-hooks.env",
+          "lifetime": "persistent",
+          "controls": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600).",
+          "verified": true
+        },
+        {
+          "kind": "dir",
+          "path": "~/.copilot/subconscious-compact-pending",
+          "lifetime": "persistent",
+          "controls": "Pending-compaction markers written by the hook.",
+          "verified": true
+        }
+      ],
+      "capabilities": {
+        "compaction": {
+          "default": "unknown",
+          "on": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "subc only sets maxInputTokens; whether VS Code compacts from it is not confirmed here."
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "subc does not configure Copilot compaction."
+          },
+          "threshold": {
+            "set_by_subc": true,
+            "kind": "config-field",
+            "name": "models.<id>.maxInputTokens",
+            "value": 5000000,
+            "verified": false,
+            "note": "subc sets this capacity; its effect on compaction is not confirmed here.",
+            "semantics": "window",
+            "config": "<VS Code user dir>/chatLanguageModels.json",
+            "override": [
+              "COPILOT_MAX_INPUT_TOKENS"
+            ]
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "subc configures no MCP servers."
+        },
+        "headers": [
+          {
+            "name": "x-subconscious-client",
+            "value": "copilot",
+            "on": "model requests and hook POSTs",
+            "set_by_subc": true,
+            "verified": true
+          },
+          {
+            "name": "Authorization",
+            "value": "Bearer {apiKey}",
+            "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+            "set_by_subc": true,
+            "verified": true
+          }
+        ],
+        "hooks": [
+          {
+            "event": "UserPromptSubmit",
+            "posts": "conversation_ensure, plus conversation_compaction phase=end when one is pending",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.copilot/hooks/subconscious-hooks.json",
+            "installed_by": [
+              "install"
+            ],
+            "verified": true
+          },
+          {
+            "event": "PreCompact",
+            "posts": "conversation_compaction phase=start",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.copilot/hooks/subconscious-hooks.json",
+            "installed_by": [
+              "install"
+            ],
+            "verified": true
+          }
+        ]
+      }
+    },
+    "pi": {
+      "id": "pi",
+      "name": "Pi",
+      "command": "subc pi",
+      "aliases": [],
+      "mode": "launch",
+      "protocol": "openai",
+      "runbook": {
+        "dir": "pi",
+        "launch": "pi/run.sh",
+        "setup": "pi/install.sh",
+        "setup_actions": [
+          "install",
+          "status",
+          "uninstall"
+        ]
+      },
+      "binary": "pi",
+      "install": {
+        "method": null,
+        "package": null,
+        "version": null,
+        "minimum_version": null,
+        "verified": false,
+        "note": "The registry lists no install command; subc expects pi on PATH.",
+        "commands": null
+      },
+      "prerequisites": [
+        {
+          "command": "jq",
+          "needed_for": "install and every launch",
+          "required": true,
+          "verified": true
+        }
+      ],
+      "launch": {
+        "argv": [
+          "pi",
+          "--provider",
+          "subconscious",
+          "--model",
+          "{model}",
+          "{args}"
+        ],
+        "persistent_setup": true,
+        "note": "Each launch first runs install.sh install, which rewrites the persistent files below."
+      },
+      "inputs": [
+        {
+          "name": "PI_API_KEY",
+          "default": "{apiKey}",
+          "controls": "Pi-specific credential; blank uses API_KEY.",
+          "source": "pi/run.sh"
+        },
+        {
+          "name": "PI_CONTEXT_WINDOW",
+          "default": "5000000",
+          "controls": "contextWindow on every provider model.",
+          "source": "pi/install.sh"
+        },
+        {
+          "name": "PI_MAX_TOKENS",
+          "default": "65536",
+          "controls": "maxTokens on every provider model.",
+          "source": "pi/install.sh"
+        },
+        {
+          "name": "PI_CODING_AGENT_DIR",
+          "default": "~/.pi/agent",
+          "controls": "Pi config directory.",
+          "source": "pi/run.sh"
+        },
+        {
+          "name": "SUBCONSCIOUS_IMAGE_WINDOW_SOFT_MIB",
+          "default": "25",
+          "source": "image-window/window.js",
+          "controls": "Soft image budget in MiB for vision models."
+        },
+        {
+          "name": "SUBCONSCIOUS_IMAGE_WINDOW_HARD_MIB",
+          "default": "30",
+          "source": "image-window/window.js",
+          "controls": "Hard image budget in MiB for vision models."
+        }
+      ],
+      "env": [],
+      "config": [
+        {
+          "kind": "file",
+          "path": "~/.pi/agent/models.json",
+          "lifetime": "persistent",
+          "value": {
+            "providers.subconscious.baseUrl": "{baseUrlV1}",
+            "providers.subconscious.api": "openai-completions",
+            "providers.subconscious.apiKey": "{apiKey}",
+            "providers.subconscious.headers": {
+              "x-subconscious-client": "pi"
+            },
+            "providers.subconscious.models[].contextWindow": 5000000,
+            "providers.subconscious.models[].maxTokens": 65536,
+            "providers.subconscious.models[].compat": {
+              "sendSessionAffinityHeaders": true,
+              "sessionAffinityFormat": "openai-nosession"
+            }
+          },
+          "controls": "Subconscious provider, merged in; other providers are kept. Mode 600; holds the key in plain text.",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.pi/agent/subconscious.env",
+          "lifetime": "persistent",
+          "controls": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the compaction extension (mode 600).",
+          "verified": true
+        },
+        {
+          "kind": "file",
+          "path": "~/.pi/agent/extensions/subconscious-compaction.ts",
+          "lifetime": "persistent",
+          "controls": "Compaction reporting extension.",
+          "verified": true
+        },
+        {
+          "kind": "dir",
+          "path": "~/.pi/agent/extensions/subconscious-image-window",
+          "lifetime": "persistent",
+          "controls": "Extension that keeps requests to the newest 30 images.",
+          "verified": true
+        }
+      ],
+      "capabilities": {
+        "compaction": {
+          "default": "on",
+          "on": {
+            "set_by_subc": true,
+            "kind": "config-field",
+            "name": "providers.subconscious.models[].contextWindow",
+            "value": 5000000,
+            "verified": false,
+            "note": "subc sets contextWindow (from install.sh). That Pi compacts relative to it comes only from the profile setting description.",
+            "config": "~/.pi/agent/models.json",
+            "override": [
+              "PI_CONTEXT_WINDOW"
+            ]
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": "config-field",
+            "name": "compaction.enabled",
+            "value": false,
+            "verified": false,
+            "note": "Upstream Pi setting. subc never sets it, and this repo does not confirm its location or behaviour.",
+            "config": "Pi settings (location unverified)"
+          },
+          "threshold": {
+            "set_by_subc": true,
+            "kind": "config-field",
+            "name": "providers.subconscious.models[].contextWindow",
+            "value": 5000000,
+            "override": [
+              "PI_CONTEXT_WINDOW"
+            ],
+            "verified": false,
+            "note": "subc sets contextWindow (from install.sh). That Pi compacts relative to it comes only from the profile setting description. Pi's reserveTokens also moves the trigger; subc never sets it.",
+            "semantics": "window",
+            "config": "~/.pi/agent/models.json"
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "subc configures no MCP servers."
+        },
+        "headers": [
+          {
+            "name": "x-subconscious-client",
+            "value": "pi",
+            "on": "model requests",
+            "set_by_subc": true,
+            "verified": true
+          },
+          {
+            "name": "x-session-affinity",
+            "value": "session ID",
+            "on": "model requests",
+            "set_by_subc": true,
+            "verified": false,
+            "note": "Enabled by compat.sendSessionAffinityHeaders; the header name comes from an install.sh comment."
+          },
+          {
+            "name": "Authorization",
+            "value": "Bearer {apiKey}",
+            "on": "extension POSTs to {baseUrl}/v1/agent-hooks",
+            "set_by_subc": true,
+            "verified": true
+          }
+        ],
+        "hooks": [
+          {
+            "event": "session_before_compact",
+            "posts": "conversation_compaction phase=start",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.pi/agent/extensions/subconscious-compaction.ts",
+            "installed_by": [
+              "launch",
+              "install"
+            ],
+            "verified": true
+          },
+          {
+            "event": "session_compact",
+            "posts": "conversation_compaction phase=end",
+            "endpoint": "{baseUrl}/v1/agent-hooks",
+            "config": "~/.pi/agent/extensions/subconscious-compaction.ts",
+            "installed_by": [
+              "launch",
+              "install"
+            ],
+            "verified": true
+          }
+        ]
+      }
+    },
+    "deepseek-harness": {
+      "id": "deepseek-harness",
+      "name": "DeepSeek Harness",
+      "command": "subc dsh",
+      "aliases": [
+        "deepseek-harness",
+        "deepseek"
+      ],
+      "mode": "launch",
+      "protocol": "openai",
+      "runbook": {
+        "dir": "deepseek-harness",
+        "launch": "deepseek-harness/run.sh",
+        "setup": null,
+        "setup_actions": []
+      },
+      "binary": "dsh",
+      "install": {
+        "method": "npm",
+        "package": "@deepseek-ai/dsh",
+        "version": null,
+        "channel": "latest (unpinned)",
+        "minimum_version": null,
+        "verified": true,
+        "commands": {
+          "darwin": "npm i -g @deepseek-ai/dsh",
+          "linux": "npm i -g @deepseek-ai/dsh",
+          "win32": "npm i -g @deepseek-ai/dsh"
+        }
+      },
+      "prerequisites": [],
+      "launch": {
+        "argv": [
+          "dsh",
+          "web",
+          "--patch",
+          "{tempFile}",
+          "{args}"
+        ],
+        "headless_argv": [
+          "dsh",
+          "--profile",
+          "headless",
+          "--patch",
+          "{tempFile}",
+          "{args}"
+        ],
+        "persistent_setup": false
+      },
+      "inputs": [
+        {
+          "name": "DEEPSEEK_HARNESS_API_KEY",
+          "default": "{apiKey}",
+          "controls": "DeepSeek Harness credential; blank uses API_KEY.",
+          "source": "deepseek-harness/run.sh"
+        },
+        {
+          "name": "DEEPSEEK_HARNESS_CONTEXT_WINDOW",
+          "default": "5000000",
+          "controls": "defaultContextWindow and per-model contextWindow.",
+          "source": "deepseek-harness/run.sh"
+        },
+        {
+          "name": "DEEPSEEK_HARNESS_MAX_TOKENS",
+          "default": "65536",
+          "controls": "defaultMaxTokens and per-model maxTokens.",
+          "source": "deepseek-harness/run.sh"
+        }
+      ],
+      "env": [
+        {
+          "name": "SUBCONSCIOUS_API_KEY",
+          "value": "{apiKey}",
+          "source": "deepseek-harness/run.sh",
+          "controls": "Credential, read through apiKeyEnv in the overlay.",
+          "override": [
+            "DEEPSEEK_HARNESS_API_KEY",
+            "API_KEY"
+          ],
+          "verified": true
+        },
+        {
+          "name": "SUBCONSCIOUS_DSH_BASE_URL",
+          "value": "{baseUrlV1}",
+          "source": "deepseek-harness/run.sh",
+          "controls": "OpenAI-compatible base URL, read by the overlay.",
+          "override": [],
+          "verified": true
+        }
+      ],
+      "config": [
+        {
+          "kind": "file",
+          "path": "{tmp}/subc-dsh.XXXXXX/subconscious.cordis.yml",
+          "lifetime": "launch",
+          "value": {
+            "llm-pi-ai.providers.subconscious.api": "openai-completions",
+            "llm-pi-ai.providers.subconscious.apiKeyEnv": "SUBCONSCIOUS_API_KEY",
+            "llm-pi-ai.providers.subconscious.headers": {
+              "x-subconscious-client": "deepseek-harness"
+            },
+            "llm-pi-ai.providers.subconscious.compat": {
+              "supportsDeveloperRole": false,
+              "maxTokensField": "max_tokens"
+            },
+            "llm-pi-ai.providers.subconscious.defaultContextWindow": 5000000,
+            "llm-pi-ai.providers.subconscious.defaultMaxTokens": 65536,
+            "agent-default-model": {
+              "provider": "subconscious",
+              "model": "{model}"
+            },
+            "llm-pi-ai.providers.subconscious.models[].contextWindow": 5000000,
+            "llm-pi-ai.providers.subconscious.models[].maxTokens": 65536
+          },
+          "controls": "Cordis patch passed with --patch; holds no API key; removed on exit.",
+          "verified": true
+        }
+      ],
+      "capabilities": {
+        "compaction": {
+          "default": "unknown",
+          "on": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "subc sets contextWindow only; DeepSeek Harness compaction behaviour is not described in this repo."
+          },
+          "off": {
+            "set_by_subc": false,
+            "kind": null,
+            "name": null,
+            "value": null,
+            "verified": false,
+            "note": "No off knob is set or documented by subc."
+          },
+          "threshold": {
+            "set_by_subc": true,
+            "kind": "config-field",
+            "name": "llm-pi-ai.providers.subconscious.models[].contextWindow",
+            "value": 5000000,
+            "override": [
+              "DEEPSEEK_HARNESS_CONTEXT_WINDOW"
+            ],
+            "verified": false,
+            "note": "subc sets it; whether it drives compaction is not confirmed here.",
+            "semantics": "window",
+            "config": "{tmp}/subc-dsh.XXXXXX/subconscious.cordis.yml"
+          }
+        },
+        "mcp": {
+          "configured_by_subc": false,
+          "transports": null,
+          "verified": false,
+          "note": "subc configures no MCP servers."
+        },
+        "headers": [
+          {
+            "name": "x-subconscious-client",
+            "value": "deepseek-harness",
+            "on": "model requests",
+            "set_by_subc": true,
+            "verified": true
+          }
+        ],
+        "hooks": []
+      }
+    }
+  }
+}

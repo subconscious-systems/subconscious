@@ -28,6 +28,10 @@ import {
 import { renderBanner } from './branding.js';
 import { c } from './colors.js';
 import { feedbackCommand, printFeedbackHelp } from './feedback.js';
+import {
+  harnessManifestCommand,
+  printHarnessManifestHelp,
+} from './harness-manifest.js';
 import { resolveModelCatalog } from './models.js';
 import {
   configCommand,
@@ -86,6 +90,7 @@ function printHelp() {
 
   ${c.bold}Coding agents${c.reset}
 ${agents}
+    ${c.cyan}harness-manifest${c.reset}  Print how each agent is installed and launched (JSON)
 
   ${c.bold}Options${c.reset}
     ${c.dim}--model <id>${c.reset}   Model to use (profile MODEL, or first live catalog model if UNSET)
@@ -111,6 +116,7 @@ ${agents}
     ${c.dim}$${c.reset} subc cursor install
     ${c.dim}$${c.reset} subc cursor uninstall
     ${c.dim}$${c.reset} subc pi install
+    ${c.dim}$${c.reset} subc harness-manifest --json
     ${c.dim}$${c.reset} subc -p staging codex
 
   ${c.dim}Use subc <command> help for command-specific usage.${c.reset}
@@ -293,6 +299,17 @@ async function main() {
     const pkgPath = new URL('../package.json', import.meta.url);
     const pkg = JSON.parse(await fs.readFile(pkgPath, 'utf-8'));
     console.log(pkg.version);
+    return;
+  }
+
+  // Machine-readable output: skip the update check so nothing else reaches
+  // stdout and no npm request is made.
+  if (command === 'harness-manifest') {
+    if (isHelpArg(args[1])) {
+      printHarnessManifestHelp();
+      return;
+    }
+    harnessManifestCommand(args.slice(1));
     return;
   }
 

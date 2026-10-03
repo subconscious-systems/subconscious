@@ -4,6 +4,7 @@
  *
  *   1. bin/registry.generated.json
  *   2. bin/runbook/model-capabilities.generated.sh
+ *   3. bin/harness-manifest.generated.json
  *
  * Do not hand-edit those outputs. Edit registry.json and re-run.
  */
@@ -11,6 +12,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildHarnessManifest } from './lib/harness-manifest.js';
 import { loadRegistry } from './lib/registry.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,10 +21,14 @@ const BIN_DIR = path.join(ROOT, 'bin');
 const registry = loadRegistry();
 
 function writeCliData() {
+  // Harness descriptions ship in their own manifest; the launcher never reads them.
+  const { runbookEnv: _runbookEnv, ...rest } = registry;
   const out = {
     _generated: 'Source of truth: agents/registry.json. Do not edit by hand.',
-    ...registry,
-    agents: registry.agents.filter((agent) => agent.cli !== false),
+    ...rest,
+    agents: registry.agents
+      .filter((agent) => agent.cli !== false)
+      .map(({ harness: _harness, ...agent }) => agent),
   };
   const dest = path.join(BIN_DIR, 'registry.generated.json');
   fs.writeFileSync(dest, `${JSON.stringify(out, null, 2)}\n`);
@@ -55,5 +61,13 @@ function writeModelCapabilities() {
   console.log(`Wrote ${path.relative(ROOT, dest)}`);
 }
 
+function writeHarnessManifest() {
+  const dest = path.join(BIN_DIR, 'harness-manifest.generated.json');
+  const manifest = buildHarnessManifest(registry);
+  fs.writeFileSync(dest, `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`Wrote ${path.relative(ROOT, dest)}`);
+}
+
 writeCliData();
 writeModelCapabilities();
+writeHarnessManifest();
