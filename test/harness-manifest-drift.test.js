@@ -255,7 +255,7 @@ test('drift: launch argv matches the command run.sh executes', () => {
       if (!argv) continue;
       const prefix = argv.slice(
         0,
-        argv.findIndex((part) => part.startsWith('{')),
+        argv.findIndex((part) => part.includes('{')),
       );
       assert.ok(
         flat.includes(prefix.join(' ')),

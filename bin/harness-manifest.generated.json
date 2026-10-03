@@ -10,6 +10,7 @@
     "{catalog}": "Every live catalog model ID, newline-separated.",
     "{catalog[N]}": "Catalog model at index N, clamped to the last entry; {model} when the catalog is empty.",
     "{args}": "Arguments passed through from subc.",
+    "{prompt}": "The task given to subc <agent> headless PROMPT.",
     "{tempFile}": "Temporary file the runbook writes and removes on exit.",
     "{tmp}": "System temporary directory.",
     "{json}": "JSON document described by the matching config entry.",
@@ -239,6 +240,11 @@
           "marathon",
           "{args}"
         ],
+        "headless_argv": [
+          "marathon",
+          "--print={prompt}",
+          "{args}"
+        ],
         "persistent_setup": false
       },
       "inputs": [
@@ -377,6 +383,14 @@
           "--settings",
           "{claudeSettings}",
           "{args}"
+        ],
+        "headless_argv": [
+          "claude",
+          "--settings",
+          "{claudeSettings}",
+          "{args}",
+          "-p",
+          "{prompt}"
         ],
         "persistent_setup": false
       },
@@ -899,6 +913,15 @@
           "{configOverrides}",
           "{args}"
         ],
+        "headless_argv": [
+          "codex",
+          "-c",
+          "{configOverrides}",
+          "exec",
+          "{args}",
+          "--",
+          "{prompt}"
+        ],
         "persistent_setup": true,
         "note": "Each launch merges the compaction hooks into ~/.codex/hooks.json when they are missing or stale (best effort)."
       },
@@ -1354,6 +1377,12 @@
         "argv": [
           "opencode",
           "{args}"
+        ],
+        "headless_argv": [
+          "opencode",
+          "run",
+          "{args}",
+          "{prompt}"
         ],
         "persistent_setup": false
       },
@@ -1923,6 +1952,16 @@
           "{model}",
           "{args}"
         ],
+        "headless_argv": [
+          "pi",
+          "--provider",
+          "subconscious",
+          "--model",
+          "{model}",
+          "--print",
+          "{args}",
+          "{prompt}"
+        ],
         "persistent_setup": true,
         "note": "Each launch first runs install.sh install, which rewrites the persistent files below."
       },
@@ -2148,6 +2187,7 @@
           "headless",
           "--patch",
           "{tempFile}",
+          "{prompt}",
           "{args}"
         ],
         "persistent_setup": false

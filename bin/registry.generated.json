@@ -48,6 +48,9 @@
       "runbook": {
         "mode": "launch",
         "script": "subconscious-code/run.sh",
+        "headless": {
+          "windows": false
+        },
         "setupScript": "subconscious-code/install.sh",
         "binaryInstallScript": "subconscious-code/install.sh",
         "installDirEnv": "SC_INSTALL_DIR",
@@ -97,6 +100,9 @@
       "runbook": {
         "mode": "launch",
         "script": "claude-code/run.sh",
+        "headless": {
+          "windows": false
+        },
         "setupScript": "claude-code/install.sh",
         "setupActions": [
           "status",
@@ -160,6 +166,9 @@
       "runbook": {
         "mode": "launch",
         "script": "codex/run.sh",
+        "headless": {
+          "windows": false
+        },
         "setupScript": "codex/install.sh",
         "setupActions": [
           "install",
@@ -202,6 +211,9 @@
       "runbook": {
         "mode": "launch",
         "script": "opencode/run.sh",
+        "headless": {
+          "windows": false
+        },
         "setupScript": "opencode/install.sh",
         "installDir": ".opencode/bin",
         "setupActions": [
@@ -364,6 +376,9 @@
       "runbook": {
         "mode": "launch",
         "script": "pi/run.sh",
+        "headless": {
+          "windows": false
+        },
         "setupScript": "pi/install.sh",
         "setupActions": [
           "install",
@@ -399,7 +414,10 @@
       },
       "runbook": {
         "mode": "launch",
-        "script": "deepseek-harness/run.sh"
+        "script": "deepseek-harness/run.sh",
+        "headless": {
+          "windows": true
+        }
       }
     }
   ]

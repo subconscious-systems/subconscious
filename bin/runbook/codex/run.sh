@@ -74,6 +74,15 @@ CODEX_MULTI_AGENT_VERSION="${CODEX_MULTI_AGENT_VERSION-v2}"
 # Parse args (only when executed, not sourced)
 PASSTHRU=()
 if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
+  HEADLESS_PROMPT=""
+  if [[ "${1:-}" == "headless" ]]; then
+    if [[ -z "${2:-}" ]]; then
+      echo "usage: subc codex headless PROMPT [args...]" >&2
+      exit 2
+    fi
+    HEADLESS_PROMPT="$2"
+    shift 2
+  fi
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --context-window)
@@ -288,7 +297,7 @@ export SUBCONSCIOUS_GATEWAY_URL="${GATEWAY_URL%/}"
 HOOK_SRC="${SCRIPT_DIR}/hook.sh"
 # shellcheck source=hooks-lib.sh
 source "${SCRIPT_DIR}/hooks-lib.sh"
-codex_ensure_hooks best-effort || true
+codex_ensure_hooks best-effort >&2 || true
 
 # Write a temp model catalog so Codex doesn't print "model metadata not found".
 # This is the one thing that can't be passed via -c flags.
@@ -301,6 +310,11 @@ write_model_catalog "$CATALOG_FILE"
 if [[ "${BASH_SOURCE[0]:-$0}" != "${0}" ]]; then
   export GATEWAY_URL CATALOG_FILE MAX_CONCURRENT_SUBAGENTS CODEX_SUBAGENT_REASONING_EFFORT
   return 0 2>/dev/null || true
+fi
+
+# Root -c overrides also apply to `codex exec`.
+if [[ -n "${HEADLESS_PROMPT:-}" ]]; then
+  PASSTHRU=(exec ${PASSTHRU[@]+"${PASSTHRU[@]}"} -- "$HEADLESS_PROMPT")
 fi
 
 # Ephemeral config via -c flags — nothing is written to ~/.codex/config.toml.

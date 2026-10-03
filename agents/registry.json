@@ -174,6 +174,7 @@
       "runbook": {
         "mode": "launch",
         "script": "subconscious-code/run.sh",
+        "headless": { "windows": false },
         "setupScript": "subconscious-code/install.sh",
         "binaryInstallScript": "subconscious-code/install.sh",
         "installDirEnv": "SC_INSTALL_DIR",
@@ -234,6 +235,7 @@
         ],
         "launch": {
           "argv": ["marathon", "{args}"],
+          "headless_argv": ["marathon", "--print={prompt}", "{args}"],
           "persistent_setup": false
         },
         "inputs": [
@@ -352,6 +354,7 @@
       "runbook": {
         "mode": "launch",
         "script": "claude-code/run.sh",
+        "headless": { "windows": false },
         "setupScript": "claude-code/install.sh",
         "setupActions": ["status", "uninstall"]
       },
@@ -397,6 +400,7 @@
         "prerequisites": [],
         "launch": {
           "argv": ["claude", "--settings", "{claudeSettings}", "{args}"],
+          "headless_argv": ["claude", "--settings", "{claudeSettings}", "{args}", "-p", "{prompt}"],
           "persistent_setup": false
         },
         "inputs": [
@@ -818,6 +822,7 @@
       "runbook": {
         "mode": "launch",
         "script": "codex/run.sh",
+        "headless": { "windows": false },
         "setupScript": "codex/install.sh",
         "setupActions": ["install", "status", "uninstall"]
       },
@@ -854,6 +859,7 @@
         ],
         "launch": {
           "argv": ["codex", "-c", "{configOverrides}", "{args}"],
+          "headless_argv": ["codex", "-c", "{configOverrides}", "exec", "{args}", "--", "{prompt}"],
           "persistent_setup": true,
           "note": "Each launch merges the compaction hooks into ~/.codex/hooks.json when they are missing or stale (best effort)."
         },
@@ -1267,6 +1273,7 @@
       "runbook": {
         "mode": "launch",
         "script": "opencode/run.sh",
+        "headless": { "windows": false },
         "setupScript": "opencode/install.sh",
         "installDir": ".opencode/bin",
         "setupActions": ["status", "uninstall"]
@@ -1355,6 +1362,7 @@
         "prerequisites": [],
         "launch": {
           "argv": ["opencode", "{args}"],
+          "headless_argv": ["opencode", "run", "{args}", "{prompt}"],
           "persistent_setup": false
         },
         "inputs": [
@@ -1874,6 +1882,7 @@
       "runbook": {
         "mode": "launch",
         "script": "pi/run.sh",
+        "headless": { "windows": false },
         "setupScript": "pi/install.sh",
         "setupActions": ["install", "status", "uninstall"]
       },
@@ -1896,6 +1905,7 @@
         ],
         "launch": {
           "argv": ["pi", "--provider", "subconscious", "--model", "{model}", "{args}"],
+          "headless_argv": ["pi", "--provider", "subconscious", "--model", "{model}", "--print", "{args}", "{prompt}"],
           "persistent_setup": true,
           "note": "Each launch first runs install.sh install, which rewrites the persistent files below."
         },
@@ -2087,7 +2097,8 @@
       },
       "runbook": {
         "mode": "launch",
-        "script": "deepseek-harness/run.sh"
+        "script": "deepseek-harness/run.sh",
+        "headless": { "windows": true }
       },
       "harness": {
         "install": {
@@ -2101,7 +2112,7 @@
         "prerequisites": [],
         "launch": {
           "argv": ["dsh", "web", "--patch", "{tempFile}", "{args}"],
-          "headless_argv": ["dsh", "--profile", "headless", "--patch", "{tempFile}", "{args}"],
+          "headless_argv": ["dsh", "--profile", "headless", "--patch", "{tempFile}", "{prompt}", "{args}"],
           "persistent_setup": false
         },
         "inputs": [

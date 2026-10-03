@@ -11,6 +11,7 @@ export const MANIFEST_TOKENS = {
   '{catalog[N]}':
     'Catalog model at index N, clamped to the last entry; {model} when the catalog is empty.',
   '{args}': 'Arguments passed through from subc.',
+  '{prompt}': 'The task given to subc <agent> headless PROMPT.',
   '{tempFile}': 'Temporary file the runbook writes and removes on exit.',
   '{tmp}': 'System temporary directory.',
   '{json}': 'JSON document described by the matching config entry.',

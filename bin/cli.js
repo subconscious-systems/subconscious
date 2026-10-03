@@ -117,6 +117,7 @@ ${agents}
     ${c.dim}$${c.reset} subc cursor uninstall
     ${c.dim}$${c.reset} subc pi install
     ${c.dim}$${c.reset} subc harness-manifest --json
+    ${c.dim}$${c.reset} subc codex headless "fix the failing test"
     ${c.dim}$${c.reset} subc -p staging codex
 
   ${c.dim}Use subc <command> help for command-specific usage.${c.reset}
@@ -319,9 +320,12 @@ async function main() {
     process.stdout.isTTY === true &&
     process.env.TERM !== 'dumb';
 
+  // Headless runs are scripted: no npm request and no update prompt.
+  const headless = Boolean(resolveAgent(command)) && args[1] === 'headless';
+
   // Explicit commands can wait on npm. The TUI opens immediately and prompts
   // only after a newer version is found.
-  if (!launchTui) {
+  if (!launchTui && !headless) {
     const update = await showUpdateNotice();
     if (update?.action === 'updated' || update?.action === 'cancel') return;
   }

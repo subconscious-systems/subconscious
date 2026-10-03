@@ -41,7 +41,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
   } = dependencies;
   const parsed = parseAgentAction(agent, argv);
   let args =
-    parsed.action !== 'launch' && parsed.action === argv[0]
+    !['launch', 'headless'].includes(parsed.action) && parsed.action === argv[0]
       ? argv.slice(1)
       : argv;
   const environment = windowsEnv(profile?.values, process.env);

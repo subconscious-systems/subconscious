@@ -151,6 +151,15 @@ EOF
 # Parse args (only when executed, not sourced)
 PASSTHRU=()
 if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
+  HEADLESS_PROMPT=""
+  if [[ "${1:-}" == "headless" ]]; then
+    if [[ -z "${2:-}" ]]; then
+      echo "usage: subc claude headless PROMPT [args...]" >&2
+      exit 2
+    fi
+    HEADLESS_PROMPT="$2"
+    shift 2
+  fi
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --gateway-url)
@@ -251,4 +260,7 @@ fi
 # If executed, launch claude with any passed-through args.
 # --settings is additional JSON: it replaces the built-in Fable/Opus lineup
 # with the live catalog and allowlists only those models.
+if [[ -n "${HEADLESS_PROMPT:-}" ]]; then
+  PASSTHRU+=(-p "$HEADLESS_PROMPT")
+fi
 exec claude --settings "${SUBC_CLAUDE_SETTINGS}" ${PASSTHRU[@]+"${PASSTHRU[@]}"}

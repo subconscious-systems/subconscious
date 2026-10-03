@@ -5,6 +5,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+HEADLESS_PROMPT=""
+if [[ "${1:-}" == "headless" ]]; then
+  if [[ -z "${2:-}" ]]; then
+    echo "usage: subc pi headless PROMPT [args...]" >&2
+    exit 2
+  fi
+  HEADLESS_PROMPT="$2"
+  shift 2
+fi
+
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${PI_API_KEY:-${API_KEY:-}}"
 MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
@@ -22,4 +32,7 @@ fi
   --model "$MODEL" \
   >/dev/null
 
+if [[ -n "$HEADLESS_PROMPT" ]]; then
+  exec pi --provider subconscious --model "$MODEL" --print "$@" "$HEADLESS_PROMPT"
+fi
 exec pi --provider subconscious --model "$MODEL" "$@"

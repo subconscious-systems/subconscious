@@ -179,6 +179,16 @@ export function parseAgentAction(agent, argv = []) {
     return { action: first, args: argv };
   }
 
+  if (first === 'headless') {
+    if (!agent.runbook?.headless) {
+      throw new Error(`${agent.name} does not support headless mode.`);
+    }
+    if (!argv[1]) {
+      throw new Error(`Usage: subc ${command} headless PROMPT [args...]`);
+    }
+    return { action: 'headless', args: argv };
+  }
+
   if (agent.runbook?.mode === 'setup') {
     return { action: 'install', args: argv };
   }
@@ -345,12 +355,17 @@ export function printAgentHelp(agent, profile) {
     behavior: agent.description,
     options: [],
   };
+  const options =
+    agent.runbook?.headless &&
+    !details.options.some(([option]) => option.startsWith('headless'))
+      ? [
+          ...details.options,
+          ['headless PROMPT', 'Run one task without prompting, then exit'],
+        ]
+      : details.options;
   const settings = profileSettingsForAgent(agent.id);
   const values = resolvedProfileValues(profile);
-  const optionWidth = Math.max(
-    0,
-    ...details.options.map(([option]) => option.length),
-  );
+  const optionWidth = Math.max(0, ...options.map(([option]) => option.length));
   const settingWidth = Math.max(
     0,
     ...settings.map((setting) => setting.key.length),
@@ -359,9 +374,9 @@ export function printAgentHelp(agent, profile) {
   console.log(`\n  ${c.bold}${agent.name} + Subconscious${c.reset}\n`);
   console.log(`  ${details.behavior}\n`);
   console.log(`  ${c.bold}Usage${c.reset}\n    ${details.usage}\n`);
-  if (details.options.length) {
+  if (options.length) {
     console.log(`  ${c.bold}Commands and options${c.reset}`);
-    for (const [option, description] of details.options) {
+    for (const [option, description] of options) {
       console.log(
         `    ${c.cyan}${option.padEnd(optionWidth)}${c.reset}  ${description}`,
       );
@@ -647,7 +662,7 @@ function printInstallCommands(agent) {
  * Returns the directory containing the bin (to prepend to the child's PATH) on
  * success. May exit the process on failure or when manual action is needed.
  */
-async function ensureInstalled(agent) {
+async function ensureInstalled(agent, { mayPrompt = true } = {}) {
   const preferredDirs = preferredBinDirsForAgent(agent);
   const existing = await resolveBinPath(agent.bin, preferredDirs);
   if (existing) return existing;
@@ -664,7 +679,7 @@ async function ensureInstalled(agent) {
     process.exit(127);
   }
 
-  const interactive = process.stdin.isTTY && process.stdout.isTTY;
+  const interactive = mayPrompt && process.stdin.isTTY && process.stdout.isTTY;
 
   if (!interactive) {
     console.error(
@@ -761,7 +776,11 @@ const MINIMUM_VERSIONS = {
   codex: { minimum: MIN_CODEX_VERSION, label: 'Codex' },
 };
 
-async function ensureClaudeCompatible(agent, binDir) {
+async function ensureClaudeCompatible(
+  agent,
+  binDir,
+  { mayPrompt = true } = {},
+) {
   const requirement = MINIMUM_VERSIONS[agent.id];
   if (!requirement) return;
   const version = readClaudeVersion(agent.bin, binDir);
@@ -777,7 +796,11 @@ async function ensureClaudeCompatible(agent, binDir) {
     console.error(`    ${c.cyan}${agent.installFallback}${c.reset}`);
   }
   console.error('');
-  if (process.stdin.isTTY === true && process.stdout.isTTY === true) {
+  if (
+    mayPrompt &&
+    process.stdin.isTTY === true &&
+    process.stdout.isTTY === true
+  ) {
     await waitForEnter(`  ${c.dim}Press Enter to continue.${c.reset} `);
     console.error('');
   }
@@ -1121,6 +1144,17 @@ export async function runAgent(agent, argv, options = {}) {
     return 0;
   }
 
+  const headless = parseAgentAction(agent, argv).action === 'headless';
+  if (
+    headless &&
+    process.platform === 'win32' &&
+    !agent.runbook.headless.windows
+  ) {
+    throw new Error(
+      `${agent.name} headless mode is not available on Windows yet.`,
+    );
+  }
+
   if (process.platform === 'win32') {
     return runWindowsAgent(agent, argv, {
       profile,
@@ -1137,7 +1171,7 @@ export async function runAgent(agent, argv, options = {}) {
   }
 
   const parsed = parseAgentAction(agent, argv);
-  if (parsed.action !== 'launch') {
+  if (parsed.action !== 'launch' && !headless) {
     if (!agent.runbook?.setupScript) {
       throw new Error(
         `No persistent integration is available for ${agent.name}`,
@@ -1173,8 +1207,9 @@ export async function runAgent(agent, argv, options = {}) {
   const apiKey = await requireApiKey(profile, agent);
   if (!apiKey) return 1;
 
-  const binDir = await ensureInstalled(agent);
-  await ensureClaudeCompatible(agent, binDir);
+  const mayPrompt = !headless;
+  const binDir = await ensureInstalled(agent, { mayPrompt });
+  await ensureClaudeCompatible(agent, binDir, { mayPrompt });
   const catalog = await resolvedModelsForLaunch(
     profile,
     apiKey,
@@ -1188,7 +1223,8 @@ export async function runAgent(agent, argv, options = {}) {
   }
 
   if (agent.runbook?.mode === 'launch') {
-    console.log(
+    // Headless stdout belongs to the harness alone.
+    (headless ? console.error : console.log)(
       `  ${c.dim}Launching ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}on Subconscious ${c.reset}${c.dim}(${model})${c.reset}\n`,
     );
     return spawnRunbook(

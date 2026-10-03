@@ -161,6 +161,21 @@ The packaged integrations live in `bin/runbook`.
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
+## Headless runs
+
+`subc <agent> headless PROMPT [args...]` runs one task without a terminal UI and exits with the agent's status. It works for `claude`, `codex`, `opencode`, `pi`, `marathon`, and `dsh`, and uses the same setup as an interactive launch. It never prompts: there is no update check, a missing agent fails with its install command, and stdout carries only the agent's own output. Remaining arguments go to the agent, for example `subc claude headless "fix the failing test" --output-format stream-json --verbose`.
+
+| Agent | Runs |
+| --- | --- |
+| `claude` | `claude -p PROMPT` |
+| `codex` | `codex exec -- PROMPT` |
+| `opencode` | `opencode run PROMPT` |
+| `pi` | `pi --print PROMPT` |
+| `marathon` | `marathon --print=PROMPT` |
+| `dsh` | `dsh --profile headless PROMPT` |
+
+On Windows only `dsh` supports headless runs.
+
 ## Harness manifest
 
 `subc harness-manifest` prints how this version of subc installs, configures, and launches each agent above, so other tools can copy the setup exactly instead of re-implementing it.
@@ -187,7 +202,7 @@ Each `harnesses.<id>` entry has:
 | `install` | `method`, `package` or `repository`, `version` or `channel`, `minimum_version`, release `targets`, and the per-OS `commands`. |
 | `prerequisites` | Commands the runbook needs, such as `jq`, with what needs them and whether they are required. `a\|b` means either one. |
 | `binary` | Executable name, or `null` for IDE integrations. |
-| `launch` | `argv` template, and whether a launch also writes persistent files. |
+| `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), and whether a launch also writes persistent files. |
 | `inputs` | Profile or environment variables the runbook reads, with `default` and the `source` file under `bin/runbook`. |
 | `env` | Variables the runbook exports to the agent: `value`, what it `controls`, and the `override` variables or flags. |
 | `config` | Files, directories, `-c` overrides, flags, and JSON-in-env the runbook writes. |
@@ -217,6 +232,7 @@ Placeholders:
 | `{apiKey}`, `{model}` | Gateway API key and launch model |
 | `{catalog}`, `{catalog[N]}` | All live catalog models (newline-separated), or the one at index N (clamped to the last) |
 | `{args}`, `{tempFile}`, `{tmp}` | Passed-through arguments, a temporary file the runbook removes, the system temp directory |
+| `{prompt}` | The task given to `subc <agent> headless` |
 | `{json}`, `{claudeSettings}`, `{configOverrides}` | Documents described by the matching `config` entries |
 | `{target}` | A release target triple from `install.targets` or `install.windows_targets` |
 | `{binDir}`, `{PATH}`, `<install dirs>` | Parts of the `PATH` subc builds |
@@ -231,7 +247,7 @@ The tests compare the manifest with the runbooks for these points:
 
 - input defaults in shell scripts
 - the full set of `run.sh` exports and their values
-- launch commands
+- launch commands, and the exact headless argv (each runbook is run against a stub agent)
 - Codex `-c` overrides
 - the compaction knobs subc sets (full name and value)
 - context and output limits in the config entries

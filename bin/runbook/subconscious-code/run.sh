@@ -3,6 +3,16 @@
 
 set -euo pipefail
 
+HEADLESS_PROMPT=""
+if [[ "${1:-}" == "headless" ]]; then
+  if [[ -z "${2:-}" ]]; then
+    echo "usage: subc marathon headless PROMPT [args...]" >&2
+    exit 2
+  fi
+  HEADLESS_PROMPT="$2"
+  shift 2
+fi
+
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${SC_API_KEY:-${API_KEY:-}}"
 MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
@@ -18,4 +28,8 @@ export SC_DLR_URL="${GATEWAY_URL%/}"
 export SC_DLR_ENABLED=true
 export SC_MODEL="$MODEL"
 
+if [[ -n "$HEADLESS_PROMPT" ]]; then
+  # The = form keeps a prompt that starts with "-" from parsing as a flag.
+  exec marathon "--print=${HEADLESS_PROMPT}" "$@"
+fi
 exec marathon "$@"

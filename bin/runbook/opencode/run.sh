@@ -69,6 +69,15 @@ fi
 # Parse args (only when executed, not sourced)
 PASSTHRU=()
 if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
+  HEADLESS_PROMPT=""
+  if [[ "${1:-}" == "headless" ]]; then
+    if [[ -z "${2:-}" ]]; then
+      echo "usage: subc opencode headless PROMPT [args...]" >&2
+      exit 2
+    fi
+    HEADLESS_PROMPT="$2"
+    shift 2
+  fi
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --)
@@ -96,4 +105,7 @@ if [[ "${BASH_SOURCE[0]:-$0}" != "${0}" ]]; then
   return 0 2>/dev/null || true
 fi
 
+if [[ -n "${HEADLESS_PROMPT:-}" ]]; then
+  exec opencode run ${PASSTHRU[@]+"${PASSTHRU[@]}"} "$HEADLESS_PROMPT"
+fi
 exec opencode ${PASSTHRU[@]+"${PASSTHRU[@]}"}
