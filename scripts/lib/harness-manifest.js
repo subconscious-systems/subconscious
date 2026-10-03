@@ -16,10 +16,22 @@ export const MANIFEST_TOKENS = {
   '{json}': 'JSON document described by the matching config entry.',
   '{claudeSettings}': 'JSON document described by the --settings config entry.',
   '{configOverrides}': 'The -c key=value pairs listed under config.',
+  '{target}':
+    'Release target triple, one of install.targets or install.windows_targets.',
+  '{binDir}': "Directory the agent's binary was found in.",
+  '{PATH}': "The caller's PATH.",
+  '<install dirs>': 'Common install directories subc adds to PATH.',
+  '<agent key>': 'The agent-specific API key input, for example CODEX_API_KEY.',
+  '<id>': 'Any model ID in the catalog; the field repeats for each model.',
+  'models[]': 'Every element of the models array.',
+  '<runbook>': 'Absolute path of the installed bin/runbook directory.',
+  '<VS Code user dir>':
+    'The VS Code user settings directory, for example ~/Library/Application Support/Code/User.',
 };
 
 const REQUIRED_HARNESS_FIELDS = [
   'install',
+  'prerequisites',
   'launch',
   'inputs',
   'env',
@@ -62,6 +74,7 @@ function harnessEntry(agent) {
     },
     binary: agent.bin || null,
     install: { ...harness.install, commands: agent.install || null },
+    prerequisites: harness.prerequisites,
     launch: harness.launch,
     inputs: harness.inputs,
     env: harness.env,

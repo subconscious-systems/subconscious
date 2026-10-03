@@ -176,26 +176,69 @@ The manifest is generated from `agents/registry.json` into `bin/harness-manifest
 | --- | --- |
 | `schema_version` | Raised when a field is renamed, removed, or changes meaning. New fields do not raise it. |
 | `cli_version` | The installed `subconscious-cli` version. Printed by the command only. |
-| `tokens` | Placeholders used in values, such as `{baseUrl}`, `{model}`, and `{catalog[N]}`. |
-| `runbook_env` | Variables subc passes to every runbook. |
+| `tokens` | Placeholders used in values (listed below). |
+| `runbook_env` | What subc passes to every runbook: `order` of the layers, `inherited` sources (profile values, then `process.env`), `fixed` values set last, and `per_harness` extras (Claude's `SUBC_CLAUDE_SETTINGS` and model picker env). |
 | `harnesses.<id>` | One entry per agent with a runbook. |
 
 Each `harnesses.<id>` entry has:
 
 | Field | Meaning |
 | --- | --- |
-| `install` | `method` (`npm`, `script`, `github-release`, `user`, or `null`), `package` or `repository`, `version` or `channel`, `minimum_version`, and the per-OS `commands`. |
+| `install` | `method`, `package` or `repository`, `version` or `channel`, `minimum_version`, release `targets`, and the per-OS `commands`. |
+| `prerequisites` | Commands the runbook needs, such as `jq`, with what needs them and whether they are required. `a\|b` means either one. |
 | `binary` | Executable name, or `null` for IDE integrations. |
 | `launch` | `argv` template, and whether a launch also writes persistent files. |
-| `inputs` | Profile or environment variables the runbook reads, with defaults. |
+| `inputs` | Profile or environment variables the runbook reads, with `default` and the `source` file under `bin/runbook`. |
 | `env` | Variables the runbook exports to the agent: `value`, what it `controls`, and the `override` variables or flags. |
-| `config` | Files, `-c` overrides, flags, and JSON-in-env the runbook writes, with `lifetime` (`launch`, `persistent`, or `legacy`). |
-| `capabilities.compaction` | `on`, `off`, and `threshold`, each with the exact knob (`kind`, `name`, `value`) and whether subc sets it (`set_by_subc`). |
+| `config` | Files, directories, `-c` overrides, flags, and JSON-in-env the runbook writes. |
+| `capabilities.compaction` | `default`, plus `on`, `off`, and `threshold`, each with the exact knob and whether subc sets it (`set_by_subc`). |
 | `capabilities.mcp` | Whether subc configures MCP, and which transports. |
 | `capabilities.headers` | Headers sent and on which requests. |
 | `capabilities.hooks` | Hook events installed, what each posts, and where. |
 
-`verified: true` means the value was read from what the runbook script does. `verified: false` means subc does not set it, or the scripts cannot prove it; a `note` says which. Tests fail if an env var, input, header, hook, or file in the manifest is missing from that agent's runbook.
+A compaction knob has `kind`, `name`, `value`, and `override`. When `kind` is `config-field` or `model-catalog-field`, `config` names the `config` entry (its `path` or `name`) that holds it. `threshold.semantics` says what the number means: `window` is the context size the agent compacts against (Claude Code, OpenCode, Pi, DeepSeek Harness, Copilot); `trigger` is the token count that starts compaction (Codex).
+
+Enumerated values:
+
+| Field | Values |
+| --- | --- |
+| `install.method` | `npm`, `script`, `github-release`, `user`, `null` |
+| `compaction.default` | `on`, `unknown` |
+| knob `kind` | `env`, `cli-config`, `config-field`, `model-catalog-field`, `null` |
+| `threshold.semantics` | `window`, `trigger` |
+| `config[].kind` | `file`, `dir`, `cli-flag`, `cli-config`, `env-json` |
+| `config[].lifetime` | `launch` (removed or not written to disk), `persistent`, `legacy` (left by older setups) |
+
+Placeholders:
+
+| Token | Meaning |
+| --- | --- |
+| `{baseUrl}`, `{baseUrlV1}` | Gateway origin, and the origin followed by `/v1` |
+| `{apiKey}`, `{model}` | Gateway API key and launch model |
+| `{catalog}`, `{catalog[N]}` | All live catalog models (newline-separated), or the one at index N (clamped to the last) |
+| `{args}`, `{tempFile}`, `{tmp}` | Passed-through arguments, a temporary file the runbook removes, the system temp directory |
+| `{json}`, `{claudeSettings}`, `{configOverrides}` | Documents described by the matching `config` entries |
+| `{target}` | A release target triple from `install.targets` or `install.windows_targets` |
+| `{binDir}`, `{PATH}`, `<install dirs>` | Parts of the `PATH` subc builds |
+| `<agent key>` | The agent-specific API key input, such as `CODEX_API_KEY` |
+| `<id>`, `models[]` | Any catalog model ID, and every element of a models array |
+| `<runbook>` | The installed `bin/runbook` directory |
+| `<VS Code user dir>` | The VS Code user settings directory |
+
+`verified: true` means the value was read from what the runbook script does. `verified: false` means subc does not set it, or the scripts cannot prove its effect; a `note` says which.
+
+The tests compare the manifest with the runbooks for these points:
+
+- input defaults in shell scripts
+- the full set of `run.sh` exports and their values
+- launch commands
+- Codex `-c` overrides
+- the compaction knobs subc sets (full name and value)
+- context and output limits in the config entries
+- minimum versions
+- the names of headers, hooks, files, and prerequisites
+
+Free-text fields, `controls`, notes, and most config payload fields are not checked.
 
 ## Long screenshot sessions
 
