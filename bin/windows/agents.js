@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import { separatorIndex } from '../headless-args.js';
 import { parseOptions } from './common.js';
 import { installWindowsAgent, windowsInstallSpec } from './install.js';
 import { executeWindowsLaunch, windowsLaunch } from './launch.js';
@@ -69,7 +70,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
   }
 
   // Honor -- after which all arguments belong to the underlying agent.
-  const boundary = args.indexOf('--');
+  const boundary = separatorIndex(args);
   const tail = boundary < 0 ? [] : args.slice(boundary);
   const extracted = extractModel(
     boundary < 0 ? args : args.slice(0, boundary),
@@ -79,7 +80,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
   let explicit = {};
   if (parsed.action === 'install' || agent.id === 'claude-code') {
     const handled = parseOptions(
-      boundary < 0 ? args : args.slice(0, args.indexOf('--')),
+      boundary < 0 ? args : args.slice(0, boundary),
       { '--api-key': 1, '--gateway-url': 1 },
     );
     explicit = handled.options;

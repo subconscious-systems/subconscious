@@ -71,7 +71,8 @@ PASSTHRU=()
 if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
   HEADLESS_PROMPT=""
   if [[ "${1:-}" == "headless" ]]; then
-    if [[ -z "${2:-}" || "$2" == "-h" || "$2" == "--help" ]]; then
+    prompt_text="${2:-}"
+    if [[ -z "${prompt_text//[[:space:]]/}" || "$2" == "-h" || "$2" == "--help" ]]; then
       echo "usage: subc opencode headless PROMPT [args...]" >&2
       exit 2
     fi

@@ -33,6 +33,7 @@ import {
   harnessManifestCommand,
   printHarnessManifestHelp,
 } from './harness-manifest.js';
+import { headlessPromptIndex } from './headless-args.js';
 import { resolveModelCatalog } from './models.js';
 import {
   configCommand,
@@ -253,23 +254,34 @@ const authCommands = {
   whoami: whoamiCommand,
 };
 
+/** Position of the headless prompt in the full argv, or -1. */
+function headlessPromptPosition(argv) {
+  let command = 0;
+  while (command < argv.length) {
+    const arg = argv[command];
+    if (arg === '--profile' || arg === '-p') command += 2;
+    else if (arg.startsWith('--profile=')) command += 1;
+    else break;
+  }
+  const prompt = headlessPromptIndex(argv.slice(command + 1));
+  return prompt < 0 ? -1 : command + 1 + prompt;
+}
+
 function extractProfile(argv) {
   let profileName = process.env.SUBC_PROFILE?.trim() || DEFAULT_PROFILE;
   let profileExplicit = false;
   const args = [];
-  let headlessSeen = false;
+  // The headless prompt is opaque, even when it looks like --profile.
+  const promptIndex = headlessPromptPosition(argv);
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
+    if (i === promptIndex) {
+      args.push(arg);
+      continue;
+    }
     if (arg === '--') {
       args.push(...argv.slice(i));
       break;
-    }
-    // The headless prompt is opaque, even when it looks like --profile.
-    if (arg === 'headless' && args.length > 0 && !headlessSeen) {
-      headlessSeen = true;
-      args.push(...argv.slice(i, i + 2));
-      i++;
-      continue;
     }
     if (arg === '--profile' || arg === '-p') {
       const value = argv[++i];

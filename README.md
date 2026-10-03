@@ -178,7 +178,9 @@ The agents keep their own permission defaults, so a run that should edit files u
 
 The prompt is always the argument after `headless`, including for `dsh`, which no longer reads a task piped into subc. Where the table says stdin, subc passes the prompt that way so it reaches the agent unchanged even when it starts with `-` or `@`. On Windows only `dsh` supports headless runs.
 
-The exit status is the agent's own. Pi's print mode exits 0 even when the model request fails, so check its output rather than relying on the exit status alone.
+The exit status is the agent's own. Pi 1.0.1 exits 1 when the model request fails in its default text output, but 0 with `--mode json`, so check its JSON output for errors. Pi also trims whitespace around a prompt it reads from stdin.
+
+A blank prompt, and `-h` or `--help` anywhere in a headless run, are refused so a scripted run never reports success without doing the task.
 
 ## Harness manifest
 

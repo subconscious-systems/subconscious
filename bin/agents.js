@@ -19,6 +19,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { getApiKey } from './auth.js';
 import { c } from './colors.js';
+import { headlessPromptIndex, separatorIndex } from './headless-args.js';
 import {
   isLiveModelSource,
   PUBLIC_CATALOG_FALLBACK_MESSAGE,
@@ -183,8 +184,11 @@ export function parseAgentAction(agent, argv = []) {
     if (!agent.runbook?.headless) {
       throw new Error(`${agent.name} does not support headless mode.`);
     }
-    if (!argv[1] || ['-h', '--help'].includes(argv[1])) {
+    if (!argv[1]?.trim() || ['-h', '--help'].includes(argv[1])) {
       throw new Error(`Usage: subc ${command} headless PROMPT [args...]`);
+    }
+    if (argv.slice(2).some((arg) => arg === '-h' || arg === '--help')) {
+      throw new Error('help is not available in a headless run');
     }
     return { action: 'headless', args: argv };
   }
@@ -196,14 +200,12 @@ export function parseAgentAction(agent, argv = []) {
   return { action: 'launch', args: argv };
 }
 
-/** True when argv asks for a headless run, after subc's own flags. */
-export function isHeadlessRequest(agent, argv = [], profile) {
-  const boundary = argv.indexOf('--');
-  const { rest } = extractModel(
-    boundary < 0 ? argv : argv.slice(0, boundary),
-    profile,
-  );
-  return parseAgentAction(agent, rest).action === 'headless';
+/** True when argv asks for a headless run; throws when that run is invalid. */
+export function isHeadlessRequest(agent, argv = []) {
+  const prompt = headlessPromptIndex(argv);
+  if (prompt < 0) return false;
+  parseAgentAction(agent, argv.slice(prompt - 1));
+  return true;
 }
 
 const AGENT_HELP = {
@@ -458,14 +460,12 @@ export function extractModel(argv, profile) {
       ? 'profile'
       : 'catalog';
   const rest = [];
-  let headlessSeen = false;
+  // The headless prompt is opaque, even when it looks like --model.
+  const promptIndex = headlessPromptIndex(argv);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    // The headless prompt is opaque, even when it looks like --model.
-    if (a === 'headless' && !headlessSeen) {
-      headlessSeen = true;
-      rest.push(...argv.slice(i, i + 2));
-      i++;
+    if (i === promptIndex) {
+      rest.push(a);
       continue;
     }
     if (a === '--model') {
@@ -1162,7 +1162,7 @@ export async function runAgent(agent, argv, options = {}) {
     return 0;
   }
 
-  const headless = isHeadlessRequest(agent, argv, profile);
+  const headless = isHeadlessRequest(agent, argv);
   if (
     headless &&
     process.platform === 'win32' &&
@@ -1219,7 +1219,7 @@ export async function runAgent(agent, argv, options = {}) {
   }
 
   // Arguments after -- belong to the agent, including its own --model.
-  const boundary = argv.indexOf('--');
+  const boundary = separatorIndex(argv);
   const {
     model: requestedModel,
     modelSource,

@@ -343,3 +343,66 @@ test('a prompt that looks like a subc flag reaches the agent unchanged', async (
     assert.deepEqual(argv.slice(-3), ['exec', '--', prompt]);
   }
 });
+
+test('a blank prompt is refused before launching', async () => {
+  assert.throws(
+    () => parseAgentAction(agentById('pi'), ['headless', ' \n ']),
+    /headless PROMPT/,
+  );
+  for (const id of HEADLESS_AGENTS) {
+    await fs.rm(argsFile, { force: true });
+    const result = runRunbook(agentById(id), ['headless', ' \t\n']);
+    assert.equal(result.status, 2, `${id}: ${result.stderr}`);
+    await assert.rejects(fs.access(argsFile), `${id} launched anyway`);
+  }
+});
+
+test('help flags after the prompt are refused instead of exiting 0', () => {
+  for (const args of [
+    ['headless', 'go', '-h'],
+    ['headless', 'go', '--', '--help'],
+  ]) {
+    assert.throws(
+      () => parseAgentAction(agentById('codex'), args),
+      /help is not available in a headless run/,
+    );
+  }
+});
+
+test('a prompt of exactly -- reaches the agent', async () => {
+  const result = await runSubc([
+    'codex',
+    'headless',
+    '--',
+    '--model',
+    'subconscious/glm-5.2',
+  ]);
+  assertHeadlessLaunch(result);
+  const argv = await recordedArgv();
+  // The prompt "--" is not a separator, so the --model after it is subc's.
+  assert.ok(argv.includes('model=subconscious/glm-5.2'), argv.join(' '));
+  assert.deepEqual(argv.slice(-3), ['exec', '--', '--']);
+});
+
+test('the word headless later in a normal launch changes nothing', async () => {
+  const { extractModel } = await import('../bin/agents.js');
+  const parsed = extractModel(
+    ['--resume', 'headless', '--model', 'subconscious/glm-5.2'],
+    { values: {} },
+  );
+  assert.equal(parsed.model, 'subconscious/glm-5.2');
+  assert.deepEqual(parsed.rest, ['--resume', 'headless']);
+  const { isHeadlessRequest } = await import('../bin/agents.js');
+  assert.equal(
+    isHeadlessRequest(agentById('claude-code'), ['--model', 'x', 'install']),
+    false,
+  );
+  const result = await runSubc([
+    'codex',
+    '--resume',
+    'headless',
+    '-p',
+    'missing-profile',
+  ]);
+  assert.match(result.stderr, /Profile 'missing-profile' does not exist/);
+});

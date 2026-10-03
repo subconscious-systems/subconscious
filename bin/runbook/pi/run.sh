@@ -7,7 +7,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HEADLESS_PROMPT=""
 if [[ "${1:-}" == "headless" ]]; then
-  if [[ -z "${2:-}" || "$2" == "-h" || "$2" == "--help" ]]; then
+  prompt_text="${2:-}"
+  if [[ -z "${prompt_text//[[:space:]]/}" || "$2" == "-h" || "$2" == "--help" ]]; then
     echo "usage: subc pi headless PROMPT [args...]" >&2
     exit 2
   fi
