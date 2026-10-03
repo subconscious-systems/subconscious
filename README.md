@@ -161,6 +161,42 @@ The packaged integrations live in `bin/runbook`.
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
+## Harness manifest
+
+`subc harness-manifest` prints how this version of subc installs, configures, and launches each agent above, so other tools can copy the setup exactly instead of re-implementing it.
+
+```bash
+subc harness-manifest --json   # full manifest
+subc harness-manifest          # summary table in a terminal, JSON when piped
+```
+
+The manifest is generated from `agents/registry.json` into `bin/harness-manifest.generated.json`, which ships in the npm package. The command adds `cli_version` from `package.json`.
+
+| Field | Meaning |
+| --- | --- |
+| `schema_version` | Raised when a field is renamed, removed, or changes meaning. New fields do not raise it. |
+| `cli_version` | The installed `subconscious-cli` version. Printed by the command only. |
+| `tokens` | Placeholders used in values, such as `{baseUrl}`, `{model}`, and `{catalog[N]}`. |
+| `runbook_env` | Variables subc passes to every runbook. |
+| `harnesses.<id>` | One entry per agent with a runbook. |
+
+Each `harnesses.<id>` entry has:
+
+| Field | Meaning |
+| --- | --- |
+| `install` | `method` (`npm`, `script`, `github-release`, `user`, or `null`), `package` or `repository`, `version` or `channel`, `minimum_version`, and the per-OS `commands`. |
+| `binary` | Executable name, or `null` for IDE integrations. |
+| `launch` | `argv` template, and whether a launch also writes persistent files. |
+| `inputs` | Profile or environment variables the runbook reads, with defaults. |
+| `env` | Variables the runbook exports to the agent: `value`, what it `controls`, and the `override` variables or flags. |
+| `config` | Files, `-c` overrides, flags, and JSON-in-env the runbook writes, with `lifetime` (`launch`, `persistent`, or `legacy`). |
+| `capabilities.compaction` | `on`, `off`, and `threshold`, each with the exact knob (`kind`, `name`, `value`) and whether subc sets it (`set_by_subc`). |
+| `capabilities.mcp` | Whether subc configures MCP, and which transports. |
+| `capabilities.headers` | Headers sent and on which requests. |
+| `capabilities.hooks` | Hook events installed, what each posts, and where. |
+
+`verified: true` means the value was read from what the runbook script does. `verified: false` means subc does not set it, or the scripts cannot prove it; a `note` says which. Tests fail if an env var, input, header, hook, or file in the manifest is missing from that agent's runbook.
+
 ## Long screenshot sessions
 
 Coding agents resend every screenshot on every turn, so a long computer-use or screenshot session grows until the gateway refuses it. For vision models, subc applies one rule in Pi and OpenCode before a request leaves the machine: keep the newest screenshots, up to 30 and about 25 MiB in total, and put the text `image` where older ones were. It never removes more than one screenshot per turn, because Subconscious Cache reuses around one removed screenshot, not several; a big screenshot can take the total past 25 MiB for a few turns while it catches up, and only past 30 MiB does it drop straight back to 25. The gateway applies the same rule, so it receives exactly what its own window would produce, and Subconscious Cache still reuses the rest of the conversation: each turn only reads the new screenshot.
