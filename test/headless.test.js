@@ -25,7 +25,9 @@ const PROMPTS = [
   '@file-looking prompt',
 ];
 let PROMPT = PROMPTS[0];
-const EXTRA = ['--extra-flag'];
+const EXTRA = ['--extra-flag', 'value'];
+// Each runbook drops the separator, so the agent sees the same options.
+const EXTRA_FORMS = [EXTRA, ['--', ...EXTRA]];
 const MODEL = 'subconscious/glm-5.3-marathon';
 const HEADLESS_AGENTS = [
   'claude-code',
@@ -134,10 +136,12 @@ test('every headless runbook runs exactly the manifest headless_argv', async () 
     const { headless_argv: argv, headless_stdin: stdin } =
       manifest.harnesses[id].launch;
     assert.ok(argv, `${id}: manifest has no headless_argv`);
-    for (const prompt of PROMPTS) {
+    for (const [prompt, extra] of PROMPTS.flatMap((p) =>
+      EXTRA_FORMS.map((form) => [p, form]),
+    )) {
       PROMPT = prompt;
       await fs.rm(argsFile, { force: true });
-      const result = runRunbook(agent, ['headless', PROMPT, ...EXTRA]);
+      const result = runRunbook(agent, ['headless', PROMPT, ...extra]);
       assert.equal(result.status, 0, `${id}: ${result.stderr}`);
       // The stub writes nothing to stdout, so anything here is runbook noise.
       assert.equal(result.stdout, '', `${id} wrote to stdout`);
@@ -145,7 +149,7 @@ test('every headless runbook runs exactly the manifest headless_argv', async () 
       assert.equal(
         await fs.readFile(stdinFile, 'utf8'),
         stdin ? stdin.replaceAll('{prompt}', PROMPT) : '',
-        `${id}: stdin for ${JSON.stringify(PROMPT)}`,
+        `${id}: stdin for ${JSON.stringify(PROMPT)} ${extra.join(' ')}`,
       );
     }
   }
@@ -161,6 +165,14 @@ test('headless without a prompt fails before launching', async () => {
       await assert.rejects(fs.access(argsFile), `${id} launched anyway`);
     }
   }
+});
+
+test('help inside a headless run is refused instead of exiting 0', async () => {
+  await fs.rm(argsFile, { force: true });
+  const result = runRunbook(agentById('claude-code'), ['headless', 'go', '-h']);
+  assert.equal(result.status, 2, result.stderr);
+  assert.equal(result.stdout, '');
+  await assert.rejects(fs.access(argsFile));
 });
 
 test('the registry and the manifest agree on which agents run headless', () => {
@@ -203,7 +215,7 @@ test('parseAgentAction recognizes headless only where it is supported', () => {
   );
 });
 
-test('Windows dsh headless finds the binary and never prompts to install', async () => {
+test('Windows dsh headless reports a missing binary without prompting or crashing', async () => {
   const { runWindowsAgent } = await import('../bin/windows/agents.js');
   const { extractModel } = await import('../bin/agents.js');
   const emptyDir = await fs.mkdtemp(path.join(testDir, 'empty-path-'));
@@ -238,10 +250,10 @@ test('Windows dsh headless finds the binary and never prompts to install', async
   assert.deepEqual(stdout, []);
 });
 
-test('subc headless keeps stdout clean, skips npm, and leaves args after -- alone', async () => {
+async function runSubc(args) {
   const home = await fs.mkdtemp(path.join(testDir, 'home-'));
-  const fetchLog = path.join(testDir, 'fetches');
-  const preload = path.join(testDir, 'record-fetch.mjs');
+  const fetchLog = path.join(home, 'fetches');
+  const preload = path.join(home, 'record-fetch.mjs');
   await fs.writeFile(
     preload,
     `import { appendFileSync } from 'node:fs';
@@ -254,19 +266,7 @@ globalThis.fetch = async (url) => {
   await fs.rm(argsFile, { force: true });
   const result = spawnSync(
     process.execPath,
-    [
-      '--import',
-      preload,
-      path.join(ROOT, 'bin/cli.js'),
-      'codex',
-      'headless',
-      'do it',
-      '--model',
-      MODEL,
-      '--',
-      '--model',
-      'agent-side-model',
-    ],
+    ['--import', preload, path.join(ROOT, 'bin/cli.js'), ...args],
     {
       encoding: 'utf8',
       input: CALLER_STDIN,
@@ -277,6 +277,7 @@ globalThis.fetch = async (url) => {
         SUBC_CONFIG_DIR: path.join(home, 'subc'),
         SUBCONSCIOUS_API_KEY: 'sk-test',
         SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9',
+        SUBCONSCIOUS_MODEL: MODEL,
         SUBC_DISABLE_UPDATE_CHECK: '',
         FETCH_LOG: fetchLog,
         HEADLESS_ARGV_FILE: argsFile,
@@ -284,13 +285,31 @@ globalThis.fetch = async (url) => {
       },
     },
   );
+  const fetched = await fs.readFile(fetchLog, 'utf8').catch(() => '');
+  return { ...result, fetched };
+}
+
+function assertHeadlessLaunch(result) {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /Launching.*Codex/);
-  const fetched = await fs.readFile(fetchLog, 'utf8').catch(() => '');
-  assert.doesNotMatch(fetched, /registry\.npmjs\.org/);
+  assert.doesNotMatch(result.fetched, /registry\.npmjs\.org/);
+}
+
+test('subc headless keeps stdout clean, skips npm, and leaves args after -- alone', async () => {
+  const result = await runSubc([
+    'codex',
+    'headless',
+    'do it',
+    '--model',
+    'subconscious/glm-5.2',
+    '--',
+    '--model',
+    'agent-side-model',
+  ]);
+  assertHeadlessLaunch(result);
   const argv = await recordedArgv();
-  assert.ok(argv.includes(`model=${MODEL}`), argv.join(' '));
+  assert.ok(argv.includes('model=subconscious/glm-5.2'), argv.join(' '));
   assert.deepEqual(argv.slice(-5), [
     'exec',
     '--model',
@@ -299,4 +318,28 @@ globalThis.fetch = async (url) => {
     'do it',
   ]);
   assert.equal(await fs.readFile(stdinFile, 'utf8'), '');
+});
+
+test('subc flags before headless still get headless behaviour', async () => {
+  const result = await runSubc([
+    'codex',
+    '--model',
+    'subconscious/glm-5.2',
+    'headless',
+    'do it',
+  ]);
+  assertHeadlessLaunch(result);
+  const argv = await recordedArgv();
+  assert.ok(argv.includes('model=subconscious/glm-5.2'), argv.join(' '));
+  assert.deepEqual(argv.slice(-3), ['exec', '--', 'do it']);
+});
+
+test('a prompt that looks like a subc flag reaches the agent unchanged', async () => {
+  for (const prompt of ['--model', '-p', '--profile=x', '--model=y']) {
+    const result = await runSubc(['codex', 'headless', prompt]);
+    assertHeadlessLaunch(result);
+    const argv = await recordedArgv();
+    assert.ok(argv.includes(`model=${MODEL}`), `${prompt}: ${argv.join(' ')}`);
+    assert.deepEqual(argv.slice(-3), ['exec', '--', prompt]);
+  }
 });

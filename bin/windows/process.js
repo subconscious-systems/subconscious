@@ -207,8 +207,19 @@ export function spawnWindowsSync(command, args, options = {}) {
 }
 
 export function runWindows(command, args, options = {}) {
+  const { input, ...spawnOptions } = options;
   return new Promise((resolve, reject) => {
-    const child = spawnWindows(command, args, { stdio: 'inherit', ...options });
+    const child = spawnWindows(command, args, {
+      stdio: input === undefined ? 'inherit' : ['pipe', 'inherit', 'inherit'],
+      ...spawnOptions,
+    });
+    if (input !== undefined) {
+      // EPIPE means the agent exited without reading; its exit code reports why.
+      child.stdin.on('error', (error) => {
+        if (error.code !== 'EPIPE') reject(error);
+      });
+      child.stdin.end(input);
+    }
     const forward = (signal) => {
       try {
         child.kill(signal);

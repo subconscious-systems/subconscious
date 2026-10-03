@@ -106,7 +106,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
     console.error(
       `Configured model ${extracted.model} is not in the live catalog; using ${model}.`,
     );
-  const headless = parsed.action === 'headless';
+  const headless = dependencies.headless ?? parsed.action === 'headless';
   let executable;
   if (parsed.action === 'launch' || headless) {
     executable = resolveWindowsExecutable(agent.bin, {

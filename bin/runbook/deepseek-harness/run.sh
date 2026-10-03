@@ -105,19 +105,33 @@ if [[ "${1:-}" == "web" || "${1:-}" == "headless" ]]; then
   mode="$1"
   shift
 fi
+HEADLESS_PROMPT=""
 if [[ "$mode" == "headless" ]]; then
   if [[ -z "${1:-}" || "$1" == "-h" || "$1" == "--help" ]]; then
     echo "usage: subc dsh headless PROMPT [args...]" >&2
     exit 2
   fi
-  exec </dev/null
+  HEADLESS_PROMPT="$1"
+  shift
 fi
+
+# Drop the first "--": everything after it already belongs to the agent.
+AGENT_ARGS=()
+separator_dropped=false
+for arg in "$@"; do
+  if [[ "$separator_dropped" == false && "$arg" == "--" ]]; then
+    separator_dropped=true
+    continue
+  fi
+  AGENT_ARGS+=("$arg")
+done
 
 set +e
 if [[ "$mode" == "headless" ]]; then
-  dsh --profile headless --patch "$OVERLAY_FILE" "$@"
+  # The task goes on stdin: as an argument, a leading "-" parses as an option.
+  dsh --profile headless --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} < <(printf '%s' "$HEADLESS_PROMPT")
 else
-  dsh web --patch "$OVERLAY_FILE" "$@"
+  dsh web --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}
 fi
 status=$?
 set -e

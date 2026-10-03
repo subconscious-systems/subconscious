@@ -145,7 +145,8 @@ test('DeepSeek Harness supports headless mode and mirrors its exit status', asyn
     assert.equal(result.code, 7);
     const args = await readNullArgs(path.join(root, 'args'));
     assert.deepEqual(args.slice(0, 2), ['--profile', 'headless']);
-    assert.deepEqual(args.slice(-1), ['fix the tests']);
+    // The task goes on stdin, so nothing follows the overlay path.
+    assert.equal(args.length, 4);
     const overlay = await fs.readFile(path.join(root, 'overlay.yml'), 'utf8');
     assert.match(
       overlay,

@@ -1960,10 +1960,9 @@
           "--model",
           "{model}",
           "--print",
-          "{args}",
-          "--",
-          "{prompt}"
+          "{args}"
         ],
+        "headless_stdin": "{prompt}",
         "persistent_setup": true,
         "note": "Each launch first runs install.sh install, which rewrites the persistent files below."
       },
@@ -2189,9 +2188,9 @@
           "headless",
           "--patch",
           "{tempFile}",
-          "{prompt}",
           "{args}"
         ],
+        "headless_stdin": "{prompt}",
         "persistent_setup": false
       },
       "inputs": [

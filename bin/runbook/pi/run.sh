@@ -34,7 +34,20 @@ fi
   --model "$MODEL" \
   >/dev/null
 
+# Drop the first "--": everything after it already belongs to the agent.
+AGENT_ARGS=()
+separator_dropped=false
+for arg in "$@"; do
+  if [[ "$separator_dropped" == false && "$arg" == "--" ]]; then
+    separator_dropped=true
+    continue
+  fi
+  AGENT_ARGS+=("$arg")
+done
+
 if [[ -n "$HEADLESS_PROMPT" ]]; then
-  exec pi --provider subconscious --model "$MODEL" --print "$@" -- "$HEADLESS_PROMPT"
+  # On stdin the prompt is used as-is; as an argument a leading "@" would
+  # name a file.
+  exec pi --provider subconscious --model "$MODEL" --print ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} < <(printf '%s' "$HEADLESS_PROMPT")
 fi
-exec pi --provider subconscious --model "$MODEL" "$@"
+exec pi --provider subconscious --model "$MODEL" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}

@@ -196,6 +196,16 @@ export function parseAgentAction(agent, argv = []) {
   return { action: 'launch', args: argv };
 }
 
+/** True when argv asks for a headless run, after subc's own flags. */
+export function isHeadlessRequest(agent, argv = [], profile) {
+  const boundary = argv.indexOf('--');
+  const { rest } = extractModel(
+    boundary < 0 ? argv : argv.slice(0, boundary),
+    profile,
+  );
+  return parseAgentAction(agent, rest).action === 'headless';
+}
+
 const AGENT_HELP = {
   'subconscious-code': {
     usage: 'subc [-p NAME] marathon [help|install] [Marathon arguments...]',
@@ -448,8 +458,16 @@ export function extractModel(argv, profile) {
       ? 'profile'
       : 'catalog';
   const rest = [];
+  let headlessSeen = false;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    // The headless prompt is opaque, even when it looks like --model.
+    if (a === 'headless' && !headlessSeen) {
+      headlessSeen = true;
+      rest.push(...argv.slice(i, i + 2));
+      i++;
+      continue;
+    }
     if (a === '--model') {
       const v = argv[i + 1];
       if (v && !v.startsWith('-')) {
@@ -1144,7 +1162,7 @@ export async function runAgent(agent, argv, options = {}) {
     return 0;
   }
 
-  const headless = parseAgentAction(agent, argv).action === 'headless';
+  const headless = isHeadlessRequest(agent, argv, profile);
   if (
     headless &&
     process.platform === 'win32' &&
@@ -1165,6 +1183,7 @@ export async function runAgent(agent, argv, options = {}) {
       selectLaunchModel,
       runbookEnv,
       minimumClaudeVersion: MIN_CLAUDE_CODE_VERSION,
+      headless,
       parseClaudeVersion,
       claudeVersionNeedsUpgrade,
     });

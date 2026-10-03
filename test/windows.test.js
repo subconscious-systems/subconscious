@@ -593,7 +593,7 @@ test('DeepSeek overlay is ephemeral, has no API key, and supports headless argv'
   const root = await temporary(t);
   const spec = await windowsLaunch(
     'deepseek-harness',
-    ['headless', 'hello\nworld'],
+    ['headless', '- hello\nworld', '--', '--json'],
     {
       ...env,
       DEEPSEEK_HARNESS_CONTEXT_WINDOW: '123456',
@@ -602,6 +602,9 @@ test('DeepSeek overlay is ephemeral, has no API key, and supports headless argv'
     { tempRoot: root },
   );
   assert.deepEqual(spec.args.slice(0, 3), ['--profile', 'headless', '--patch']);
+  // The task goes on stdin, so a leading "-" cannot parse as an option.
+  assert.deepEqual(spec.args.slice(4), ['--json']);
+  assert.equal(spec.input, '- hello\nworld');
   const overlay = await fs.readFile(spec.args[3], 'utf8');
   assert.match(overlay, /contextWindow: 123456/);
   assert.match(overlay, /maxTokens: 6543/);
@@ -1260,4 +1263,20 @@ test('Windows OpenCode launch loads the image window plugin', async () => {
   const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT);
   assert.equal(config.plugin.length, 1);
   await fs.access(config.plugin[0]);
+});
+
+test('runWindows writes input to the child stdin and mirrors its exit code', async (t) => {
+  const root = await temporary(t);
+  const out = path.join(root, 'stdin.txt');
+  const code = await runWindows(
+    process.execPath,
+    [
+      '-e',
+      'let d="";process.stdin.on("data",(c)=>{d+=c}).on("end",()=>{require("fs").writeFileSync(process.argv[1],d);process.exit(3)})',
+      out,
+    ],
+    { env: process.env, input: '- hi\n"there"' },
+  );
+  assert.equal(code, 3);
+  assert.equal(await fs.readFile(out, 'utf8'), '- hi\n"there"');
 });

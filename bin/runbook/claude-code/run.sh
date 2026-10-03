@@ -185,6 +185,10 @@ if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
         shift 2
         ;;
       -h|--help)
+        if [[ -n "$HEADLESS_PROMPT" ]]; then
+          echo "error: help is not available in a headless run" >&2
+          exit 2
+        fi
         usage
         exit 0
         ;;

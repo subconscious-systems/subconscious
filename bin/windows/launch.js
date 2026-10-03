@@ -231,15 +231,22 @@ export async function windowsLaunch(
       await fs.writeFile(file, text, { mode: 0o600, flag: 'wx' });
       const mode = ['web', 'headless'].includes(argv[0]) ? argv[0] : 'web';
       const rest = ['web', 'headless'].includes(argv[0]) ? argv.slice(1) : argv;
+      // The headless task goes on stdin: as an argument, a leading "-"
+      // parses as an option.
+      const task = mode === 'headless' ? rest[0] : undefined;
+      const agentArgs = withoutSeparator(
+        mode === 'headless' ? rest.slice(1) : rest,
+      );
       return {
         command: 'dsh',
         args: [
           ...(mode === 'web' ? ['web'] : ['--profile', 'headless']),
           '--patch',
           file,
-          ...rest,
+          ...agentArgs,
         ],
         env: { ...childEnv, SUBCONSCIOUS_DSH_BASE_URL: `${base}/v1` },
+        ...(task === undefined ? {} : { input: task }),
         cleanup,
       };
     } catch (error) {
@@ -250,9 +257,19 @@ export async function windowsLaunch(
   throw new Error(`No native Windows launcher is available for ${id}`);
 }
 
+/** Drop the first "--": everything after it already belongs to the agent. */
+function withoutSeparator(args) {
+  const index = args.indexOf('--');
+  return index < 0 ? args : [...args.slice(0, index), ...args.slice(index + 1)];
+}
+
 export async function executeWindowsLaunch(spec, run) {
   try {
-    return await run(spec.command, spec.args, { env: spec.env });
+    const options =
+      spec.input === undefined
+        ? { env: spec.env }
+        : { env: spec.env, input: spec.input };
+    return await run(spec.command, spec.args, options);
   } finally {
     await spec.cleanup?.();
   }

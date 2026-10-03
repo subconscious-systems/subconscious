@@ -14,6 +14,7 @@ import {
   agentCommandName,
   agentList,
   isAgentHelpRequest,
+  isHeadlessRequest,
   parseAgentAction,
   resolveAgent,
   runAgent,
@@ -256,11 +257,19 @@ function extractProfile(argv) {
   let profileName = process.env.SUBC_PROFILE?.trim() || DEFAULT_PROFILE;
   let profileExplicit = false;
   const args = [];
+  let headlessSeen = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--') {
       args.push(...argv.slice(i));
       break;
+    }
+    // The headless prompt is opaque, even when it looks like --profile.
+    if (arg === 'headless' && args.length > 0 && !headlessSeen) {
+      headlessSeen = true;
+      args.push(...argv.slice(i, i + 2));
+      i++;
+      continue;
     }
     if (arg === '--profile' || arg === '-p') {
       const value = argv[++i];
@@ -321,7 +330,10 @@ async function main() {
     process.env.TERM !== 'dumb';
 
   // Headless runs are scripted: no npm request and no update prompt.
-  const headless = Boolean(resolveAgent(command)) && args[1] === 'headless';
+  const headlessAgent = resolveAgent(command);
+  const headless = Boolean(
+    headlessAgent && isHeadlessRequest(headlessAgent, args.slice(1)),
+  );
 
   // Explicit commands can wait on npm. The TUI opens immediately and prompts
   // only after a newer version is found.

@@ -172,11 +172,13 @@ The agents keep their own permission defaults, so a run that should edit files u
 | `claude` | `claude -p -- PROMPT` |
 | `codex` | `codex exec -- PROMPT` |
 | `opencode` | `opencode run`, with the prompt on stdin |
-| `pi` | `pi --print -- PROMPT` |
+| `pi` | `pi --print`, with the prompt on stdin |
 | `marathon` | `marathon --print=PROMPT` |
-| `dsh` | `dsh --profile headless PROMPT` |
+| `dsh` | `dsh --profile headless`, with the prompt on stdin |
 
-On Windows only `dsh` supports headless runs.
+The prompt is always the argument after `headless`, including for `dsh`, which no longer reads a task piped into subc. Where the table says stdin, subc passes the prompt that way so it reaches the agent unchanged even when it starts with `-` or `@`. On Windows only `dsh` supports headless runs.
+
+The exit status is the agent's own. Pi's print mode exits 0 even when the model request fails, so check its output rather than relying on the exit status alone.
 
 ## Harness manifest
 

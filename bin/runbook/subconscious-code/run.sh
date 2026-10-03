@@ -30,8 +30,19 @@ export SC_DLR_URL="${GATEWAY_URL%/}"
 export SC_DLR_ENABLED=true
 export SC_MODEL="$MODEL"
 
+# Drop the first "--": everything after it already belongs to the agent.
+AGENT_ARGS=()
+separator_dropped=false
+for arg in "$@"; do
+  if [[ "$separator_dropped" == false && "$arg" == "--" ]]; then
+    separator_dropped=true
+    continue
+  fi
+  AGENT_ARGS+=("$arg")
+done
+
 if [[ -n "$HEADLESS_PROMPT" ]]; then
   # The = form keeps a prompt that starts with "-" from parsing as a flag.
-  exec marathon "--print=${HEADLESS_PROMPT}" "$@"
+  exec marathon "--print=${HEADLESS_PROMPT}" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}
 fi
-exec marathon "$@"
+exec marathon ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}
