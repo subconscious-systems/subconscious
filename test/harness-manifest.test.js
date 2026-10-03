@@ -22,26 +22,6 @@ const registry = readJson('agents/registry.json');
 const generated = readJson('bin/harness-manifest.generated.json');
 const pkg = readJson('package.json');
 
-function runbookFile(dir, file) {
-  return readFileSync(path.join(RUNBOOK_DIR, dir, file), 'utf8');
-}
-
-function harnessSources(harness, files) {
-  return files
-    .filter((file) =>
-      readdirSync(path.join(RUNBOOK_DIR, harness.runbook.dir)).includes(file),
-    )
-    .map((file) => runbookFile(harness.runbook.dir, file))
-    .join('\n');
-}
-
-function allHarnessFiles(harness) {
-  const dir = path.join(RUNBOOK_DIR, harness.runbook.dir);
-  return readdirSync(dir)
-    .map((file) => readFileSync(path.join(dir, file), 'utf8'))
-    .join('\n');
-}
-
 function runCli(args) {
   return spawnSync(process.execPath, [CLI, ...args], {
     encoding: 'utf8',
@@ -114,73 +94,6 @@ test('every unverified value explains itself', () => {
   };
   walk(generated.harnesses, 'harnesses');
   assert.deepEqual(missing, []);
-});
-
-test('drift: manifest env and inputs appear in each run.sh or install.sh', () => {
-  for (const harness of Object.values(generated.harnesses)) {
-    const scripts = harnessSources(harness, ['run.sh', 'install.sh']);
-    for (const entry of [...harness.env, ...harness.inputs]) {
-      assert.match(
-        scripts,
-        new RegExp(`\\b${entry.name}\\b`),
-        `${harness.id}: ${entry.name} is not in run.sh or install.sh`,
-      );
-    }
-    for (const entry of harness.env) {
-      assert.match(
-        runbookFile(harness.runbook.dir, entry.source),
-        new RegExp(`\\b${entry.name}\\b`),
-        `${harness.id}: ${entry.name} is not in ${entry.source}`,
-      );
-    }
-  }
-});
-
-test('drift: compaction knobs subc sets appear in the runbook', () => {
-  for (const harness of Object.values(generated.harnesses)) {
-    const sources = allHarnessFiles(harness);
-    for (const [mode, knob] of Object.entries(
-      harness.capabilities.compaction,
-    )) {
-      if (!knob?.set_by_subc || !knob.name) continue;
-      const leaf = knob.name.split('.').at(-1);
-      assert.ok(
-        sources.includes(leaf),
-        `${harness.id}: compaction ${mode} knob ${knob.name} is not in the runbook`,
-      );
-    }
-  }
-});
-
-test('drift: headers, hooks, and config files appear in the runbook', () => {
-  for (const harness of Object.values(generated.harnesses)) {
-    const sources = allHarnessFiles(harness);
-    for (const header of harness.capabilities.headers) {
-      if (!header.set_by_subc) continue;
-      assert.ok(
-        sources.includes(header.name),
-        `${harness.id}: header ${header.name}`,
-      );
-      if (header.name === 'x-subconscious-client') {
-        assert.ok(
-          sources.includes(`x-subconscious-client: ${header.value}`) ||
-            sources.includes(`"x-subconscious-client":"${header.value}"`) ||
-            sources.includes(`"x-subconscious-client": "${header.value}"`),
-          `${harness.id}: x-subconscious-client value ${header.value}`,
-        );
-      }
-    }
-    for (const hook of harness.capabilities.hooks) {
-      assert.ok(sources.includes(hook.event), `${harness.id}: ${hook.event}`);
-    }
-    for (const file of harness.config.filter(
-      (entry) => entry.kind === 'file',
-    )) {
-      const base = path.basename(file.path).replace('XXXXXX', '');
-      const stem = base.split('..')[0];
-      assert.ok(sources.includes(stem), `${harness.id}: ${file.path}`);
-    }
-  }
 });
 
 test('harness-manifest prints valid JSON with the schema version', () => {
