@@ -18,7 +18,13 @@ const manifest = JSON.parse(
   ),
 );
 
-const PROMPT = 'fix the "bug"\nthen run -p --model trick';
+const PROMPTS = [
+  'fix the "bug"\nthen run -p --model trick',
+  '- start with a markdown bullet',
+  '--looks-like-a-flag',
+  '@file-looking prompt',
+];
+let PROMPT = PROMPTS[0];
 const EXTRA = ['--extra-flag'];
 const MODEL = 'subconscious/glm-5.3-marathon';
 const HEADLESS_AGENTS = [
@@ -33,11 +39,13 @@ const HEADLESS_AGENTS = [
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-headless-'));
 const binDir = path.join(testDir, 'bin');
 const argsFile = path.join(testDir, 'argv');
+const stdinFile = path.join(testDir, 'stdin');
+const CALLER_STDIN = 'caller input that a headless run must not read';
 await fs.mkdir(binDir, { recursive: true });
 for (const bin of ['claude', 'codex', 'opencode', 'pi', 'marathon', 'dsh']) {
   await fs.writeFile(
     path.join(binDir, bin),
-    `#!/usr/bin/env bash\nprintf '%s\\0' "$@" >"$HEADLESS_ARGV_FILE"\n`,
+    `#!/usr/bin/env bash\nprintf '%s\\0' "$(basename "$0")" "$@" >"$HEADLESS_ARGV_FILE"\ncat >"$HEADLESS_STDIN_FILE"\n`,
     { mode: 0o755 },
   );
 }
@@ -70,7 +78,9 @@ function runRunbook(agent, args) {
         CODEX_DIR: path.join(testDir, '.codex'),
         PI_CODING_AGENT_DIR: piDir,
         HEADLESS_ARGV_FILE: argsFile,
+        HEADLESS_STDIN_FILE: stdinFile,
       },
+      input: CALLER_STDIN,
     },
   );
 }
@@ -121,25 +131,35 @@ function matchArgv(expected, actual) {
 test('every headless runbook runs exactly the manifest headless_argv', async () => {
   for (const id of HEADLESS_AGENTS) {
     const agent = agentById(id);
-    const argv = manifest.harnesses[id].launch.headless_argv;
+    const { headless_argv: argv, headless_stdin: stdin } =
+      manifest.harnesses[id].launch;
     assert.ok(argv, `${id}: manifest has no headless_argv`);
-    await fs.rm(argsFile, { force: true });
-    const result = runRunbook(agent, ['headless', PROMPT, ...EXTRA]);
-    assert.equal(result.status, 0, `${id}: ${result.stderr}`);
-    // The stub writes nothing to stdout, so anything here is runbook noise.
-    assert.equal(result.stdout, '', `${id} wrote to stdout`);
-    const actual = [argv[0], ...(await recordedArgv())];
-    matchArgv(argv, actual);
+    for (const prompt of PROMPTS) {
+      PROMPT = prompt;
+      await fs.rm(argsFile, { force: true });
+      const result = runRunbook(agent, ['headless', PROMPT, ...EXTRA]);
+      assert.equal(result.status, 0, `${id}: ${result.stderr}`);
+      // The stub writes nothing to stdout, so anything here is runbook noise.
+      assert.equal(result.stdout, '', `${id} wrote to stdout`);
+      matchArgv(argv, await recordedArgv());
+      assert.equal(
+        await fs.readFile(stdinFile, 'utf8'),
+        stdin ? stdin.replaceAll('{prompt}', PROMPT) : '',
+        `${id}: stdin for ${JSON.stringify(PROMPT)}`,
+      );
+    }
   }
 });
 
 test('headless without a prompt fails before launching', async () => {
   for (const id of HEADLESS_AGENTS) {
     await fs.rm(argsFile, { force: true });
-    const result = runRunbook(agentById(id), ['headless']);
-    assert.equal(result.status, 2, `${id}: ${result.stderr}`);
-    assert.match(result.stderr, /headless PROMPT/, id);
-    await assert.rejects(fs.access(argsFile), `${id} launched anyway`);
+    for (const args of [['headless'], ['headless', '--help']]) {
+      const result = runRunbook(agentById(id), args);
+      assert.equal(result.status, 2, `${id}: ${result.stderr}`);
+      assert.match(result.stderr, /headless PROMPT/, id);
+      await assert.rejects(fs.access(argsFile), `${id} launched anyway`);
+    }
   }
 });
 
@@ -171,8 +191,112 @@ test('parseAgentAction recognizes headless only where it is supported', () => {
     () => parseAgentAction(agentById('codex'), ['headless', '']),
     /headless PROMPT/,
   );
+  for (const help of ['-h', '--help']) {
+    assert.throws(
+      () => parseAgentAction(agentById('codex'), ['headless', help]),
+      /headless PROMPT/,
+    );
+  }
   assert.throws(
     () => parseAgentAction(agentById('cursor'), ['headless', 'go']),
     /does not support headless/,
   );
+});
+
+test('Windows dsh headless finds the binary and never prompts to install', async () => {
+  const { runWindowsAgent } = await import('../bin/windows/agents.js');
+  const { extractModel } = await import('../bin/agents.js');
+  const emptyDir = await fs.mkdtemp(path.join(testDir, 'empty-path-'));
+  const saved = { PATH: process.env.PATH, exitCode: process.exitCode };
+  const stdout = [];
+  const log = console.log;
+  process.env.PATH = emptyDir;
+  console.log = (...parts) => stdout.push(parts.join(' '));
+  try {
+    const code = await runWindowsAgent(
+      agentById('deepseek-harness'),
+      ['headless', 'go'],
+      {
+        profile: { name: 'default', values: {} },
+        parseAgentAction,
+        extractModel,
+        requireApiKey: async () => 'sk-test',
+        resolvedModelsForLaunch: async () => ({
+          models: [MODEL],
+          source: 'packaged',
+        }),
+        selectLaunchModel: () => MODEL,
+        runbookEnv: () => ({}),
+      },
+    );
+    assert.equal(code, 127);
+  } finally {
+    console.log = log;
+    process.env.PATH = saved.PATH;
+    process.exitCode = saved.exitCode;
+  }
+  assert.deepEqual(stdout, []);
+});
+
+test('subc headless keeps stdout clean, skips npm, and leaves args after -- alone', async () => {
+  const home = await fs.mkdtemp(path.join(testDir, 'home-'));
+  const fetchLog = path.join(testDir, 'fetches');
+  const preload = path.join(testDir, 'record-fetch.mjs');
+  await fs.writeFile(
+    preload,
+    `import { appendFileSync } from 'node:fs';
+globalThis.fetch = async (url) => {
+  appendFileSync(process.env.FETCH_LOG, String(url) + '\\n');
+  throw new Error('network disabled in test');
+};
+`,
+  );
+  await fs.rm(argsFile, { force: true });
+  const result = spawnSync(
+    process.execPath,
+    [
+      '--import',
+      preload,
+      path.join(ROOT, 'bin/cli.js'),
+      'codex',
+      'headless',
+      'do it',
+      '--model',
+      MODEL,
+      '--',
+      '--model',
+      'agent-side-model',
+    ],
+    {
+      encoding: 'utf8',
+      input: CALLER_STDIN,
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        HOME: home,
+        SUBC_CONFIG_DIR: path.join(home, 'subc'),
+        SUBCONSCIOUS_API_KEY: 'sk-test',
+        SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9',
+        SUBC_DISABLE_UPDATE_CHECK: '',
+        FETCH_LOG: fetchLog,
+        HEADLESS_ARGV_FILE: argsFile,
+        HEADLESS_STDIN_FILE: stdinFile,
+      },
+    },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /Launching.*Codex/);
+  const fetched = await fs.readFile(fetchLog, 'utf8').catch(() => '');
+  assert.doesNotMatch(fetched, /registry\.npmjs\.org/);
+  const argv = await recordedArgv();
+  assert.ok(argv.includes(`model=${MODEL}`), argv.join(' '));
+  assert.deepEqual(argv.slice(-5), [
+    'exec',
+    '--model',
+    'agent-side-model',
+    '--',
+    'do it',
+  ]);
+  assert.equal(await fs.readFile(stdinFile, 'utf8'), '');
 });

@@ -400,7 +400,7 @@
         "prerequisites": [],
         "launch": {
           "argv": ["claude", "--settings", "{claudeSettings}", "{args}"],
-          "headless_argv": ["claude", "--settings", "{claudeSettings}", "{args}", "-p", "{prompt}"],
+          "headless_argv": ["claude", "--settings", "{claudeSettings}", "{args}", "-p", "--", "{prompt}"],
           "persistent_setup": false
         },
         "inputs": [
@@ -1362,7 +1362,8 @@
         "prerequisites": [],
         "launch": {
           "argv": ["opencode", "{args}"],
-          "headless_argv": ["opencode", "run", "{args}", "{prompt}"],
+          "headless_argv": ["opencode", "run", "{args}"],
+          "headless_stdin": "{prompt}",
           "persistent_setup": false
         },
         "inputs": [
@@ -1905,7 +1906,7 @@
         ],
         "launch": {
           "argv": ["pi", "--provider", "subconscious", "--model", "{model}", "{args}"],
-          "headless_argv": ["pi", "--provider", "subconscious", "--model", "{model}", "--print", "{args}", "{prompt}"],
+          "headless_argv": ["pi", "--provider", "subconscious", "--model", "{model}", "--print", "{args}", "--", "{prompt}"],
           "persistent_setup": true,
           "note": "Each launch first runs install.sh install, which rewrites the persistent files below."
         },

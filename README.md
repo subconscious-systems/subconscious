@@ -163,14 +163,16 @@ The packaged integrations live in `bin/runbook`.
 
 ## Headless runs
 
-`subc <agent> headless PROMPT [args...]` runs one task without a terminal UI and exits with the agent's status. It works for `claude`, `codex`, `opencode`, `pi`, `marathon`, and `dsh`, and uses the same setup as an interactive launch. It never prompts: there is no update check, a missing agent fails with its install command, and stdout carries only the agent's own output. Remaining arguments go to the agent, for example `subc claude headless "fix the failing test" --output-format stream-json --verbose`.
+`subc <agent> headless PROMPT [args...]` runs one task without a terminal UI and exits with the agent's status. It works for `claude`, `codex`, `opencode`, `pi`, `marathon`, and `dsh`, and uses the same setup as an interactive launch. It never prompts: there is no update check, a missing agent fails with its install command, stdin is not read, and stdout carries only the agent's own output. Remaining arguments go to the agent, for example `subc claude headless "fix the failing test" --output-format stream-json --verbose`. subc reads `-p`/`--profile` and `--model` itself; put agent options with those names after `--`.
+
+The agents keep their own permission defaults, so a run that should edit files usually needs the agent's permission flags in `[args...]`. For example, `codex exec` uses a read-only sandbox and requires a git repository unless given `--skip-git-repo-check`.
 
 | Agent | Runs |
 | --- | --- |
-| `claude` | `claude -p PROMPT` |
+| `claude` | `claude -p -- PROMPT` |
 | `codex` | `codex exec -- PROMPT` |
-| `opencode` | `opencode run PROMPT` |
-| `pi` | `pi --print PROMPT` |
+| `opencode` | `opencode run`, with the prompt on stdin |
+| `pi` | `pi --print -- PROMPT` |
 | `marathon` | `marathon --print=PROMPT` |
 | `dsh` | `dsh --profile headless PROMPT` |
 
@@ -202,7 +204,7 @@ Each `harnesses.<id>` entry has:
 | `install` | `method`, `package` or `repository`, `version` or `channel`, `minimum_version`, release `targets`, and the per-OS `commands`. |
 | `prerequisites` | Commands the runbook needs, such as `jq`, with what needs them and whether they are required. `a\|b` means either one. |
 | `binary` | Executable name, or `null` for IDE integrations. |
-| `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), and whether a launch also writes persistent files. |
+| `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), `headless_stdin` when the prompt is passed on stdin instead, and whether a launch also writes persistent files. |
 | `inputs` | Profile or environment variables the runbook reads, with `default` and the `source` file under `bin/runbook`. |
 | `env` | Variables the runbook exports to the agent: `value`, what it `controls`, and the `override` variables or flags. |
 | `config` | Files, directories, `-c` overrides, flags, and JSON-in-env the runbook writes. |
@@ -247,7 +249,7 @@ The tests compare the manifest with the runbooks for these points:
 
 - input defaults in shell scripts
 - the full set of `run.sh` exports and their values
-- launch commands, and the exact headless argv (each runbook is run against a stub agent)
+- launch commands, and the exact headless argv and stdin (each runbook is run against a stub agent)
 - Codex `-c` overrides
 - the compaction knobs subc sets (full name and value)
 - context and output limits in the config entries

@@ -106,8 +106,9 @@ export async function runWindowsAgent(agent, argv, dependencies) {
     console.error(
       `Configured model ${extracted.model} is not in the live catalog; using ${model}.`,
     );
+  const headless = parsed.action === 'headless';
   let executable;
-  if (parsed.action === 'launch') {
+  if (parsed.action === 'launch' || headless) {
     executable = resolveWindowsExecutable(agent.bin, {
       env: environment,
       preferredDirs,
@@ -116,6 +117,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
       const installer = windowsInstallSpec(agent.id, environment);
       if (
         !installer ||
+        headless ||
         !process.stdin.isTTY ||
         !process.stdout.isTTY ||
         !(await askInstall(agent.name))
@@ -180,7 +182,10 @@ export async function runWindowsAgent(agent, argv, dependencies) {
   }
   const spec = await windowsLaunch(agent.id, args, env);
   if (spec.command === agent.bin) spec.command = executable;
-  console.log(`  Launching ${agent.name} on Subconscious (${model})\n`);
+  // Headless stdout belongs to the agent alone.
+  (headless ? console.error : console.log)(
+    `  Launching ${agent.name} on Subconscious (${model})\n`,
+  );
   return finish(await executeWindowsLaunch(spec, runWindows));
 }
 

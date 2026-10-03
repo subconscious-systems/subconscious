@@ -390,6 +390,7 @@
           "{claudeSettings}",
           "{args}",
           "-p",
+          "--",
           "{prompt}"
         ],
         "persistent_setup": false
@@ -1381,9 +1382,9 @@
         "headless_argv": [
           "opencode",
           "run",
-          "{args}",
-          "{prompt}"
+          "{args}"
         ],
+        "headless_stdin": "{prompt}",
         "persistent_setup": false
       },
       "inputs": [
@@ -1960,6 +1961,7 @@
           "{model}",
           "--print",
           "{args}",
+          "--",
           "{prompt}"
         ],
         "persistent_setup": true,

@@ -105,9 +105,12 @@ if [[ "${1:-}" == "web" || "${1:-}" == "headless" ]]; then
   mode="$1"
   shift
 fi
-if [[ "$mode" == "headless" && -z "${1:-}" ]]; then
-  echo "usage: subc dsh headless PROMPT [args...]" >&2
-  exit 2
+if [[ "$mode" == "headless" ]]; then
+  if [[ -z "${1:-}" || "$1" == "-h" || "$1" == "--help" ]]; then
+    echo "usage: subc dsh headless PROMPT [args...]" >&2
+    exit 2
+  fi
+  exec </dev/null
 fi
 
 set +e

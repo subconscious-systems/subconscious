@@ -5,12 +5,14 @@ set -euo pipefail
 
 HEADLESS_PROMPT=""
 if [[ "${1:-}" == "headless" ]]; then
-  if [[ -z "${2:-}" ]]; then
+  if [[ -z "${2:-}" || "$2" == "-h" || "$2" == "--help" ]]; then
     echo "usage: subc marathon headless PROMPT [args...]" >&2
     exit 2
   fi
   HEADLESS_PROMPT="$2"
   shift 2
+  # Headless takes no input; an open stdin can leave the agent waiting for EOF.
+  exec </dev/null
 fi
 
 GATEWAY_URL="${GATEWAY_URL:-}"

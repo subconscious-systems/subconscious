@@ -153,12 +153,14 @@ PASSTHRU=()
 if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
   HEADLESS_PROMPT=""
   if [[ "${1:-}" == "headless" ]]; then
-    if [[ -z "${2:-}" ]]; then
+    if [[ -z "${2:-}" || "$2" == "-h" || "$2" == "--help" ]]; then
       echo "usage: subc claude headless PROMPT [args...]" >&2
       exit 2
     fi
     HEADLESS_PROMPT="$2"
     shift 2
+    # Headless takes no input; an open stdin can leave the agent waiting for EOF.
+    exec </dev/null
   fi
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -261,6 +263,6 @@ fi
 # --settings is additional JSON: it replaces the built-in Fable/Opus lineup
 # with the live catalog and allowlists only those models.
 if [[ -n "${HEADLESS_PROMPT:-}" ]]; then
-  PASSTHRU+=(-p "$HEADLESS_PROMPT")
+  PASSTHRU+=(-p -- "$HEADLESS_PROMPT")
 fi
 exec claude --settings "${SUBC_CLAUDE_SETTINGS}" ${PASSTHRU[@]+"${PASSTHRU[@]}"}

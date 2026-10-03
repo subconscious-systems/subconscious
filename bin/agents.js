@@ -183,7 +183,7 @@ export function parseAgentAction(agent, argv = []) {
     if (!agent.runbook?.headless) {
       throw new Error(`${agent.name} does not support headless mode.`);
     }
-    if (!argv[1]) {
+    if (!argv[1] || ['-h', '--help'].includes(argv[1])) {
       throw new Error(`Usage: subc ${command} headless PROMPT [args...]`);
     }
     return { action: 'headless', args: argv };
@@ -1199,11 +1199,14 @@ export async function runAgent(agent, argv, options = {}) {
     return code;
   }
 
+  // Arguments after -- belong to the agent, including its own --model.
+  const boundary = argv.indexOf('--');
   const {
     model: requestedModel,
     modelSource,
-    rest,
-  } = extractModel(argv, profile);
+    rest: subcRest,
+  } = extractModel(boundary < 0 ? argv : argv.slice(0, boundary), profile);
+  const rest = boundary < 0 ? subcRest : [...subcRest, ...argv.slice(boundary)];
   const apiKey = await requireApiKey(profile, agent);
   if (!apiKey) return 1;
 
