@@ -26,10 +26,6 @@
     "<runbook>": "Absolute path of the installed bin/runbook directory.",
     "<VS Code user dir>": "The VS Code user settings directory, for example ~/Library/Application Support/Code/User."
   },
-  "headless_models": [
-    "subconscious/glm-5.3-marathon",
-    "subconscious/deepseek-v4.1-flash-marathon"
-  ],
   "runbook_env": {
     "order": "Later layers win: Claude picker env (claude-code only), then profile values, then process.env, then the fixed values. For claude-code, picker slots whose value is not in the live catalog are then reset to the catalog.",
     "inherited": [

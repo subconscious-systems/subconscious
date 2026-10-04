@@ -167,13 +167,13 @@ The packaged integrations live in `bin/runbook`.
 
 The agents keep their own permission defaults, so a run that should edit files usually needs the agent's permission flags in `[args...]`. For example, `codex exec` uses a read-only sandbox and requires a git repository unless given `--skip-git-repo-check`.
 
-A headless run takes exactly three inputs and nothing from the live catalog:
+Model, endpoint, and key resolve as for any launch, so a logged-in user needs nothing extra. To point a run somewhere else:
 
 | Input | How to set it |
 | --- | --- |
-| Model | `--model`, or `SUBCONSCIOUS_MODEL`. Required. One of `subconscious/glm-5.3-marathon` or `subconscious/deepseek-v4.1-flash-marathon` (published as `headless_models` in the manifest). |
-| Endpoint | `SUBCONSCIOUS_BASE_URL`, otherwise the profile's gateway. Every agent uses it, including Claude Code (`CLAUDE_GATEWAY_URL` is ignored). |
-| Key | `SUBCONSCIOUS_API_KEY`, otherwise the logged-in key. It takes priority over agent-specific keys. Kept out of argv so it never shows in a process list. |
+| Model | `--model`, or `SUBCONSCIOUS_MODEL` |
+| Endpoint | `SUBCONSCIOUS_BASE_URL`. In a headless run every agent uses it, including Claude Code (`CLAUDE_GATEWAY_URL` is ignored). |
+| Key | `SUBCONSCIOUS_API_KEY`, otherwise the `subc login` key |
 
 ```bash
 SUBCONSCIOUS_BASE_URL=https://gateway.example SUBCONSCIOUS_API_KEY=... \
@@ -215,7 +215,6 @@ The manifest is generated from `agents/registry.json` into `bin/harness-manifest
 | `schema_version` | Raised when a field is renamed, removed, or changes meaning. New fields do not raise it. |
 | `cli_version` | The installed `subconscious-cli` version. Printed by the command only. |
 | `tokens` | Placeholders used in values (listed below). |
-| `headless_models` | The models `subc <agent> headless` accepts. |
 | `runbook_env` | What subc passes to every runbook: `order` of the layers, `inherited` sources (profile values, then `process.env`), `fixed` values set last, and `per_harness` extras (Claude's `SUBC_CLAUDE_SETTINGS` and model picker env). |
 | `harnesses.<id>` | One entry per agent with a runbook. |
 

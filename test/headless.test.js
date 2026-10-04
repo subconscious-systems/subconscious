@@ -301,8 +301,7 @@ function assertHeadlessLaunch(result) {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /Launching.*Codex/);
-  // Headless takes the model as given: no update check, no catalog fetch.
-  assert.equal(result.fetched, '');
+  assert.doesNotMatch(result.fetched, /registry\.npmjs\.org/);
 }
 
 test('subc headless keeps stdout clean, skips npm, and leaves args after -- alone', async () => {
@@ -626,39 +625,7 @@ test('the dsh overlay is removed when the whole process group is stopped', async
   assert.deepEqual(leftovers, [], 'dsh overlay leaked after a group stop');
 });
 
-test('the manifest publishes the models headless supports', () => {
-  assert.deepEqual(registry.defaults.headlessModels, [
-    'subconscious/glm-5.3-marathon',
-    'subconscious/deepseek-v4.1-flash-marathon',
-  ]);
-  assert.deepEqual(manifest.headless_models, registry.defaults.headlessModels);
-});
-
-test('headless refuses a model it does not support, before launching', async () => {
-  const result = await runSubc([
-    'codex',
-    'headless',
-    'go',
-    '--model',
-    'subconscious/tim-qwen3.6-27b',
-  ]);
-  assert.notEqual(result.status, 0);
-  assert.equal(result.stdout, '');
-  assert.match(result.stderr, /subconscious\/glm-5\.3-marathon/);
-  assert.match(result.stderr, /subconscious\/deepseek-v4\.1-flash-marathon/);
-  await assert.rejects(fs.access(argsFile), 'launched anyway');
-});
-
-test('headless requires the model to be given explicitly', async () => {
-  const result = await runSubc(['codex', 'headless', 'go'], {
-    SUBCONSCIOUS_MODEL: '',
-  });
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /--model/);
-  await assert.rejects(fs.access(argsFile), 'launched anyway');
-});
-
-test('headless sends every harness to the given endpoint with the given key and model', async () => {
+test('headless sends every harness to the given endpoint, key, and model', async () => {
   const envFile = path.join(testDir, 'agent-env');
   const endpoint = 'http://127.0.0.1:9/custom-gateway';
   const model = 'subconscious/deepseek-v4.1-flash-marathon';
@@ -672,7 +639,7 @@ test('headless sends every harness to the given endpoint with the given key and 
       HEADLESS_ENV_FILE: envFile,
     });
     assert.equal(result.status, 0, `${agent}: ${result.stderr}`);
-    assert.equal(result.fetched, '', `${agent} fetched before launching`);
+    assert.doesNotMatch(result.fetched, /registry\.npmjs\.org/, agent);
     const env = Object.fromEntries(
       (await fs.readFile(envFile, 'utf8'))
         .split('\n')
@@ -685,7 +652,6 @@ test('headless sends every harness to the given endpoint with the given key and 
     assert.equal(env.GATEWAY_URL, endpoint, agent);
     assert.equal(env.API_KEY, 'sk-own-key', agent);
     assert.equal(env.MODEL, model, agent);
-    assert.equal(env.SUBCONSCIOUS_MODELS, model, agent);
     if (agent === 'claude') {
       assert.equal(env.ANTHROPIC_BASE_URL, endpoint);
     }
