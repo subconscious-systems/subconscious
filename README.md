@@ -215,6 +215,7 @@ The manifest is generated from `agents/registry.json` into `bin/harness-manifest
 | `schema_version` | Raised when a field is renamed, removed, or changes meaning. New fields do not raise it. |
 | `cli_version` | The installed `subconscious-cli` version. Printed by the command only. |
 | `tokens` | Placeholders used in values (listed below). |
+| `headless_models` | The models `subc <agent> headless` accepts. |
 | `runbook_env` | What subc passes to every runbook: `order` of the layers, `inherited` sources (profile values, then `process.env`), `fixed` values set last, and `per_harness` extras (Claude's `SUBC_CLAUDE_SETTINGS` and model picker env). |
 | `harnesses.<id>` | One entry per agent with a runbook. |
 
