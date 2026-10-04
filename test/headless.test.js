@@ -187,6 +187,13 @@ test('the registry and the manifest agree on which agents run headless', () => {
       declared.includes(id),
       `${id}: headless_argv vs runbook.headless`,
     );
+    if (!declared.includes(id)) continue;
+    const windows = agentById(id).runbook.headless.windows;
+    assert.deepEqual(
+      harness.launch.headless_platforms,
+      windows ? ['darwin', 'linux', 'win32'] : ['darwin', 'linux'],
+      id,
+    );
   }
 });
 
@@ -405,4 +412,81 @@ test('the word headless later in a normal launch changes nothing', async () => {
     'missing-profile',
   ]);
   assert.match(result.stderr, /Profile 'missing-profile' does not exist/);
+});
+
+test('subc and the runbook agree on whether a run is headless', async () => {
+  const { extractModel } = await import('../bin/agents.js');
+  const { headlessPromptIndex } = await import('../bin/headless-args.js');
+  const forms = [
+    ['headless', 'P'],
+    ['--model', 'm', 'headless', 'P'],
+    ['--model=m', 'headless', 'P'],
+    ['--model', '', 'headless', 'P'],
+    ['--model=', 'headless', 'P'],
+    ['--model', '-x', 'headless', 'P'],
+    ['--model', '--', 'headless', 'P'],
+    ['--model', '--model', 'x', 'headless', 'P'],
+    ['--resume', 'headless', 'P'],
+    ['--model'],
+  ];
+  for (const argv of forms) {
+    const runbookSeesHeadless =
+      extractModel(argv, { values: {} }).rest[0] === 'headless';
+    assert.equal(
+      headlessPromptIndex(argv) >= 0,
+      runbookSeesHeadless,
+      JSON.stringify(argv),
+    );
+  }
+  // An empty --model value means "use the catalog", not a missing value.
+  assert.ok(headlessPromptIndex(['--model', '', 'headless', 'P']) >= 0);
+});
+
+test('stopping subc stops the agent it launched', async () => {
+  const { spawn } = await import('node:child_process');
+  const sleeperDir = await fs.mkdtemp(path.join(testDir, 'sleeper-'));
+  const pidFile = path.join(sleeperDir, 'pid');
+  await fs.writeFile(
+    path.join(sleeperDir, 'codex'),
+    // subc checks the version before launching; only the launch sleeps.
+    `#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "codex-cli 0.200.0"; exit 0; }\necho $$ >"${pidFile}"\nexec sleep 60\n`,
+    { mode: 0o755 },
+  );
+  const home = await fs.mkdtemp(path.join(testDir, 'home-'));
+  const child = spawn(
+    process.execPath,
+    [path.join(ROOT, 'bin/cli.js'), 'codex', 'headless', 'wait'],
+    {
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        PATH: `${sleeperDir}:${process.env.PATH}`,
+        HOME: home,
+        SUBC_CONFIG_DIR: path.join(home, 'subc'),
+        SUBCONSCIOUS_API_KEY: 'sk-test',
+        SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9',
+        SUBCONSCIOUS_MODEL: MODEL,
+      },
+    },
+  );
+  const exited = new Promise((resolve) => child.on('exit', resolve));
+  let agentPid;
+  for (let i = 0; i < 100 && !agentPid; i++) {
+    agentPid = Number(await fs.readFile(pidFile, 'utf8').catch(() => 0));
+    if (!agentPid) await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.ok(agentPid, 'agent never started');
+  child.kill('SIGTERM');
+  await exited;
+  let alive = true;
+  for (let i = 0; i < 30 && alive; i++) {
+    try {
+      process.kill(agentPid, 0);
+      await new Promise((r) => setTimeout(r, 100));
+    } catch {
+      alive = false;
+    }
+  }
+  if (alive) process.kill(agentPid, 'SIGKILL');
+  assert.equal(alive, false, 'agent kept running after subc was stopped');
 });

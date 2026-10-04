@@ -1,5 +1,10 @@
-const SUBC_VALUE_FLAGS = new Set(['--model', '-p', '--profile']);
+const SUBC_PROFILE_FLAGS = new Set(['-p', '--profile']);
 const SUBC_INLINE_FLAGS = ['--model=', '--profile='];
+
+/** Whether `--model` consumes the word after it. An empty word is a value. */
+export function takesModelValue(value) {
+  return value !== undefined && !value.startsWith('-');
+}
 
 /**
  * Index of the headless prompt when `argv` (the words after the agent name)
@@ -9,8 +14,12 @@ const SUBC_INLINE_FLAGS = ['--model=', '--profile='];
 export function headlessPromptIndex(argv) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
-    if (SUBC_VALUE_FLAGS.has(arg)) {
+    if (SUBC_PROFILE_FLAGS.has(arg)) {
       i++;
+      continue;
+    }
+    if (arg === '--model') {
+      if (takesModelValue(argv[i + 1])) i++;
       continue;
     }
     if (SUBC_INLINE_FLAGS.some((prefix) => arg.startsWith(prefix))) continue;

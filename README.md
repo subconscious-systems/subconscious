@@ -182,6 +182,8 @@ The exit status is the agent's own. Pi 1.0.1 exits 1 when the model request fail
 
 A blank prompt, and `-h` or `--help` anywhere in a headless run, are refused so a scripted run never reports success without doing the task.
 
+Stopping subc with SIGTERM or SIGHUP stops the agent too. SIGKILL cannot be forwarded, so a runner that may kill subc should start it in its own process group and kill the group.
+
 ## Harness manifest
 
 `subc harness-manifest` prints how this version of subc installs, configures, and launches each agent above, so other tools can copy the setup exactly instead of re-implementing it.
@@ -208,7 +210,7 @@ Each `harnesses.<id>` entry has:
 | `install` | `method`, `package` or `repository`, `version` or `channel`, `minimum_version`, release `targets`, and the per-OS `commands`. |
 | `prerequisites` | Commands the runbook needs, such as `jq`, with what needs them and whether they are required. `a\|b` means either one. |
 | `binary` | Executable name, or `null` for IDE integrations. |
-| `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), `headless_stdin` when the prompt is passed on stdin instead, and whether a launch also writes persistent files. |
+| `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), `headless_stdin` when the prompt is passed on stdin instead, `headless_platforms` (`darwin`, `linux`, `win32`) where it works, and whether a launch also writes persistent files. |
 | `inputs` | Profile or environment variables the runbook reads, with `default` and the `source` file under `bin/runbook`. |
 | `env` | Variables the runbook exports to the agent: `value`, what it `controls`, and the `override` variables or flags. |
 | `config` | Files, directories, `-c` overrides, flags, and JSON-in-env the runbook writes. |

@@ -76,7 +76,14 @@ function harnessEntry(agent) {
     binary: agent.bin || null,
     install: { ...harness.install, commands: agent.install || null },
     prerequisites: harness.prerequisites,
-    launch: harness.launch,
+    launch: harness.launch?.headless_argv
+      ? {
+          ...harness.launch,
+          headless_platforms: runbook.headless?.windows
+            ? ['darwin', 'linux', 'win32']
+            : ['darwin', 'linux'],
+        }
+      : harness.launch,
     inputs: harness.inputs,
     env: harness.env,
     config: harness.config,

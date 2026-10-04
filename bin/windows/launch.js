@@ -47,7 +47,7 @@ export async function windowsLaunch(
   if (id === 'subconscious-code') {
     return {
       command: 'marathon',
-      args: argv,
+      args: withoutSeparator(argv),
       env: {
         ...childEnv,
         SC_API_KEY: key,
@@ -61,7 +61,13 @@ export async function windowsLaunch(
   if (id === 'pi')
     return {
       command: 'pi',
-      args: ['--provider', 'subconscious', '--model', model, ...argv],
+      args: [
+        '--provider',
+        'subconscious',
+        '--model',
+        model,
+        ...withoutSeparator(argv),
+      ],
       env: childEnv,
     };
   if (id === 'opencode') {

@@ -245,7 +245,11 @@
           "--print={prompt}",
           "{args}"
         ],
-        "persistent_setup": false
+        "persistent_setup": false,
+        "headless_platforms": [
+          "darwin",
+          "linux"
+        ]
       },
       "inputs": [
         {
@@ -393,7 +397,11 @@
           "--",
           "{prompt}"
         ],
-        "persistent_setup": false
+        "persistent_setup": false,
+        "headless_platforms": [
+          "darwin",
+          "linux"
+        ]
       },
       "inputs": [
         {
@@ -924,7 +932,11 @@
           "{prompt}"
         ],
         "persistent_setup": true,
-        "note": "Each launch merges the compaction hooks into ~/.codex/hooks.json when they are missing or stale (best effort)."
+        "note": "Each launch merges the compaction hooks into ~/.codex/hooks.json when they are missing or stale (best effort).",
+        "headless_platforms": [
+          "darwin",
+          "linux"
+        ]
       },
       "inputs": [
         {
@@ -1385,7 +1397,11 @@
           "{args}"
         ],
         "headless_stdin": "{prompt}",
-        "persistent_setup": false
+        "persistent_setup": false,
+        "headless_platforms": [
+          "darwin",
+          "linux"
+        ]
       },
       "inputs": [
         {
@@ -1964,7 +1980,11 @@
         ],
         "headless_stdin": "{prompt}",
         "persistent_setup": true,
-        "note": "Each launch first runs install.sh install, which rewrites the persistent files below."
+        "note": "Each launch first runs install.sh install, which rewrites the persistent files below.",
+        "headless_platforms": [
+          "darwin",
+          "linux"
+        ]
       },
       "inputs": [
         {
@@ -2191,7 +2211,12 @@
           "{args}"
         ],
         "headless_stdin": "{prompt}",
-        "persistent_setup": false
+        "persistent_setup": false,
+        "headless_platforms": [
+          "darwin",
+          "linux",
+          "win32"
+        ]
       },
       "inputs": [
         {

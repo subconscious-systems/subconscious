@@ -1280,3 +1280,15 @@ test('runWindows writes input to the child stdin and mirrors its exit code', asy
   assert.equal(code, 3);
   assert.equal(await fs.readFile(out, 'utf8'), '- hi\n"there"');
 });
+
+test('pi and marathon drop one -- separator, like the unix runbooks', async () => {
+  const pi = await windowsLaunch('pi', ['--', '--thinking', 'high'], env);
+  assert.deepEqual(pi.args.slice(-2), ['--thinking', 'high']);
+  assert.ok(!pi.args.includes('--'), pi.args.join(' '));
+  const sc = await windowsLaunch(
+    'subconscious-code',
+    ['--', '--model', 'x'],
+    env,
+  );
+  assert.deepEqual(sc.args, ['--model', 'x']);
+});

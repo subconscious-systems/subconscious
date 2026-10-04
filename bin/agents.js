@@ -19,7 +19,11 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { getApiKey } from './auth.js';
 import { c } from './colors.js';
-import { headlessPromptIndex, separatorIndex } from './headless-args.js';
+import {
+  headlessPromptIndex,
+  separatorIndex,
+  takesModelValue,
+} from './headless-args.js';
 import {
   isLiveModelSource,
   PUBLIC_CATALOG_FALLBACK_MESSAGE,
@@ -470,8 +474,8 @@ export function extractModel(argv, profile) {
     }
     if (a === '--model') {
       const v = argv[i + 1];
-      if (v && !v.startsWith('-')) {
-        if (isUnsetSetting(v)) {
+      if (takesModelValue(v)) {
+        if (v === '' || isUnsetSetting(v)) {
           model = '';
           modelSource = 'catalog';
         } else {
@@ -839,8 +843,22 @@ function spawnRunbook(agent, args, env, relativeScript) {
   return new Promise((resolve, reject) => {
     const script = runbookScriptPath(agent, relativeScript);
     const child = spawn('bash', [script, ...args], { stdio: 'inherit', env });
+    // The runbook execs the agent, so it is our direct child: a runner that
+    // stops subc must stop the agent too. A terminal already delivers SIGINT
+    // to the whole process group, so it is not forwarded.
+    const forwarded = ['SIGTERM', 'SIGHUP'];
+    const forward = (signal) => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill(signal);
+      }
+    };
+    for (const signal of forwarded) process.on(signal, forward);
+    const stopForwarding = () => {
+      for (const signal of forwarded) process.off(signal, forward);
+    };
 
     child.on('error', (error) => {
+      stopForwarding();
       if (error.code === 'ENOENT') {
         reject(
           new Error(
@@ -853,6 +871,7 @@ function spawnRunbook(agent, args, env, relativeScript) {
     });
 
     child.on('exit', (code, signal) => {
+      stopForwarding();
       if (signal) {
         process.kill(process.pid, signal);
         return;
