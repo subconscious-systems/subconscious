@@ -101,6 +101,7 @@ export function buildHarnessManifest(registry) {
     schema_version: HARNESS_MANIFEST_SCHEMA_VERSION,
     cli_package: 'subconscious-cli',
     tokens: MANIFEST_TOKENS,
+    headless_models: registry.defaults.headlessModels,
     runbook_env: registry.runbookEnv,
     harnesses: Object.fromEntries(
       agents.map((agent) => [agent.id, harnessEntry(agent)]),

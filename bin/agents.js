@@ -204,6 +204,30 @@ export function parseAgentAction(agent, argv = []) {
   return { action: 'launch', args: argv };
 }
 
+/** A headless run uses exactly the key it was given, ahead of agent keys. */
+async function requireHeadlessApiKey(profile, agent) {
+  return (
+    process.env.SUBCONSCIOUS_API_KEY?.trim() ||
+    (await requireApiKey(profile, agent))
+  );
+}
+
+/** Throws unless a headless run names one of the supported models. */
+function requireHeadlessModel(model, source) {
+  const supported = DEFAULTS.headlessModels;
+  const explicit = source === 'command' || source === 'environment';
+  if (!explicit || !model) {
+    throw new Error(
+      `A headless run needs --model, one of: ${supported.join(', ')}`,
+    );
+  }
+  if (!supported.includes(model)) {
+    throw new Error(
+      `Headless runs support ${supported.join(', ')}; ${model} is not one of them.`,
+    );
+  }
+}
+
 /** True when argv asks for a headless run; throws when that run is invalid. */
 export function isHeadlessRequest(agent, argv = []) {
   const prompt = headlessPromptIndex(argv);
@@ -1195,15 +1219,28 @@ export async function runAgent(agent, argv, options = {}) {
       `${agent.name} headless mode is not available on Windows yet.`,
     );
   }
+  if (headless) {
+    const end = separatorIndex(argv);
+    const { model, modelSource } = extractModel(
+      end < 0 ? argv : argv.slice(0, end),
+      profile,
+    );
+    requireHeadlessModel(model, modelSource);
+  }
 
   if (process.platform === 'win32') {
     return runWindowsAgent(agent, argv, {
       profile,
       parseAgentAction,
       extractModel,
-      requireApiKey,
-      resolvedModelsForLaunch,
-      selectLaunchModel,
+      requireApiKey: headless ? requireHeadlessApiKey : requireApiKey,
+      resolvedModelsForLaunch: headless
+        ? async (_profile, _key, model) => ({
+            models: [model],
+            source: 'headless',
+          })
+        : resolvedModelsForLaunch,
+      selectLaunchModel: headless ? (model) => model : selectLaunchModel,
       runbookEnv,
       minimumClaudeVersion: MIN_CLAUDE_CODE_VERSION,
       headless,
@@ -1249,18 +1286,21 @@ export async function runAgent(agent, argv, options = {}) {
     rest: subcRest,
   } = extractModel(boundary < 0 ? argv : argv.slice(0, boundary), profile);
   const rest = boundary < 0 ? subcRest : [...subcRest, ...argv.slice(boundary)];
-  const apiKey = await requireApiKey(profile, agent);
+  const apiKey = headless
+    ? await requireHeadlessApiKey(profile, agent)
+    : await requireApiKey(profile, agent);
   if (!apiKey) return 1;
 
   const mayPrompt = !headless;
   const binDir = await ensureInstalled(agent, { mayPrompt });
   await ensureClaudeCompatible(agent, binDir, { mayPrompt });
-  const catalog = await resolvedModelsForLaunch(
-    profile,
-    apiKey,
-    requestedModel,
-  );
-  const model = selectLaunchModel(requestedModel, modelSource, catalog);
+  // Headless runs the requested model as-is: no catalog fetch, no swap.
+  const catalog = headless
+    ? { models: [requestedModel], source: 'headless' }
+    : await resolvedModelsForLaunch(profile, apiKey, requestedModel);
+  const model = headless
+    ? requestedModel
+    : selectLaunchModel(requestedModel, modelSource, catalog);
   if (requestedModel && model !== requestedModel) {
     console.error(
       `  ${c.yellow}Configured model ${requestedModel} is not in the live catalog; using ${model}.${c.reset}\n`,
@@ -1272,10 +1312,19 @@ export async function runAgent(agent, argv, options = {}) {
     (headless ? console.error : console.log)(
       `  ${c.dim}Launching ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}on Subconscious ${c.reset}${c.dim}(${model})${c.reset}\n`,
     );
+    const env = runbookEnv(
+      apiKey,
+      model,
+      binDir,
+      profile,
+      agent,
+      catalog.models,
+    );
+    // The headless endpoint is the one endpoint for every harness, Claude too.
     return spawnRunbook(
       agent,
       rest,
-      runbookEnv(apiKey, model, binDir, profile, agent, catalog.models),
+      headless ? { ...env, CLAUDE_GATEWAY_URL: '' } : env,
     );
   }
 

@@ -47,7 +47,7 @@ await fs.mkdir(binDir, { recursive: true });
 for (const bin of ['claude', 'codex', 'opencode', 'pi', 'marathon', 'dsh']) {
   await fs.writeFile(
     path.join(binDir, bin),
-    `#!/usr/bin/env bash\nprintf '%s\\0' "$(basename "$0")" "$@" >"$HEADLESS_ARGV_FILE"\ncat >"$HEADLESS_STDIN_FILE"\n`,
+    `#!/usr/bin/env bash\nprintf '%s\\0' "$(basename "$0")" "$@" >"$HEADLESS_ARGV_FILE"\ncat >"$HEADLESS_STDIN_FILE"\n[ -n "$HEADLESS_ENV_FILE" ] && env >"$HEADLESS_ENV_FILE"\nexit 0\n`,
     { mode: 0o755 },
   );
 }
@@ -257,7 +257,7 @@ test('Windows dsh headless reports a missing binary without prompting or crashin
   assert.deepEqual(stdout, []);
 });
 
-async function runSubc(args) {
+async function runSubc(args, extraEnv = {}) {
   const home = await fs.mkdtemp(path.join(testDir, 'home-'));
   const fetchLog = path.join(home, 'fetches');
   const preload = path.join(home, 'record-fetch.mjs');
@@ -289,6 +289,7 @@ globalThis.fetch = async (url) => {
         FETCH_LOG: fetchLog,
         HEADLESS_ARGV_FILE: argsFile,
         HEADLESS_STDIN_FILE: stdinFile,
+        ...extraEnv,
       },
     },
   );
@@ -300,7 +301,8 @@ function assertHeadlessLaunch(result) {
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout, '');
   assert.match(result.stderr, /Launching.*Codex/);
-  assert.doesNotMatch(result.fetched, /registry\.npmjs\.org/);
+  // Headless takes the model as given: no update check, no catalog fetch.
+  assert.equal(result.fetched, '');
 }
 
 test('subc headless keeps stdout clean, skips npm, and leaves args after -- alone', async () => {
@@ -309,14 +311,17 @@ test('subc headless keeps stdout clean, skips npm, and leaves args after -- alon
     'headless',
     'do it',
     '--model',
-    'subconscious/glm-5.2',
+    'subconscious/deepseek-v4.1-flash-marathon',
     '--',
     '--model',
     'agent-side-model',
   ]);
   assertHeadlessLaunch(result);
   const argv = await recordedArgv();
-  assert.ok(argv.includes('model=subconscious/glm-5.2'), argv.join(' '));
+  assert.ok(
+    argv.includes('model=subconscious/deepseek-v4.1-flash-marathon'),
+    argv.join(' '),
+  );
   assert.deepEqual(argv.slice(-5), [
     'exec',
     '--model',
@@ -331,13 +336,16 @@ test('subc flags before headless still get headless behaviour', async () => {
   const result = await runSubc([
     'codex',
     '--model',
-    'subconscious/glm-5.2',
+    'subconscious/deepseek-v4.1-flash-marathon',
     'headless',
     'do it',
   ]);
   assertHeadlessLaunch(result);
   const argv = await recordedArgv();
-  assert.ok(argv.includes('model=subconscious/glm-5.2'), argv.join(' '));
+  assert.ok(
+    argv.includes('model=subconscious/deepseek-v4.1-flash-marathon'),
+    argv.join(' '),
+  );
   assert.deepEqual(argv.slice(-3), ['exec', '--', 'do it']);
 });
 
@@ -382,22 +390,30 @@ test('a prompt of exactly -- reaches the agent', async () => {
     'headless',
     '--',
     '--model',
-    'subconscious/glm-5.2',
+    'subconscious/deepseek-v4.1-flash-marathon',
   ]);
   assertHeadlessLaunch(result);
   const argv = await recordedArgv();
   // The prompt "--" is not a separator, so the --model after it is subc's.
-  assert.ok(argv.includes('model=subconscious/glm-5.2'), argv.join(' '));
+  assert.ok(
+    argv.includes('model=subconscious/deepseek-v4.1-flash-marathon'),
+    argv.join(' '),
+  );
   assert.deepEqual(argv.slice(-3), ['exec', '--', '--']);
 });
 
 test('the word headless later in a normal launch changes nothing', async () => {
   const { extractModel } = await import('../bin/agents.js');
   const parsed = extractModel(
-    ['--resume', 'headless', '--model', 'subconscious/glm-5.2'],
+    [
+      '--resume',
+      'headless',
+      '--model',
+      'subconscious/deepseek-v4.1-flash-marathon',
+    ],
     { values: {} },
   );
-  assert.equal(parsed.model, 'subconscious/glm-5.2');
+  assert.equal(parsed.model, 'subconscious/deepseek-v4.1-flash-marathon');
   assert.deepEqual(parsed.rest, ['--resume', 'headless']);
   const { isHeadlessRequest } = await import('../bin/agents.js');
   assert.equal(
@@ -608,4 +624,70 @@ test('the dsh overlay is removed when the whole process group is stopped', async
     await new Promise((r) => setTimeout(r, 100));
   }
   assert.deepEqual(leftovers, [], 'dsh overlay leaked after a group stop');
+});
+
+test('the manifest publishes the models headless supports', () => {
+  assert.deepEqual(registry.defaults.headlessModels, [
+    'subconscious/glm-5.3-marathon',
+    'subconscious/deepseek-v4.1-flash-marathon',
+  ]);
+  assert.deepEqual(manifest.headless_models, registry.defaults.headlessModels);
+});
+
+test('headless refuses a model it does not support, before launching', async () => {
+  const result = await runSubc([
+    'codex',
+    'headless',
+    'go',
+    '--model',
+    'subconscious/tim-qwen3.6-27b',
+  ]);
+  assert.notEqual(result.status, 0);
+  assert.equal(result.stdout, '');
+  assert.match(result.stderr, /subconscious\/glm-5\.3-marathon/);
+  assert.match(result.stderr, /subconscious\/deepseek-v4\.1-flash-marathon/);
+  await assert.rejects(fs.access(argsFile), 'launched anyway');
+});
+
+test('headless requires the model to be given explicitly', async () => {
+  const result = await runSubc(['codex', 'headless', 'go'], {
+    SUBCONSCIOUS_MODEL: '',
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /--model/);
+  await assert.rejects(fs.access(argsFile), 'launched anyway');
+});
+
+test('headless sends every harness to the given endpoint with the given key and model', async () => {
+  const envFile = path.join(testDir, 'agent-env');
+  const endpoint = 'http://127.0.0.1:9/custom-gateway';
+  const model = 'subconscious/deepseek-v4.1-flash-marathon';
+  for (const agent of ['claude', 'codex', 'opencode']) {
+    await fs.rm(envFile, { force: true });
+    const result = await runSubc([agent, 'headless', 'go', '--model', model], {
+      SUBCONSCIOUS_BASE_URL: endpoint,
+      SUBCONSCIOUS_API_KEY: 'sk-own-key',
+      SUBCONSCIOUS_MODEL: '',
+      CLAUDE_GATEWAY_URL: 'http://127.0.0.1:9/somewhere-else',
+      HEADLESS_ENV_FILE: envFile,
+    });
+    assert.equal(result.status, 0, `${agent}: ${result.stderr}`);
+    assert.equal(result.fetched, '', `${agent} fetched before launching`);
+    const env = Object.fromEntries(
+      (await fs.readFile(envFile, 'utf8'))
+        .split('\n')
+        .filter((line) => line.includes('='))
+        .map((line) => [
+          line.slice(0, line.indexOf('=')),
+          line.slice(line.indexOf('=') + 1),
+        ]),
+    );
+    assert.equal(env.GATEWAY_URL, endpoint, agent);
+    assert.equal(env.API_KEY, 'sk-own-key', agent);
+    assert.equal(env.MODEL, model, agent);
+    assert.equal(env.SUBCONSCIOUS_MODELS, model, agent);
+    if (agent === 'claude') {
+      assert.equal(env.ANTHROPIC_BASE_URL, endpoint);
+    }
+  }
 });

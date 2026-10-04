@@ -167,6 +167,21 @@ The packaged integrations live in `bin/runbook`.
 
 The agents keep their own permission defaults, so a run that should edit files usually needs the agent's permission flags in `[args...]`. For example, `codex exec` uses a read-only sandbox and requires a git repository unless given `--skip-git-repo-check`.
 
+A headless run takes exactly three inputs and nothing from the live catalog:
+
+| Input | How to set it |
+| --- | --- |
+| Model | `--model`, or `SUBCONSCIOUS_MODEL`. Required. One of `subconscious/glm-5.3-marathon` or `subconscious/deepseek-v4.1-flash-marathon` (published as `headless_models` in the manifest). |
+| Endpoint | `SUBCONSCIOUS_BASE_URL`, otherwise the profile's gateway. Every agent uses it, including Claude Code (`CLAUDE_GATEWAY_URL` is ignored). |
+| Key | `SUBCONSCIOUS_API_KEY`, otherwise the logged-in key. It takes priority over agent-specific keys. Kept out of argv so it never shows in a process list. |
+
+```bash
+SUBCONSCIOUS_BASE_URL=https://gateway.example SUBCONSCIOUS_API_KEY=... \
+  subc codex headless "fix the failing test" --model subconscious/deepseek-v4.1-flash-marathon
+```
+
+The endpoint must speak the same APIs as the Subconscious gateway: Anthropic Messages for Claude Code, OpenAI Responses for Codex, and OpenAI Chat Completions for the others.
+
 | Agent | Runs |
 | --- | --- |
 | `claude` | `claude -p -- PROMPT` |
