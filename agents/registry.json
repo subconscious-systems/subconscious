@@ -1000,7 +1000,7 @@
             "kind": "cli-config",
             "name": "model_catalog_json",
             "value": "{tempFile}",
-            "lifetime": "launch",
+            "lifetime": "persistent",
             "controls": "Temporary model catalog; see the file entry.",
             "verified": true
           },
@@ -1130,7 +1130,7 @@
           {
             "kind": "file",
             "path": "{tmp}/codex-model-catalog.XXXXXX.json",
-            "lifetime": "launch",
+            "lifetime": "persistent",
             "value": {
               "context_window": 5000000,
               "max_context_window": 5000000,
@@ -1140,7 +1140,7 @@
               "supported_reasoning_levels": ["none", "low", "medium", "high", "max"],
               "input_modalities": "[\"text\"], or [\"text\", \"image\"] for vision models"
             },
-            "controls": "One entry per catalog model; removed on exit.",
+            "controls": "One entry per catalog model. Left in the temp directory: the runbook execs codex, so its exit trap never runs (bin/runbook/codex/run.sh).",
             "verified": true
           },
           {

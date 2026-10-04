@@ -12,7 +12,8 @@ export const MANIFEST_TOKENS = {
     'Catalog model at index N, clamped to the last entry; {model} when the catalog is empty.',
   '{args}': 'Arguments passed through from subc.',
   '{prompt}': 'The task given to subc <agent> headless PROMPT.',
-  '{tempFile}': 'Temporary file the runbook writes and removes on exit.',
+  '{tempFile}':
+    'Temporary file the runbook writes; the matching config entry says whether it is removed.',
   '{tmp}': 'System temporary directory.',
   '{json}': 'JSON document described by the matching config entry.',
   '{claudeSettings}': 'JSON document described by the --settings config entry.',

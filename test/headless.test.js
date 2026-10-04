@@ -561,3 +561,51 @@ test('profile flags do not change whether subc sees a headless run', async () =>
   ]);
   assert.match(profiled.stderr, /Profile 'nope' does not exist/);
 });
+
+test('the dsh overlay is removed when the whole process group is stopped', async () => {
+  const { spawn } = await import('node:child_process');
+  const groupDir = await fs.mkdtemp(path.join(testDir, 'group-'));
+  const tmp = await fs.mkdtemp(path.join(testDir, 'tmp-'));
+  const pidFile = path.join(groupDir, 'pid');
+  await fs.writeFile(
+    path.join(groupDir, 'dsh'),
+    `#!/usr/bin/env bash\necho $$ >"${pidFile}"\nexec sleep 60\n`,
+    { mode: 0o755 },
+  );
+  const runbook = spawn(
+    'bash',
+    [path.join(ROOT, 'bin/runbook/deepseek-harness/run.sh'), 'headless', 'go'],
+    {
+      detached: true,
+      stdio: 'ignore',
+      env: {
+        ...process.env,
+        PATH: `${groupDir}:${process.env.PATH}`,
+        TMPDIR: tmp,
+        GATEWAY_URL: 'https://gateway.example',
+        API_KEY: 'sk-test',
+        MODEL,
+        SUBCONSCIOUS_MODELS: MODEL,
+        SUBC_ENV_FILE: os.devNull,
+      },
+    },
+  );
+  const exited = new Promise((resolve) => runbook.on('exit', resolve));
+  let started = false;
+  for (let i = 0; i < 100 && !started; i++) {
+    started = Boolean(await fs.readFile(pidFile, 'utf8').catch(() => ''));
+    if (!started) await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.ok(started, 'dsh never started');
+  process.kill(-runbook.pid, 'SIGTERM');
+  await exited;
+  let leftovers = [];
+  for (let i = 0; i < 40; i++) {
+    leftovers = (await fs.readdir(tmp)).filter((name) =>
+      name.startsWith('subc-dsh.'),
+    );
+    if (leftovers.length === 0) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.deepEqual(leftovers, [], 'dsh overlay leaked after a group stop');
+});

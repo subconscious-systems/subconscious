@@ -131,6 +131,9 @@ done
 # are dsh's own. A detached watcher removes the overlay once that PID exits.
 runbook_pid=$$
 (
+  # A stop sent to the whole process group must not kill the watcher first.
+  trap '' HUP INT TERM
+  set +e
   while kill -0 "$runbook_pid" 2>/dev/null; do sleep 1; done
   cleanup
 ) </dev/null >/dev/null 2>&1 &

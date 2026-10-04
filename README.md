@@ -239,7 +239,7 @@ Placeholders:
 | `{baseUrl}`, `{baseUrlV1}` | Gateway origin, and the origin followed by `/v1` |
 | `{apiKey}`, `{model}` | Gateway API key and launch model |
 | `{catalog}`, `{catalog[N]}` | All live catalog models (newline-separated), or the one at index N (clamped to the last) |
-| `{args}`, `{tempFile}`, `{tmp}` | Passed-through arguments, a temporary file the runbook removes, the system temp directory |
+| `{args}`, `{tempFile}`, `{tmp}` | Passed-through arguments, a temporary file the runbook writes (its `config` entry says whether it is removed), the system temp directory |
 | `{prompt}` | The task given to `subc <agent> headless` |
 | `{json}`, `{claudeSettings}`, `{configOverrides}` | Documents described by the matching `config` entries |
 | `{target}` | A release target triple from `install.targets` or `install.windows_targets` |
