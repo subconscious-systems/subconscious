@@ -127,13 +127,17 @@ for arg in "$@"; do
   AGENT_ARGS+=("$arg")
 done
 
-set +e
+# dsh replaces this shell, keeping its PID, so signals and the exit status
+# are dsh's own. A detached watcher removes the overlay once that PID exits.
+runbook_pid=$$
+(
+  while kill -0 "$runbook_pid" 2>/dev/null; do sleep 1; done
+  cleanup
+) </dev/null >/dev/null 2>&1 &
+trap - EXIT HUP INT TERM
+
 if [[ "$mode" == "headless" ]]; then
   # The task goes on stdin: as an argument, a leading "-" parses as an option.
-  dsh --profile headless --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} < <(printf '%s' "$HEADLESS_PROMPT")
-else
-  dsh web --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}
+  exec dsh --profile headless --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} < <(printf '%s' "$HEADLESS_PROMPT")
 fi
-status=$?
-set -e
-exit "$status"
+exec dsh web --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}

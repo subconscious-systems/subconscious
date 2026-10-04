@@ -254,17 +254,31 @@ const authCommands = {
   whoami: whoamiCommand,
 };
 
-/** Position of the headless prompt in the full argv, or -1. */
+/**
+ * Position of the headless prompt in the full argv, or -1. It is decided on
+ * the words left once profile flags are removed, which is what the agent
+ * launcher sees, so both agree on whether the run is headless.
+ */
 function headlessPromptPosition(argv) {
-  let command = 0;
-  while (command < argv.length) {
-    const arg = argv[command];
-    if (arg === '--profile' || arg === '-p') command += 2;
-    else if (arg.startsWith('--profile=')) command += 1;
-    else break;
+  const kept = [];
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    const afterCommand = kept.slice(1).map((index) => argv[index]);
+    if (
+      kept.length > 0 &&
+      headlessPromptIndex(afterCommand) === afterCommand.length
+    ) {
+      return i;
+    }
+    if (arg === '--') return -1;
+    if (arg === '--profile' || arg === '-p') {
+      i++;
+      continue;
+    }
+    if (arg.startsWith('--profile=')) continue;
+    kept.push(i);
   }
-  const prompt = headlessPromptIndex(argv.slice(command + 1));
-  return prompt < 0 ? -1 : command + 1 + prompt;
+  return -1;
 }
 
 function extractProfile(argv) {

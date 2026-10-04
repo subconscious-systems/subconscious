@@ -442,25 +442,87 @@ test('subc and the runbook agree on whether a run is headless', async () => {
   assert.ok(headlessPromptIndex(['--model', '', 'headless', 'P']) >= 0);
 });
 
-test('stopping subc stops the agent it launched', async () => {
-  const { spawn } = await import('node:child_process');
-  const sleeperDir = await fs.mkdtemp(path.join(testDir, 'sleeper-'));
-  const pidFile = path.join(sleeperDir, 'pid');
+for (const agentName of ['codex', 'dsh']) {
+  test(`stopping subc stops the ${agentName} agent it launched`, async () => {
+    const { spawn } = await import('node:child_process');
+    const sleeperDir = await fs.mkdtemp(path.join(testDir, 'sleeper-'));
+    const tmp = await fs.mkdtemp(path.join(testDir, 'tmp-'));
+    const pidFile = path.join(sleeperDir, 'pid');
+    await fs.writeFile(
+      path.join(sleeperDir, agentName),
+      // subc checks the version before launching; only the launch sleeps.
+      `#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "codex-cli 0.200.0"; exit 0; }\necho $$ >"${pidFile}"\nexec sleep 60\n`,
+      { mode: 0o755 },
+    );
+    const home = await fs.mkdtemp(path.join(testDir, 'home-'));
+    const child = spawn(
+      process.execPath,
+      [path.join(ROOT, 'bin/cli.js'), agentName, 'headless', 'wait'],
+      {
+        stdio: 'ignore',
+        env: {
+          ...process.env,
+          PATH: `${sleeperDir}:${process.env.PATH}`,
+          TMPDIR: tmp,
+          HOME: home,
+          SUBC_CONFIG_DIR: path.join(home, 'subc'),
+          SUBCONSCIOUS_API_KEY: 'sk-test',
+          SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9',
+          SUBCONSCIOUS_MODEL: MODEL,
+        },
+      },
+    );
+    const exited = new Promise((resolve) =>
+      child.on('exit', (code, signal) => resolve({ code, signal })),
+    );
+    let agentPid;
+    for (let i = 0; i < 100 && !agentPid; i++) {
+      agentPid = Number(await fs.readFile(pidFile, 'utf8').catch(() => 0));
+      if (!agentPid) await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.ok(agentPid, 'agent never started');
+    child.kill('SIGTERM');
+    const { code, signal } = await exited;
+    assert.ok(signal === 'SIGTERM' || code === 143, `${code} ${signal}`);
+    let alive = true;
+    for (let i = 0; i < 30 && alive; i++) {
+      try {
+        process.kill(agentPid, 0);
+        await new Promise((r) => setTimeout(r, 100));
+      } catch {
+        alive = false;
+      }
+    }
+    if (alive) process.kill(agentPid, 'SIGKILL');
+    assert.equal(alive, false, 'agent kept running after subc was stopped');
+    let leftovers = [];
+    for (let i = 0; i < 40; i++) {
+      leftovers = (await fs.readdir(tmp)).filter((name) =>
+        name.startsWith('subc-dsh.'),
+      );
+      if (leftovers.length === 0) break;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.deepEqual(leftovers, [], 'dsh overlay was not removed');
+  });
+}
+
+test('an agent killed by a signal subc cannot re-raise is not reported as success', async () => {
+  const pipeDir = await fs.mkdtemp(path.join(testDir, 'pipe-'));
   await fs.writeFile(
-    path.join(sleeperDir, 'codex'),
-    // subc checks the version before launching; only the launch sleeps.
-    `#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "codex-cli 0.200.0"; exit 0; }\necho $$ >"${pidFile}"\nexec sleep 60\n`,
+    path.join(pipeDir, 'codex'),
+    '#!/usr/bin/env bash\n[ "$1" = --version ] && { echo "codex-cli 0.200.0"; exit 0; }\nkill -PIPE $$\n',
     { mode: 0o755 },
   );
   const home = await fs.mkdtemp(path.join(testDir, 'home-'));
-  const child = spawn(
+  const result = spawnSync(
     process.execPath,
-    [path.join(ROOT, 'bin/cli.js'), 'codex', 'headless', 'wait'],
+    [path.join(ROOT, 'bin/cli.js'), 'codex', 'headless', 'go'],
     {
-      stdio: 'ignore',
+      encoding: 'utf8',
       env: {
         ...process.env,
-        PATH: `${sleeperDir}:${process.env.PATH}`,
+        PATH: `${pipeDir}:${process.env.PATH}`,
         HOME: home,
         SUBC_CONFIG_DIR: path.join(home, 'subc'),
         SUBCONSCIOUS_API_KEY: 'sk-test',
@@ -469,24 +531,33 @@ test('stopping subc stops the agent it launched', async () => {
       },
     },
   );
-  const exited = new Promise((resolve) => child.on('exit', resolve));
-  let agentPid;
-  for (let i = 0; i < 100 && !agentPid; i++) {
-    agentPid = Number(await fs.readFile(pidFile, 'utf8').catch(() => 0));
-    if (!agentPid) await new Promise((r) => setTimeout(r, 100));
-  }
-  assert.ok(agentPid, 'agent never started');
-  child.kill('SIGTERM');
-  await exited;
-  let alive = true;
-  for (let i = 0; i < 30 && alive; i++) {
-    try {
-      process.kill(agentPid, 0);
-      await new Promise((r) => setTimeout(r, 100));
-    } catch {
-      alive = false;
-    }
-  }
-  if (alive) process.kill(agentPid, 'SIGKILL');
-  assert.equal(alive, false, 'agent kept running after subc was stopped');
+  assert.equal(result.status, 128 + os.constants.signals.SIGPIPE);
+});
+
+test('profile flags do not change whether subc sees a headless run', async () => {
+  // Without -p this is "--model headless": a normal launch with model
+  // "headless". Both subc and the runbook must agree on that.
+  const result = await runSubc([
+    'codex',
+    '--model',
+    '-p',
+    'default',
+    'headless',
+    'do it',
+  ]);
+  const argv = await recordedArgv();
+  const runbookHeadless = argv.includes('exec');
+  assert.equal(runbookHeadless, false, argv.join(' '));
+  assert.match(result.stdout, /Launching/);
+  assert.match(result.fetched, /registry\.npmjs\.org/);
+  // Not headless, so a later --profile= is subc's profile flag.
+  const profiled = await runSubc([
+    'codex',
+    '--model',
+    '-p',
+    'default',
+    'headless',
+    '--profile=nope',
+  ]);
+  assert.match(profiled.stderr, /Profile 'nope' does not exist/);
 });

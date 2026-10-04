@@ -91,7 +91,16 @@ test('DeepSeek Harness launches web with a temporary live-catalog provider', asy
     assert.equal(args[0], 'web');
     assert.equal(args[1], '--patch');
     assert.deepEqual(args.slice(3), ['--port', '8080']);
-    await assert.rejects(fs.access(args[2]));
+    // A detached watcher removes the overlay once dsh has exited.
+    let overlayGone = false;
+    for (let i = 0; i < 40 && !overlayGone; i++) {
+      overlayGone = await fs.access(args[2]).then(
+        () => false,
+        () => true,
+      );
+      if (!overlayGone) await new Promise((r) => setTimeout(r, 100));
+    }
+    assert.ok(overlayGone, 'overlay was not removed');
 
     const overlay = await fs.readFile(path.join(root, 'overlay.yml'), 'utf8');
     assert.match(overlay, /provider: subconscious/);

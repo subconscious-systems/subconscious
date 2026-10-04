@@ -873,7 +873,11 @@ function spawnRunbook(agent, args, env, relativeScript) {
     child.on('exit', (code, signal) => {
       stopForwarding();
       if (signal) {
+        // Node ignores some signals (SIGPIPE), so re-raising may not end the
+        // process; the shell convention still reports the agent's failure.
+        process.exitCode = 128 + (os.constants.signals[signal] ?? 0);
         process.kill(process.pid, signal);
+        resolve(process.exitCode);
         return;
       }
       if (code) process.exitCode = code;
@@ -1313,6 +1317,9 @@ export async function runAgent(agent, argv, options = {}) {
   // Mirror the child's exit status so callers/scripts see the real result.
   child.on('exit', (code, signal) => {
     if (signal) {
+      // Node ignores some signals (SIGPIPE), so re-raising may not end the
+      // process; the shell convention still reports the agent's failure.
+      process.exitCode = 128 + (os.constants.signals[signal] ?? 0);
       process.kill(process.pid, signal);
       return;
     }
