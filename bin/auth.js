@@ -12,6 +12,7 @@
  */
 
 import { exec } from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -39,6 +40,52 @@ function legacyConfigFile() {
   if (process.env.SUBC_CONFIG_DIR?.trim()) return null;
   return path.join(os.homedir(), '.subcon', 'config.json');
 }
+
+function keyFile() {
+  return path.join(configDir(), '.key');
+}
+
+// Encrypts the API key at rest (AES-256-GCM) using a per-install key stored
+// in a separate 0o600 file, so leaking config.json alone does not expose it.
+async function getEncryptionKey() {
+  try {
+    return await fs.readFile(keyFile());
+  } catch {
+    await fs.mkdir(configDir(), { recursive: true });
+    const key = crypto.randomBytes(32);
+    await fs.writeFile(keyFile(), key);
+    await fs.chmod(keyFile(), 0o600);
+    return key;
+  }
+}
+
+async function encryptApiKey(plaintext) {
+  const key = await getEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(plaintext, 'utf-8'),
+    cipher.final(),
+  ]);
+  return Buffer.concat([iv, cipher.getAuthTag(), ciphertext]).toString(
+    'base64',
+  );
+}
+
+async function decryptApiKey(encoded) {
+  const key = await getEncryptionKey();
+  const data = Buffer.from(encoded, 'base64');
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    key,
+    data.subarray(0, 12),
+  );
+  decipher.setAuthTag(data.subarray(12, 28));
+  return Buffer.concat([
+    decipher.update(data.subarray(28)),
+    decipher.final(),
+  ]).toString('utf-8');
+}
 // Defaults to the platform host. Developers set SUBCONSCIOUS_URL for local dev.
 export const DEFAULT_PLATFORM_URL = 'https://platform.subconscious.dev';
 
@@ -53,7 +100,18 @@ export function getPlatformUrl(profile) {
 async function loadConfig() {
   try {
     const content = await fs.readFile(configFile(), 'utf-8');
-    return JSON.parse(content);
+    const config = JSON.parse(content);
+    if (config.subconscious_api_key) {
+      try {
+        config.subconscious_api_key = await decryptApiKey(
+          config.subconscious_api_key,
+        );
+      } catch {
+        // Legacy plaintext key from before encryption was added; it will
+        // be re-encrypted the next time saveConfig() runs.
+      }
+    }
+    return config;
   } catch (error) {
     if (error.code !== 'ENOENT' || !legacyConfigFile()) return {};
   }
@@ -70,7 +128,13 @@ async function loadConfig() {
 
 async function saveConfig(config) {
   await fs.mkdir(configDir(), { recursive: true });
-  await fs.writeFile(configFile(), JSON.stringify(config, null, 2), 'utf-8');
+  const toWrite = config.subconscious_api_key
+    ? {
+        ...config,
+        subconscious_api_key: await encryptApiKey(config.subconscious_api_key),
+      }
+    : config;
+  await fs.writeFile(configFile(), JSON.stringify(toWrite, null, 2), 'utf-8');
   await fs.chmod(configFile(), 0o600);
 }
 
