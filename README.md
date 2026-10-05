@@ -208,15 +208,15 @@ subc harness-manifest --json   # full manifest
 subc harness-manifest          # summary table in a terminal, JSON when piped
 ```
 
-The manifest is generated from `agents/registry.json` into `bin/harness-manifest.generated.json`, which ships in the npm package. The command adds `cli_version` from `package.json`.
+The manifest is built when the command runs, from the agent files subc ships (`bin/runbook/<id>/agent.json`). Those files are what the launcher itself executes: launch and headless argv, flags, input defaults, env, and Codex `-c` overrides come from them, so the manifest describes exactly what runs. The command adds `cli_version` from `package.json`.
 
 | Field | Meaning |
 | --- | --- |
 | `schema_version` | Raised when a field is renamed, removed, or changes meaning. New fields do not raise it. |
-| `cli_version` | The installed `subconscious-cli` version. Printed by the command only. |
+| `cli_version` | The installed `subconscious-cli` version. |
 | `tokens` | Placeholders used in values (listed below). |
-| `runbook_env` | What subc passes to every runbook: `order` of the layers, `inherited` sources (profile values, then `process.env`), `fixed` values set last, and `per_harness` extras (Claude's `SUBC_CLAUDE_SETTINGS` and model picker env). |
-| `harnesses.<id>` | One entry per agent with a runbook. |
+| `runbook_env` | What subc passes to every launch: `order` of the layers, `inherited` sources (profile values, then `process.env`), `fixed` values set last, `runbook_scripts` extras, and `per_harness` extras (Claude's model picker and `SUBC_CLAUDE_SETTINGS`). |
+| `harnesses.<id>` | One entry per agent. |
 
 Each `harnesses.<id>` entry has:
 
@@ -225,10 +225,10 @@ Each `harnesses.<id>` entry has:
 | `install` | `method`, `package` or `repository`, `version` or `channel`, `minimum_version`, release `targets`, and the per-OS `commands`. |
 | `prerequisites` | Commands the runbook needs, such as `jq`, with what needs them and whether they are required. `a\|b` means either one. |
 | `binary` | Executable name, or `null` for IDE integrations. |
-| `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), `headless_stdin` when the prompt is passed on stdin instead, `headless_platforms` (`darwin`, `linux`, `win32`) where it works, and whether a launch also writes persistent files. |
-| `inputs` | Profile or environment variables the runbook reads, with `default` and the `source` file under `bin/runbook`. |
-| `env` | Variables the runbook exports to the agent: `value`, what it `controls`, and the `override` variables or flags. |
-| `config` | Files, directories, `-c` overrides, flags, and JSON-in-env the runbook writes. |
+| `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), `headless_stdin` when the prompt is passed on stdin instead, `headless_platforms` (`darwin`, `linux`, `win32`) where it works, `resume` and `handoff` argv for `subc sessions`, Codex's `config_flag`, and whether a launch also writes persistent files. |
+| `inputs` | Profile or environment variables subc reads for the agent, with `default`, `flag`, `aliases`, and profile metadata. `export: true` inputs are also passed to the agent and listed in `env`. |
+| `env` | Variables the agent receives: `value`, what it is (`description`), and the `override` variables that win when set. |
+| `config` | Files, directories, `-c` overrides (with `condition`), flags, and JSON-in-env. |
 | `capabilities.compaction` | `default`, plus `on`, `off`, and `threshold`, each with the exact knob and whether subc sets it (`set_by_subc`). |
 | `capabilities.mcp` | Whether subc configures MCP, and which transports. |
 | `capabilities.headers` | Headers sent and on which requests. |
@@ -252,11 +252,14 @@ Placeholders:
 | Token | Meaning |
 | --- | --- |
 | `{baseUrl}`, `{baseUrlV1}` | Gateway origin, and the origin followed by `/v1` |
-| `{apiKey}`, `{model}` | Gateway API key and launch model |
+| `{apiKey}`, `{model}` | The agent's API key (its own key input, else `API_KEY`) and the launch model |
+| `${NAME}` | The value of env var `NAME` at launch; left in place only where it has no default |
 | `{catalog}`, `{catalog[N]}` | All live catalog models (newline-separated), or the one at index N (clamped to the last) |
-| `{args}`, `{tempFile}`, `{tmp}` | Passed-through arguments, a temporary file the runbook writes (its `config` entry says whether it is removed), the system temp directory |
+| `{args}`, `{config}` | Passed-through arguments, and Codex's `-c` overrides |
 | `{prompt}` | The task given to `subc <agent> headless` |
-| `{json}`, `{claudeSettings}`, `{configOverrides}` | Documents described by the matching `config` entries |
+| `{sessionId}`, `{sessionFile}` | A local session's ID or file, for `launch.resume` |
+| `{tempFile}`, `{tmp}` | A temporary file the runbook writes (its `config` entry says whether it is removed), the system temp directory |
+| `{opencodeConfig}`, `{claudeSettings}` | Documents shown in the matching `config` entries |
 | `{target}` | A release target triple from `install.targets` or `install.windows_targets` |
 | `{binDir}`, `{PATH}`, `<install dirs>` | Parts of the `PATH` subc builds |
 | `<agent key>` | The agent-specific API key input, such as `CODEX_API_KEY` |
@@ -264,20 +267,7 @@ Placeholders:
 | `<runbook>` | The installed `bin/runbook` directory |
 | `<VS Code user dir>` | The VS Code user settings directory |
 
-`verified: true` means the value was read from what the runbook script does. `verified: false` means subc does not set it, or the scripts cannot prove its effect; a `note` says which.
-
-The tests compare the manifest with the runbooks for these points:
-
-- input defaults in shell scripts
-- the full set of `run.sh` exports and their values
-- launch commands, and the exact headless argv and stdin (each runbook is run against a stub agent)
-- Codex `-c` overrides
-- the compaction knobs subc sets (full name and value)
-- context and output limits in the config entries
-- minimum versions
-- the names of headers, hooks, files, and prerequisites
-
-Free-text fields, `controls`, notes, and most config payload fields are not checked.
+`verified: false` means subc does not set the value, or cannot prove its effect; a `note` says which. Entries describing files a runbook writes (the Codex catalog, Pi's `models.json`, the DeepSeek overlay, Copilot's provider, hooks) are descriptions of that script; values they take from inputs are filled in from the input defaults.
 
 ## Long screenshot sessions
 

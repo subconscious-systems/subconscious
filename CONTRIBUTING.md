@@ -53,17 +53,12 @@ The hook rejects any other subject. The same rules run in CI on every commit in 
 
 - `package.json` `version`
 - `CHANGELOG.md`
-- `bin/registry.generated.json`
-- `bin/runbook/model-capabilities.generated.sh`
-- `bin/harness-manifest.generated.json`
 
-Release Please updates the version and changelog when its release pull request merges. After editing `agents/registry.json`, regenerate:
+Release Please updates the version and changelog when its release pull request merges.
 
-```bash
-npm run generate
-```
+## Agents
 
-A change under `bin/runbook/<agent>/` must also update that agent's `harness` block in `agents/registry.json`, then `npm run generate`. If the change cannot affect how the harness is installed, configured, or launched, put `Harness-Manifest: unchanged` on its own line in a commit message or the PR description. The `harness-manifest` check enforces this; run it locally with `npm run check:harness-manifest`.
+Each agent's data lives only in `bin/runbook/<id>/agent.json`, and the code reads it at runtime. To change a default, flag, env value, argv, or help text, edit that file; nothing else needs updating. See [bin/runbook/README.md](bin/runbook/README.md).
 
 ## Checks before a pull request
 
