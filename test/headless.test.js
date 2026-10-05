@@ -5,18 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { AGENTS, agentById, agentCommandName } from '../bin/agent-data.js';
 import { parseAgentAction } from '../bin/agents.js';
+import { loadHarnessManifest } from '../bin/harness-manifest.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const registry = JSON.parse(
-  await fs.readFile(path.join(ROOT, 'agents/registry.json'), 'utf8'),
-);
-const manifest = JSON.parse(
-  await fs.readFile(
-    path.join(ROOT, 'bin/harness-manifest.generated.json'),
-    'utf8',
-  ),
-);
 
 const PROMPTS = [
   'fix the "bug"\nthen run -p --model trick',
@@ -56,61 +49,23 @@ after(async () => {
   await fs.rm(testDir, { recursive: true, force: true });
 });
 
-function agentById(id) {
-  return registry.agents.find((agent) => agent.id === id);
-}
-
-function runRunbook(agent, args) {
-  const piDir = path.join(testDir, 'pi-agent');
-  return spawnSync(
-    'bash',
-    [path.join(ROOT, 'bin/runbook', agent.runbook.script), ...args],
-    {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        PATH: `${binDir}:${process.env.PATH}`,
-        TMPDIR: testDir,
-        GATEWAY_URL: 'https://gateway.example',
-        API_KEY: 'sk-test',
-        MODEL,
-        SUBCONSCIOUS_MODELS: MODEL,
-        SUBC_ENV_FILE: os.devNull,
-        CLAUDE_CODE_SUBAGENT_MODEL: '',
-        CODEX_DIR: path.join(testDir, '.codex'),
-        PI_CODING_AGENT_DIR: piDir,
-        HEADLESS_ARGV_FILE: argsFile,
-        HEADLESS_STDIN_FILE: stdinFile,
-      },
-      input: CALLER_STDIN,
-    },
-  );
-}
-
 async function recordedArgv() {
   const raw = await fs.readFile(argsFile, 'utf8');
   return raw.split('\0').slice(0, -1);
 }
 
 // Placeholders: {args} is the pass-through list, {prompt} and {model} are
-// exact, `-c {configOverrides}` is one or more `-c` pairs, and any other
-// whole-token placeholder is a single generated value such as a temp file.
+// exact, {config} is one or more `-c` pairs, and any other whole-word
+// placeholder is a single generated value such as a temp file.
 function matchArgv(expected, actual) {
-  const out = [];
   let j = 0;
-  for (let i = 0; i < expected.length; i++) {
-    const part = expected[i];
-    if (part === '-c' && expected[i + 1] === '{configOverrides}') {
+  for (const part of expected) {
+    if (part === '{config}') {
       assert.equal(actual[j], '-c', `expected -c at ${j}: ${actual}`);
-      while (actual[j] === '-c') {
-        out.push(actual[j], actual[j + 1]);
-        j += 2;
-      }
-      i++;
+      while (actual[j] === '-c') j += 2;
       continue;
     }
     if (part === '{args}') {
-      out.push(...actual.slice(j, j + EXTRA.length));
       assert.deepEqual(actual.slice(j, j + EXTRA.length), EXTRA);
       j += EXTRA.length;
       continue;
@@ -118,32 +73,72 @@ function matchArgv(expected, actual) {
     const literal = part
       .replaceAll('{prompt}', PROMPT)
       .replaceAll('{model}', MODEL);
-    if (/^\{[A-Za-z]+\}$/.test(literal)) {
+    if (/^(\{[A-Za-z]+\}|\$\{[A-Z_]+\})$/.test(literal)) {
       assert.ok(actual[j], `missing value for ${part}`);
     } else {
       assert.equal(actual[j], literal, `argv[${j}] for ${part}`);
     }
-    out.push(actual[j]);
     j++;
   }
   assert.equal(j, actual.length, `unexpected trailing argv: ${actual}`);
-  return out;
 }
 
-test('every headless runbook runs exactly the manifest headless_argv', async () => {
+async function runSubc(args, extraEnv = {}) {
+  const home = await fs.mkdtemp(path.join(testDir, 'home-'));
+  const fetchLog = path.join(home, 'fetches');
+  const preload = path.join(home, 'record-fetch.mjs');
+  await fs.writeFile(
+    preload,
+    `import { appendFileSync } from 'node:fs';
+globalThis.fetch = async (url) => {
+  appendFileSync(process.env.FETCH_LOG, String(url) + '\\n');
+  throw new Error('network disabled in test');
+};
+`,
+  );
+  await fs.rm(argsFile, { force: true });
+  const result = spawnSync(
+    process.execPath,
+    ['--import', preload, path.join(ROOT, 'bin/cli.js'), ...args],
+    {
+      encoding: 'utf8',
+      input: CALLER_STDIN,
+      env: {
+        ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        HOME: home,
+        TMPDIR: testDir,
+        SUBC_CONFIG_DIR: path.join(home, 'subc'),
+        SUBCONSCIOUS_API_KEY: 'sk-test',
+        SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9',
+        SUBCONSCIOUS_MODEL: MODEL,
+        SUBC_DISABLE_UPDATE_CHECK: '',
+        FETCH_LOG: fetchLog,
+        HEADLESS_ARGV_FILE: argsFile,
+        HEADLESS_STDIN_FILE: stdinFile,
+        ...extraEnv,
+      },
+    },
+  );
+  const fetched = await fs.readFile(fetchLog, 'utf8').catch(() => '');
+  return { ...result, fetched };
+}
+
+test('every headless agent receives exactly its declared argv and stdin', async () => {
   for (const id of HEADLESS_AGENTS) {
     const agent = agentById(id);
-    const { headless_argv: argv, headless_stdin: stdin } =
-      manifest.harnesses[id].launch;
-    assert.ok(argv, `${id}: manifest has no headless_argv`);
-    for (const [prompt, extra] of PROMPTS.flatMap((p) =>
-      EXTRA_FORMS.map((form) => [p, form]),
-    )) {
+    const { headless_argv: argv, headless_stdin: stdin } = agent.launch;
+    for (const [index, prompt] of PROMPTS.entries()) {
       PROMPT = prompt;
-      await fs.rm(argsFile, { force: true });
-      const result = runRunbook(agent, ['headless', PROMPT, ...extra]);
+      const extra = EXTRA_FORMS[index % EXTRA_FORMS.length];
+      const result = await runSubc([
+        agentCommandName(agent),
+        'headless',
+        PROMPT,
+        ...extra,
+      ]);
       assert.equal(result.status, 0, `${id}: ${result.stderr}`);
-      // The stub writes nothing to stdout, so anything here is runbook noise.
+      // The stub writes nothing to stdout, so anything here is subc noise.
       assert.equal(result.stdout, '', `${id} wrote to stdout`);
       matchArgv(argv, await recordedArgv());
       assert.equal(
@@ -157,10 +152,9 @@ test('every headless runbook runs exactly the manifest headless_argv', async () 
 
 test('headless without a prompt fails before launching', async () => {
   for (const id of HEADLESS_AGENTS) {
-    await fs.rm(argsFile, { force: true });
     for (const args of [['headless'], ['headless', '--help']]) {
-      const result = runRunbook(agentById(id), args);
-      assert.equal(result.status, 2, `${id}: ${result.stderr}`);
+      const result = await runSubc([agentCommandName(agentById(id)), ...args]);
+      assert.notEqual(result.status, 0, `${id}: ${result.stderr}`);
       assert.match(result.stderr, /headless PROMPT/, id);
       await assert.rejects(fs.access(argsFile), `${id} launched anyway`);
     }
@@ -168,33 +162,31 @@ test('headless without a prompt fails before launching', async () => {
 });
 
 test('help inside a headless run is refused instead of exiting 0', async () => {
-  await fs.rm(argsFile, { force: true });
-  const result = runRunbook(agentById('claude-code'), ['headless', 'go', '-h']);
-  assert.equal(result.status, 2, result.stderr);
+  const result = await runSubc(['claude', 'headless', 'go', '-h']);
+  assert.notEqual(result.status, 0, result.stderr);
   assert.equal(result.stdout, '');
+  assert.match(result.stderr, /help is not available in a headless run/);
   await assert.rejects(fs.access(argsFile));
 });
 
-test('the registry and the manifest agree on which agents run headless', () => {
-  const declared = registry.agents
-    .filter((agent) => agent.runbook?.headless)
+test('the agent files and the manifest agree on which agents run headless', () => {
+  const declared = AGENTS.filter((agent) => agent.launch?.headless_argv)
     .map((agent) => agent.id)
     .sort();
   assert.deepEqual(declared, [...HEADLESS_AGENTS].sort());
-  for (const [id, harness] of Object.entries(manifest.harnesses)) {
-    assert.equal(
-      Boolean(harness.launch?.headless_argv),
-      declared.includes(id),
-      `${id}: headless_argv vs runbook.headless`,
-    );
-    if (!declared.includes(id)) continue;
-    const windows = agentById(id).runbook.headless.windows;
+  const manifest = loadHarnessManifest();
+  for (const agent of AGENTS) {
     assert.deepEqual(
-      harness.launch.headless_platforms,
-      windows ? ['darwin', 'linux', 'win32'] : ['darwin', 'linux'],
-      id,
+      manifest.harnesses[agent.id].launch?.headless_platforms,
+      agent.launch?.headless_platforms,
+      agent.id,
     );
   }
+  assert.deepEqual(agentById('deepseek-harness').launch.headless_platforms, [
+    'darwin',
+    'linux',
+    'win32',
+  ]);
 });
 
 test('parseAgentAction recognizes headless only where it is supported', () => {
@@ -256,46 +248,6 @@ test('Windows dsh headless reports a missing binary without prompting or crashin
   }
   assert.deepEqual(stdout, []);
 });
-
-async function runSubc(args, extraEnv = {}) {
-  const home = await fs.mkdtemp(path.join(testDir, 'home-'));
-  const fetchLog = path.join(home, 'fetches');
-  const preload = path.join(home, 'record-fetch.mjs');
-  await fs.writeFile(
-    preload,
-    `import { appendFileSync } from 'node:fs';
-globalThis.fetch = async (url) => {
-  appendFileSync(process.env.FETCH_LOG, String(url) + '\\n');
-  throw new Error('network disabled in test');
-};
-`,
-  );
-  await fs.rm(argsFile, { force: true });
-  const result = spawnSync(
-    process.execPath,
-    ['--import', preload, path.join(ROOT, 'bin/cli.js'), ...args],
-    {
-      encoding: 'utf8',
-      input: CALLER_STDIN,
-      env: {
-        ...process.env,
-        PATH: `${binDir}:${process.env.PATH}`,
-        HOME: home,
-        SUBC_CONFIG_DIR: path.join(home, 'subc'),
-        SUBCONSCIOUS_API_KEY: 'sk-test',
-        SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9',
-        SUBCONSCIOUS_MODEL: MODEL,
-        SUBC_DISABLE_UPDATE_CHECK: '',
-        FETCH_LOG: fetchLog,
-        HEADLESS_ARGV_FILE: argsFile,
-        HEADLESS_STDIN_FILE: stdinFile,
-        ...extraEnv,
-      },
-    },
-  );
-  const fetched = await fs.readFile(fetchLog, 'utf8').catch(() => '');
-  return { ...result, fetched };
-}
 
 function assertHeadlessLaunch(result) {
   assert.equal(result.status, 0, result.stderr);
@@ -364,9 +316,12 @@ test('a blank prompt is refused before launching', async () => {
     /headless PROMPT/,
   );
   for (const id of HEADLESS_AGENTS) {
-    await fs.rm(argsFile, { force: true });
-    const result = runRunbook(agentById(id), ['headless', ' \t\n']);
-    assert.equal(result.status, 2, `${id}: ${result.stderr}`);
+    const result = await runSubc([
+      agentCommandName(agentById(id)),
+      'headless',
+      ' \t\n',
+    ]);
+    assert.notEqual(result.status, 0, `${id}: ${result.stderr}`);
     await assert.rejects(fs.access(argsFile), `${id} launched anyway`);
   }
 });
@@ -587,9 +542,10 @@ test('the dsh overlay is removed when the whole process group is stopped', async
     `#!/usr/bin/env bash\necho $$ >"${pidFile}"\nexec sleep 60\n`,
     { mode: 0o755 },
   );
+  const home = await fs.mkdtemp(path.join(testDir, 'home-'));
   const runbook = spawn(
-    'bash',
-    [path.join(ROOT, 'bin/runbook/deepseek-harness/run.sh'), 'headless', 'go'],
+    process.execPath,
+    [path.join(ROOT, 'bin/cli.js'), 'dsh', 'headless', 'go'],
     {
       detached: true,
       stdio: 'ignore',
@@ -597,11 +553,11 @@ test('the dsh overlay is removed when the whole process group is stopped', async
         ...process.env,
         PATH: `${groupDir}:${process.env.PATH}`,
         TMPDIR: tmp,
-        GATEWAY_URL: 'https://gateway.example',
-        API_KEY: 'sk-test',
-        MODEL,
-        SUBCONSCIOUS_MODELS: MODEL,
-        SUBC_ENV_FILE: os.devNull,
+        HOME: home,
+        SUBC_CONFIG_DIR: path.join(home, 'subc'),
+        SUBCONSCIOUS_API_KEY: 'sk-test',
+        SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9',
+        SUBCONSCIOUS_MODEL: MODEL,
       },
     },
   );

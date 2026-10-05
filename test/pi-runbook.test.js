@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { launchCommand, runSync } from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-pi-test-'));
 const fakeBinDir = path.join(testDir, 'bin');
@@ -40,20 +40,20 @@ test('Pi launch replaces only the Subconscious provider with the live catalog', 
     }),
   );
 
-  const runbook = new URL('../bin/runbook/pi/run.sh', import.meta.url);
-  const result = spawnSync('bash', [runbook.pathname, '--continue'], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${fakeBinDir}:${process.env.PATH}`,
-      PI_CODING_AGENT_DIR: piDir,
-      GATEWAY_URL: 'https://gateway.example',
-      API_KEY: 'sk-test',
-      MODEL: models[0],
-      SUBCONSCIOUS_MODELS: models.join('\n'),
-      SUBC_ENV_FILE: os.devNull,
-    },
-  });
+  const result = runSync(
+    launchCommand('pi', {
+      args: ['--continue'],
+      env: {
+        ...process.env,
+        PATH: `${fakeBinDir}:${process.env.PATH}`,
+        PI_CODING_AGENT_DIR: piDir,
+        GATEWAY_URL: 'https://gateway.example',
+        API_KEY: 'sk-test',
+        MODEL: models[0],
+        SUBCONSCIOUS_MODELS: models.join('\n'),
+      },
+    }),
+  );
 
   assert.equal(result.status, 0, result.stderr);
   assert.equal(

@@ -1,13 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { agentById, installCommands } from '../agent-data.js';
 import { powershellCommand, runWindows } from './process.js';
 
-const registry = JSON.parse(
-  readFileSync(new URL('../registry.generated.json', import.meta.url), 'utf8'),
-);
 const repository = 'subconscious-systems/subconscious-code';
 
 function npmInstall(command) {
@@ -18,8 +15,8 @@ function npmInstall(command) {
 }
 
 export function windowsInstallSpec(id, env = process.env) {
-  const install = registry.agents.find((agent) => agent.id === id)?.install;
-  const command = typeof install === 'object' ? install.win32 : undefined;
+  const install = installCommands(agentById(id)) || {};
+  const command = install.win32;
   if (id === 'subconscious-code')
     return { nativeRelease: true, display: 'subc marathon install' };
   if (!command) return null; // Never fall back to a Linux installer.

@@ -1,40 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-export const defaults = JSON.parse(
-  readFileSync(new URL('../registry.generated.json', import.meta.url), 'utf8'),
-).defaults;
+export { DEFAULTS as defaults } from '../agent-data.js';
+export { modelIds, positiveInteger } from '../launch-values.js';
 export const value = (env, key, fallback = '') => env[key]?.trim() || fallback;
 export const origin = (url) =>
   url
     .replace(/\/+$/, '')
     .replace(/\/v1(?:\/(?:messages|responses|chat\/completions))?$/, '');
-export function positiveInteger(input, name) {
-  if (
-    !/^[1-9][0-9]*$/.test(String(input)) ||
-    !Number.isSafeInteger(Number(input))
-  )
-    throw new Error(`${name} must be a positive integer`);
-  return Number(input);
-}
-export function modelIds(env) {
-  const models = [
-    ...new Set(
-      [
-        value(env, 'MODEL', defaults.model),
-        ...value(env, 'SUBCONSCIOUS_MODELS', defaults.models.join('\n')).split(
-          /\r?\n/,
-        ),
-      ].filter(Boolean),
-    ),
-  ];
-  for (const model of models)
-    if (!/^[-A-Za-z0-9._:/+]+$/.test(model))
-      throw new Error(`Invalid model id: ${model}`);
-  return models;
-}
 export function parseOptions(argv, schema, { strict = false } = {}) {
   const options = {},
     rest = [];

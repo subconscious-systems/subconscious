@@ -9,6 +9,8 @@
     "includes": [
       "bin/**/*.js",
       "bin/**/*.ts",
+      "bin/runbook/shared.json",
+      "bin/runbook/*/agent.json",
       "scripts/**/*.js",
       "test/**/*.js",
       "commitlint.config.cjs"

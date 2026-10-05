@@ -10,7 +10,6 @@
     "types": ["node"]
   },
   "include": [
-    "bin/runbook/opencode/subconscious-compaction.ts",
     "bin/runbook/opencode/opencode-plugin.d.ts",
     "bin/runbook/pi/subconscious-compaction.ts",
     "bin/runbook/image-window/index.ts",

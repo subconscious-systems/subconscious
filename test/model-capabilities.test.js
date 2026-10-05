@@ -1,16 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { modelSupportsVision } from '../bin/model-capabilities.js';
+import { DEFAULTS } from '../bin/agent-data.js';
+import {
+  modelSupportsVision,
+  visionModelList,
+} from '../bin/model-capabilities.js';
+import { openCodeConfigFromEnv } from '../bin/opencode-provider.js';
 
 const visionModel = 'subconscious/deepseek-v4.1-flash-marathon';
-const registry = JSON.parse(
-  readFileSync(
-    new URL('../bin/registry.generated.json', import.meta.url),
-    'utf8',
-  ),
-);
 const cases = [
   [visionModel, true],
   ['subconscious/deepseek-v4-flash-marathon', false],
@@ -26,43 +24,33 @@ const cases = [
 test('vision capabilities match only the exact gateway model ID', () => {
   for (const [id, expected] of cases)
     assert.equal(modelSupportsVision(id), expected, id);
-  assert.ok(registry.defaults.models.includes(visionModel));
-  const opencode = registry.agents.find((agent) => agent.id === 'opencode');
-  const models =
-    opencode.env.OPENCODE_CONFIG_CONTENT.$json.provider.subconscious.models;
-  assert.equal(models[visionModel].attachment, true);
-  assert.deepEqual(models[visionModel].modalities, {
+  assert.ok(DEFAULTS.models.includes(visionModel));
+  const config = openCodeConfigFromEnv({
+    GATEWAY_URL: 'https://gateway.example',
+    MODEL: visionModel,
+    OPENCODE_CONTEXT_LIMIT: '1000',
+    OPENCODE_OUTPUT_LIMIT: '100',
+  });
+  const model = config.provider.subconscious.models[visionModel];
+  assert.equal(model.attachment, true);
+  assert.deepEqual(model.modalities, {
     input: ['text', 'image'],
     output: ['text'],
   });
 });
 
-test('generated capability data matches the registry source', () => {
-  const source = JSON.parse(
-    readFileSync(new URL('../agents/registry.json', import.meta.url), 'utf8'),
-  );
-  assert.deepEqual(registry.modelCapabilities, source.modelCapabilities);
-  assert.deepEqual(registry.defaults, source.defaults);
-});
-
-test('Unix capability lookup agrees with Windows for exact IDs', {
+test('the runbooks agree with Node on vision models, by exact ID', {
   skip: process.platform === 'win32',
 }, () => {
-  const helper = new URL(
-    '../bin/runbook/model-capabilities.generated.sh',
-    import.meta.url,
-  ).pathname;
+  const lib = new URL('../bin/runbook/lib.sh', import.meta.url).pathname;
   for (const [id, expected] of cases) {
     const result = spawnSync(
       'bash',
-      [
-        '-c',
-        'source "$1"; subc_model_supports_vision "$2"',
-        'test',
-        helper,
-        id,
-      ],
-      { encoding: 'utf8' },
+      ['-c', 'source "$1"; subc_model_supports_vision "$2"', 'test', lib, id],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, SUBC_VISION_MODELS: visionModelList() },
+      },
     );
     assert.equal(result.status, expected ? 0 : 1, `${id}: ${result.stderr}`);
   }

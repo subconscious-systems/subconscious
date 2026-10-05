@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,6 +8,11 @@ import {
   OPENCODE_PROVIDER_NAME,
   opencodeModelDisplayName,
 } from '../bin/opencode-provider.js';
+import {
+  launchCommand,
+  runSync,
+  setupCommand,
+} from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-opencode-test-'));
 const fakeOpenCode = path.join(testDir, 'opencode');
@@ -33,19 +37,18 @@ test('OpenCode launch replaces the Subconscious catalog on every startup', () =>
     'subconscious/glm-5.3-marathon',
     'subconscious/tim-qwen3.6-27b',
   ];
-  const runbook = new URL('../bin/runbook/opencode/run.sh', import.meta.url);
-  const result = spawnSync('bash', [runbook.pathname], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${testDir}:${process.env.PATH}`,
-      GATEWAY_URL: 'https://gateway.example',
-      API_KEY: 'sk-test',
-      MODEL: models[0],
-      SUBCONSCIOUS_MODELS: models.join('\n'),
-      SUBC_ENV_FILE: os.devNull,
-    },
-  });
+  const result = runSync(
+    launchCommand('opencode', {
+      env: {
+        ...process.env,
+        PATH: `${testDir}:${process.env.PATH}`,
+        GATEWAY_URL: 'https://gateway.example',
+        API_KEY: 'sk-test',
+        MODEL: models[0],
+        SUBCONSCIOUS_MODELS: models.join('\n'),
+      },
+    }),
+  );
 
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(result.stdout);
@@ -99,11 +102,8 @@ test('OpenCode launch replaces the Subconscious catalog on every startup', () =>
 
 test('OpenCode enables vision for an explicitly selected model missing from the catalog', () => {
   const model = 'subconscious/deepseek-v4.1-flash-marathon';
-  const result = spawnSync(
-    'bash',
-    [new URL('../bin/runbook/opencode/run.sh', import.meta.url).pathname],
-    {
-      encoding: 'utf8',
+  const result = runSync(
+    launchCommand('opencode', {
       env: {
         ...process.env,
         PATH: `${testDir}:${process.env.PATH}`,
@@ -111,9 +111,8 @@ test('OpenCode enables vision for an explicitly selected model missing from the 
         API_KEY: 'sk-test',
         MODEL: model,
         SUBCONSCIOUS_MODELS: 'custom/model',
-        SUBC_ENV_FILE: os.devNull,
       },
-    },
+    }),
   );
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(result.stdout);
@@ -124,51 +123,27 @@ test('OpenCode enables vision for an explicitly selected model missing from the 
   );
 });
 
-test('the standalone OpenCode installer also advertises vision and preserves other providers', async () => {
-  const home = await fs.mkdtemp(path.join(testDir, 'install-'));
+test('OpenCode uninstall removes only the Subconscious provider left by older setups', async () => {
+  const home = await fs.mkdtemp(path.join(testDir, 'uninstall-'));
   const file = path.join(home, '.opencode', 'opencode.json');
   await fs.mkdir(path.dirname(file), { recursive: true });
   await fs.writeFile(
     file,
-    JSON.stringify({ provider: { other: { models: { keep: {} } } } }),
+    JSON.stringify({
+      provider: { other: { models: { keep: {} } }, subconscious: {} },
+      model: 'subconscious/subconscious/glm-5.2',
+    }),
   );
-  const model = 'subconscious/deepseek-v4.1-flash-marathon';
-  const result = spawnSync(
-    'bash',
-    [
-      new URL('../bin/runbook/opencode/install.sh', import.meta.url).pathname,
-      'install',
-    ],
-    {
-      encoding: 'utf8',
-      env: {
-        ...process.env,
-        HOME: home,
-        XDG_CONFIG_HOME: path.join(home, '.config'),
-        GATEWAY_URL: 'https://gateway.example',
-        API_KEY: 'sk-test',
-        MODEL: model,
-        SUBCONSCIOUS_MODELS: 'subconscious/deepseek-v4-flash-marathon',
-        SUBC_ENV_FILE: os.devNull,
-      },
-    },
+  const result = runSync(
+    setupCommand('opencode', ['uninstall'], {
+      ...process.env,
+      HOME: home,
+      XDG_CONFIG_HOME: path.join(home, '.config'),
+    }),
   );
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(await fs.readFile(file, 'utf8'));
-  assert.deepEqual(config.provider.other, { models: { keep: {} } });
-  assert.equal(config.provider.subconscious.name, OPENCODE_PROVIDER_NAME);
-  assert.equal(config.model, `${OPENCODE_PROVIDER_ID}/${model}`);
-  assert.equal(config.provider.subconscious.models[model].attachment, true);
-  assert.deepEqual(config.provider.subconscious.models[model].modalities, {
-    input: ['text', 'image'],
-    output: ['text'],
-  });
-  assert.equal(
-    config.provider.subconscious.models[
-      'subconscious/deepseek-v4-flash-marathon'
-    ].attachment,
-    undefined,
-  );
+  assert.deepEqual(config, { provider: { other: { models: { keep: {} } } } });
 });
 
 test('OpenCode model display names are capitalized from the id', () => {
@@ -195,20 +170,19 @@ test('OpenCode model display names are capitalized from the id', () => {
 });
 
 // OpenCode resends every screenshot each turn; the plugin trims the upload to
-// the newest 100 (bin/runbook/image-window). Loaded by path, nothing written.
+// the newest images. Loaded by path, nothing written.
 test('OpenCode launch loads the image window plugin', async () => {
-  const runbook = new URL('../bin/runbook/opencode/run.sh', import.meta.url);
-  const result = spawnSync('bash', [runbook.pathname], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${testDir}:${process.env.PATH}`,
-      GATEWAY_URL: 'https://gateway.example',
-      API_KEY: 'sk-test',
-      MODEL: 'subconscious/deepseek-v4.1-flash-marathon',
-      SUBC_ENV_FILE: os.devNull,
-    },
-  });
+  const result = runSync(
+    launchCommand('opencode', {
+      env: {
+        ...process.env,
+        PATH: `${testDir}:${process.env.PATH}`,
+        GATEWAY_URL: 'https://gateway.example',
+        API_KEY: 'sk-test',
+        MODEL: 'subconscious/deepseek-v4.1-flash-marathon',
+      },
+    }),
+  );
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(result.stdout);
   assert.equal(config.plugin.length, 1);

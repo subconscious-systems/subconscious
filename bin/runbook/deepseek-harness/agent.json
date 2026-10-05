@@ -1,0 +1,163 @@
+{
+  "id": "deepseek-harness",
+  "command": "dsh",
+  "aliases": ["deepseek-harness", "deepseek"],
+  "name": "DeepSeek Harness",
+  "description": "Launch DeepSeek Harness with an ephemeral Subconscious provider populated from the live model catalog.",
+  "protocol": "openai",
+  "homepage": "https://www.deepseek.com/harness/en/",
+  "install": {
+    "commands": {
+      "darwin": "npm i -g {package}",
+      "linux": "npm i -g {package}",
+      "win32": "npm i -g {package}"
+    },
+    "method": "npm",
+    "package": "@deepseek-ai/dsh",
+    "version": null,
+    "channel": "latest (unpinned)",
+    "minimum_version": null,
+    "verified": true
+  },
+  "runbook": {
+    "mode": "launch",
+    "script": "run.sh"
+  },
+  "help": {
+    "usage": "subc [-p NAME] dsh [web|headless] [--model MODEL] [Harness arguments...]",
+    "behavior": "Launches DeepSeek Harness with a temporary Subconscious provider containing every live gateway model. Web mode is the default.",
+    "options": [
+      ["help", "Show this help"],
+      ["web", "Launch the DeepSeek Harness Web UI (default)"],
+      ["headless PROMPT", "Run one headless task and exit"],
+      ["--model MODEL", "Set the initial model for new Harness sessions"]
+    ],
+    "args": ["ARGS...", "Pass remaining arguments to the selected Harness mode"]
+  },
+  "prerequisites": [],
+  "launch": {
+    "argv": ["dsh", "web", "--patch", "{tempFile}", "{args}"],
+    "headless_argv": [
+      "dsh",
+      "--profile",
+      "headless",
+      "--patch",
+      "{tempFile}",
+      "{args}"
+    ],
+    "headless_stdin": "{prompt}",
+    "headless_platforms": ["darwin", "linux", "win32"],
+    "mode_word": "web",
+    "persistent_setup": false
+  },
+  "inputs": [
+    {
+      "name": "DEEPSEEK_HARNESS_API_KEY",
+      "label": "DeepSeek Harness API key",
+      "description": "DeepSeek Harness credential override; blank uses API_KEY.",
+      "type": "secret"
+    },
+    {
+      "name": "DEEPSEEK_HARNESS_CONTEXT_WINDOW",
+      "default": 5000000,
+      "label": "Context window",
+      "description": "Context capacity advertised to DeepSeek Harness.",
+      "type": "integer",
+      "min": 1
+    },
+    {
+      "name": "DEEPSEEK_HARNESS_MAX_TOKENS",
+      "default": 65536,
+      "label": "Maximum output tokens",
+      "description": "Output capacity advertised to DeepSeek Harness.",
+      "type": "integer",
+      "min": 1
+    }
+  ],
+  "env": [
+    {
+      "name": "SUBCONSCIOUS_API_KEY",
+      "value": "{apiKey}",
+      "description": "Credential, read through apiKeyEnv in the overlay."
+    },
+    {
+      "name": "SUBCONSCIOUS_DSH_BASE_URL",
+      "value": "{baseUrlV1}",
+      "description": "OpenAI-compatible base URL, read by the overlay."
+    }
+  ],
+  "config": [
+    {
+      "kind": "file",
+      "path": "{tmp}/subc-dsh.XXXXXX/subconscious.cordis.yml",
+      "lifetime": "launch",
+      "value": {
+        "llm-pi-ai.providers.subconscious.api": "openai-completions",
+        "llm-pi-ai.providers.subconscious.apiKeyEnv": "SUBCONSCIOUS_API_KEY",
+        "llm-pi-ai.providers.subconscious.headers": {
+          "x-subconscious-client": "deepseek-harness"
+        },
+        "llm-pi-ai.providers.subconscious.compat": {
+          "supportsDeveloperRole": false,
+          "maxTokensField": "max_tokens"
+        },
+        "llm-pi-ai.providers.subconscious.defaultContextWindow": "${DEEPSEEK_HARNESS_CONTEXT_WINDOW}",
+        "llm-pi-ai.providers.subconscious.defaultMaxTokens": "${DEEPSEEK_HARNESS_MAX_TOKENS}",
+        "agent-default-model": {
+          "provider": "subconscious",
+          "model": "{model}"
+        },
+        "llm-pi-ai.providers.subconscious.models[].contextWindow": "${DEEPSEEK_HARNESS_CONTEXT_WINDOW}",
+        "llm-pi-ai.providers.subconscious.models[].maxTokens": "${DEEPSEEK_HARNESS_MAX_TOKENS}"
+      },
+      "description": "Cordis patch the runbook writes and passes with --patch; holds no API key; removed once dsh exits."
+    }
+  ],
+  "capabilities": {
+    "compaction": {
+      "default": "unknown",
+      "on": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "subc sets contextWindow only; DeepSeek Harness compaction behaviour is not described in this repo."
+      },
+      "off": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "No off knob is set or documented by subc."
+      },
+      "threshold": {
+        "set_by_subc": true,
+        "kind": "config-field",
+        "name": "llm-pi-ai.providers.subconscious.models[].contextWindow",
+        "value": "${DEEPSEEK_HARNESS_CONTEXT_WINDOW}",
+        "verified": false,
+        "note": "subc sets it; whether it drives compaction is not confirmed here.",
+        "semantics": "window",
+        "config": "{tmp}/subc-dsh.XXXXXX/subconscious.cordis.yml"
+      }
+    },
+    "mcp": {
+      "configured_by_subc": false,
+      "transports": null,
+      "verified": false,
+      "note": "subc configures no MCP servers."
+    },
+    "headers": [
+      {
+        "name": "x-subconscious-client",
+        "value": "deepseek-harness",
+        "on": "model requests",
+        "set_by_subc": true,
+        "verified": true
+      }
+    ],
+    "hooks": []
+  }
+}

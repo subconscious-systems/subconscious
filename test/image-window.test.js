@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +10,7 @@ import {
   windowFetch,
   windowImages,
 } from '../bin/runbook/image-window/window.js';
+import { runSync, setupCommand } from './helpers/agent-command.js';
 
 const MODEL = 'subconscious/deepseek-v4.1-flash-marathon';
 
@@ -192,33 +192,26 @@ after(async () => {
 
 test('subc installs the image window extension with Pi', async () => {
   const piDir = path.join(testDir, 'pi-agent');
-  const runbook = new URL('../bin/runbook/pi/install.sh', import.meta.url);
-  const env = {
-    ...process.env,
-    PI_CODING_AGENT_DIR: piDir,
-    SUBC_ENV_FILE: os.devNull,
-  };
-  const installed = spawnSync(
-    'bash',
-    [
-      runbook.pathname,
-      'install',
-      '--gateway-url',
-      'https://gateway.example',
-      '--api-key',
-      'sk-test',
-    ],
-    { encoding: 'utf8', env },
+  const env = { ...process.env, PI_CODING_AGENT_DIR: piDir };
+  const installed = runSync(
+    setupCommand(
+      'pi',
+      [
+        'install',
+        '--gateway-url',
+        'https://gateway.example',
+        '--api-key',
+        'sk-test',
+      ],
+      env,
+    ),
   );
   assert.equal(installed.status, 0, installed.stderr);
   const dir = path.join(piDir, 'extensions', 'subconscious-image-window');
   for (const file of ['index.ts', 'window.js'])
     await fs.access(path.join(dir, file));
 
-  const removed = spawnSync('bash', [runbook.pathname, 'uninstall'], {
-    encoding: 'utf8',
-    env,
-  });
+  const removed = runSync(setupCommand('pi', ['uninstall'], env));
   assert.equal(removed.status, 0, removed.stderr);
   await assert.rejects(fs.access(dir));
 });

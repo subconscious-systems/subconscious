@@ -13,21 +13,14 @@ process.env.SUBC_DISABLE_UPDATE_CHECK = '1';
 
 const profiles = await import('../bin/profiles.js');
 const agents = await import('../bin/agents.js');
-const registry = JSON.parse(
-  await fs.readFile(
-    new URL('../bin/registry.generated.json', import.meta.url),
-    'utf-8',
-  ),
-);
+const { AGENTS, DEFAULTS } = await import('../bin/agent-data.js');
 
 after(async () => {
   await fs.rm(testConfigDir, { recursive: true, force: true });
 });
 
 test('profile sections stay in sync with every registered CLI agent', () => {
-  const expectedAgentIds = registry.agents
-    .filter((agent) => agent.cli !== false)
-    .map((agent) => agent.id);
+  const expectedAgentIds = AGENTS.map((agent) => agent.id);
   const actualAgentIds = profiles.PROFILE_SETTING_GROUPS.filter(
     (group) => group.id !== 'shared',
   ).map((group) => group.id);
@@ -118,7 +111,7 @@ test('profiles are created securely and preserve agent-specific settings', async
   const created = await profiles.ensureProfile('work', 'shared-secret');
   assert.equal(created.exists, true);
   assert.equal(created.values.API_KEY, 'shared-secret');
-  assert.equal(created.values.MODEL, registry.defaults.model);
+  assert.equal(created.values.MODEL, DEFAULTS.model);
   assert.equal(created.values.CLAUDE_CODE_SUBAGENT_MODEL, '');
   assert.equal(created.values.GATEWAY_URL, 'https://api.subconscious.dev');
   assert.equal((await fs.stat(created.path)).mode & 0o777, 0o600);
@@ -187,7 +180,7 @@ test('config create makes a new profile and rejects duplicates', async () => {
   });
   const created = await profiles.loadProfile('created-in-tui');
   assert.equal(created.exists, true);
-  assert.equal(created.values.MODEL, registry.defaults.model);
+  assert.equal(created.values.MODEL, DEFAULTS.model);
   assert.equal((await fs.stat(created.path)).mode & 0o777, 0o600);
   await assert.rejects(
     profiles.configCommand(['create'], 'created-in-tui', {
@@ -284,13 +277,13 @@ test('extra profile keys survive known-field updates and appear in config show',
   await fs.writeFile(created.path, text, { encoding: 'utf-8', mode: 0o600 });
 
   const updated = await profiles.updateProfile('extras', {
-    MODEL: registry.defaults.model,
+    MODEL: DEFAULTS.model,
   });
   assert.equal(
     updated.values.ANTHROPIC_DEFAULT_OPUS_MODEL,
     'subconscious/custom-opus',
   );
-  assert.equal(updated.values.MODEL, registry.defaults.model);
+  assert.equal(updated.values.MODEL, DEFAULTS.model);
 
   const { spawnSync } = await import('node:child_process');
   const cli = new URL('../bin/cli.js', import.meta.url);
@@ -389,7 +382,7 @@ test('profile extras can remap Claude picker slots only to catalog models', () =
   }
 });
 
-test('Claude picker slots stay inside the live catalog', () => {
+test('Claude picker slots stay inside the live catalog', async () => {
   const previousHaiku = process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL;
   const previousFable = process.env.ANTHROPIC_DEFAULT_FABLE_MODEL;
   const previousCustom = process.env.ANTHROPIC_CUSTOM_MODEL_OPTION;
@@ -421,7 +414,13 @@ test('Claude picker slots stay inside the live catalog', () => {
     assert.equal(env.ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME, catalog[1]);
     assert.equal(env.ANTHROPIC_DEFAULT_FABLE_MODEL_NAME, catalog[1]);
     assert.equal(env.ANTHROPIC_CUSTOM_MODEL_OPTION_NAME, undefined);
-    assert.equal(env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY, '0');
+    // The launch plan, built from Claude's agent file, forces discovery off.
+    const { launchPlan } = await import('../bin/agent-launch.js');
+    assert.equal(
+      launchPlan(claude, { env }).env
+        .CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY,
+      '0',
+    );
     const settings = JSON.parse(env.SUBC_CLAUDE_SETTINGS);
     assert.deepEqual(settings.availableModels, catalog);
     assert.equal(settings.modelPicker.replaceBuiltInOptions, true);

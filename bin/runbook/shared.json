@@ -1,0 +1,58 @@
+{
+  "agents": [
+    "subconscious-code",
+    "claude-code",
+    "codex",
+    "opencode",
+    "cursor",
+    "copilot",
+    "pi",
+    "deepseek-harness"
+  ],
+  "defaults": {
+    "model": "subconscious/glm-5.3-marathon",
+    "models": [
+      "subconscious/glm-5.3-marathon",
+      "subconscious/glm-5.2",
+      "subconscious/tim-qwen3.6-27b",
+      "subconscious/deepseek-v4-flash-marathon",
+      "subconscious/deepseek-v4.1-flash-marathon"
+    ],
+    "baseUrl": "https://api.subconscious.dev"
+  },
+  "model_capabilities": {
+    "subconscious/deepseek-v4.1-flash-marathon": { "vision": true }
+  },
+  "inputs": [
+    {
+      "name": "GATEWAY_URL",
+      "group": "shared",
+      "label": "Gateway URL",
+      "description": "Subconscious gateway origin shared by every integration.",
+      "type": "url",
+      "required": true
+    },
+    {
+      "name": "API_KEY",
+      "group": "shared",
+      "label": "Shared API key",
+      "description": "Default credential used when an agent-specific key is blank.",
+      "type": "secret"
+    },
+    {
+      "name": "MODEL",
+      "group": "shared",
+      "label": "Default model",
+      "description": "Initial model used by coding-agent launches and setup. UNSET uses the first live catalog model.",
+      "type": "model"
+    },
+    {
+      "name": "MAX_CONCURRENT_SUBAGENTS",
+      "default": 4,
+      "label": "Concurrent subagents",
+      "description": "Maximum concurrent Claude/Codex subagent threads.",
+      "type": "integer",
+      "min": 1
+    }
+  ]
+}

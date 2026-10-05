@@ -1,14 +1,9 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-
-const runPath = new URL(
-  '../bin/runbook/deepseek-harness/run.sh',
-  import.meta.url,
-);
+import { launchCommand, run } from './helpers/agent-command.js';
 
 async function makeFakeDsh(root) {
   const binDir = path.join(root, 'bin');
@@ -36,8 +31,11 @@ exit "\${DSH_FAKE_EXIT_CODE:-0}"
 }
 
 function runHarness(root, binDir, args = [], overrides = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('bash', [runPath.pathname, ...args], {
+  const headless = args[0] === 'headless';
+  return run(
+    launchCommand('deepseek-harness', {
+      args: headless ? args.slice(2) : args,
+      prompt: headless ? args[1] : undefined,
       env: {
         ...process.env,
         PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`,
@@ -58,21 +56,8 @@ function runHarness(root, binDir, args = [], overrides = {}) {
         DSH_API_KEY_FILE: path.join(root, 'api-key'),
         ...overrides,
       },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-  });
+    }),
+  );
 }
 
 async function readNullArgs(file) {

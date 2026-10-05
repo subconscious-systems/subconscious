@@ -1,6 +1,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
+import { agentBinary, agentInstallDirs } from '../agent-data.js';
 import { separatorIndex } from '../headless-args.js';
 import { parseOptions } from './common.js';
 import { installWindowsAgent, windowsInstallSpec } from './install.js';
@@ -46,14 +47,8 @@ export async function runWindowsAgent(agent, argv, dependencies) {
       ? argv.slice(1)
       : argv;
   const environment = windowsEnv(profile?.values, process.env);
-  const preferredDirs = agent.runbook?.installDir
-    ? [
-        path.resolve(
-          environment[agent.runbook.installDirEnv] ||
-            path.join(os.homedir(), agent.runbook.installDir),
-        ),
-      ]
-    : [];
+  const preferredDirs = agentInstallDirs(agent, environment, os.homedir());
+  const bin = agentBinary(agent);
   environment.PATH = windowsPath([
     ...preferredDirs,
     ...(environment.PATH || '').split(';'),
@@ -110,7 +105,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
   const headless = dependencies.headless ?? parsed.action === 'headless';
   let executable;
   if (parsed.action === 'launch' || headless) {
-    executable = resolveWindowsExecutable(agent.bin, {
+    executable = resolveWindowsExecutable(bin, {
       env: environment,
       preferredDirs,
     });
@@ -130,13 +125,13 @@ export async function runWindowsAgent(agent, argv, dependencies) {
       }
       const installed = await installWindowsAgent(agent.id, environment);
       if (installed) return finish(installed);
-      executable = resolveWindowsExecutable(agent.bin, {
+      executable = resolveWindowsExecutable(bin, {
         env: environment,
         preferredDirs,
       });
       if (!executable) {
         console.error(
-          `Installed ${agent.name}, but ${agent.bin} was not found. Add its installation directory to PATH or restart your terminal.`,
+          `Installed ${agent.name}, but ${bin} was not found. Add its installation directory to PATH or restart your terminal.`,
         );
         return finish(127);
       }
@@ -182,7 +177,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
     }
   }
   const spec = await windowsLaunch(agent.id, args, env);
-  if (spec.command === agent.bin) spec.command = executable;
+  if (spec.command === bin) spec.command = executable;
   // Headless stdout belongs to the agent alone.
   (headless ? console.error : console.log)(
     `  Launching ${agent.name} on Subconscious (${model})\n`,

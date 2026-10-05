@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { agentById } from '../agent-data.js';
+import { resolveInputs } from '../agent-launch.js';
 import { modelSupportsVision } from '../model-capabilities.js';
 import {
   defaults,
@@ -118,10 +120,11 @@ export async function windowsSetup(
   if (id === 'pi')
     Object.assign(schema, { '--context-window': 1, '--max-tokens': 1 });
   const { options } = parseOptions(argv, schema, { strict: true });
-  const env = {
+  const agent = agentById(id);
+  const env = resolveInputs(agent, {
     ...environment,
     ...(options['--model'] ? { MODEL: options['--model'] } : {}),
-  };
+  });
   const gatewayUrl = origin(
     options['--gateway-url'] || value(env, 'GATEWAY_URL', defaults.baseUrl),
   );
@@ -179,12 +182,12 @@ export async function windowsSetup(
       if (installing) {
         const context = positiveInteger(
           options['--max-input-tokens'] ||
-            value(env, 'COPILOT_MAX_INPUT_TOKENS', '5000000'),
+            value(env, 'COPILOT_MAX_INPUT_TOKENS'),
           'max-input-tokens',
         );
         const maxTokens = positiveInteger(
           options['--max-output-tokens'] ||
-            value(env, 'COPILOT_MAX_OUTPUT_TOKENS', '65536'),
+            value(env, 'COPILOT_MAX_OUTPUT_TOKENS'),
           'max-output-tokens',
         );
         providers.push({
@@ -271,12 +274,11 @@ export async function windowsSetup(
     const config = path.join(dir, 'subconscious-windows.json');
     if (installing) {
       const context = positiveInteger(
-        options['--context-window'] ||
-          value(env, 'PI_CONTEXT_WINDOW', '5000000'),
+        options['--context-window'] || value(env, 'PI_CONTEXT_WINDOW'),
         'context-window',
       );
       const maxTokens = positiveInteger(
-        options['--max-tokens'] || value(env, 'PI_MAX_TOKENS', '65536'),
+        options['--max-tokens'] || value(env, 'PI_MAX_TOKENS'),
         'max-tokens',
       );
       providers.subconscious = {

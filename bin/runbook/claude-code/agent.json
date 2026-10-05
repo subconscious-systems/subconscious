@@ -1,0 +1,300 @@
+{
+  "id": "claude-code",
+  "command": "claude",
+  "aliases": ["claude-code", "claudecode"],
+  "name": "Claude Code",
+  "description": "Run Claude Code on your hosted Subconscious model with gateway env, context limits, and telemetry.",
+  "protocol": "anthropic",
+  "homepage": "https://docs.anthropic.com/en/docs/claude-code",
+  "install": {
+    "commands": {
+      "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
+      "linux": "curl -fsSL https://claude.ai/install.sh | bash",
+      "win32": "powershell -ExecutionPolicy Bypass -Command \"irm https://claude.ai/install.ps1 | iex\"",
+      "fallback": "npm i -g {package}"
+    },
+    "method": "script",
+    "package": "@anthropic-ai/claude-code",
+    "version": null,
+    "channel": "installer default (unpinned)",
+    "minimum_version": "2.1.242",
+    "verified": true,
+    "note": "subc warns, and does not block, below minimum_version."
+  },
+  "runbook": {
+    "mode": "launch",
+    "setup_script": "install.sh",
+    "setup_actions": ["status", "uninstall"]
+  },
+  "help": {
+    "usage": "subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]",
+    "behavior": "Launches Claude Code with the active Subconscious profile and model picker. Persistent files are leftover-only: subc claude uninstall.",
+    "options": [
+      ["help", "Show this help"],
+      ["status", "Inspect leftover ~/.claude/subconscious-gateway.env"],
+      ["uninstall", "Remove leftover ~/.claude/subconscious-gateway.env"],
+      ["--model MODEL", "Override the profile model for this launch"]
+    ],
+    "args": ["-- ARGS...", "Pass remaining arguments to Claude Code"]
+  },
+  "sessions": { "key": "claude", "portable": true },
+  "prerequisites": [],
+  "launch": {
+    "argv": ["claude", "--settings", "${SUBC_CLAUDE_SETTINGS}", "{args}"],
+    "headless_argv": [
+      "claude",
+      "--settings",
+      "${SUBC_CLAUDE_SETTINGS}",
+      "{args}",
+      "-p",
+      "--",
+      "{prompt}"
+    ],
+    "headless_platforms": ["darwin", "linux"],
+    "resume": ["--resume", "{sessionId}"],
+    "handoff": ["{prompt}"],
+    "persistent_setup": false
+  },
+  "inputs": [
+    {
+      "name": "GATEWAY_URL",
+      "flag": "--gateway-url",
+      "metavar": "URL"
+    },
+    {
+      "name": "CLAUDE_GATEWAY_URL",
+      "label": "Claude gateway override",
+      "description": "Optional Claude-only gateway origin; blank uses GATEWAY_URL.",
+      "type": "url",
+      "comment": "Leave CLAUDE_GATEWAY_URL blank to use GATEWAY_URL above."
+    },
+    {
+      "name": "CLAUDE_CODE_API_KEY",
+      "flag": "--api-key",
+      "metavar": "KEY",
+      "label": "Claude API key",
+      "description": "Claude-specific credential override; blank uses API_KEY.",
+      "type": "secret"
+    },
+    {
+      "name": "CLAUDE_CODE_SUBAGENT_MODEL",
+      "default": "{model}",
+      "unset_words": true,
+      "export": true,
+      "label": "Subagent model",
+      "description": "Model used by Claude Code subagents. UNSET follows the default model.",
+      "type": "model",
+      "comment": "CLAUDE_CODE_SUBAGENT_MODEL=UNSET follows MODEL above."
+    },
+    {
+      "name": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+      "default": 1000000,
+      "aliases": ["COMPACT_WINDOW"],
+      "export": true,
+      "flag": "--compact-window",
+      "metavar": "N",
+      "help": "Override the Claude auto-compact window",
+      "label": "Auto-compact window",
+      "description": "Claude token window before compaction (100000–1000000).",
+      "type": "integer",
+      "min": 100000,
+      "max": 1000000
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_CONTEXT_TOKENS",
+      "default": 3000000,
+      "aliases": ["MAX_CONTEXT_TOKENS"],
+      "export": true,
+      "flag": "--max-context-tokens",
+      "metavar": "N",
+      "help": "Override the maximum context tokens",
+      "label": "Maximum context tokens",
+      "description": "Maximum context advertised to Claude Code.",
+      "type": "integer",
+      "min": 1
+    },
+    { "name": "MAX_CONCURRENT_SUBAGENTS" },
+    {
+      "name": "MAX_SUBAGENT_SPAWN_DEPTH",
+      "default": 1,
+      "label": "Subagent spawn depth",
+      "description": "Maximum Claude subagent nesting depth.",
+      "type": "integer",
+      "min": 0
+    }
+  ],
+  "env": [
+    {
+      "name": "ANTHROPIC_BASE_URL",
+      "value": "{baseUrl}",
+      "override": ["CLAUDE_GATEWAY_URL"],
+      "description": "Anthropic Messages endpoint origin."
+    },
+    {
+      "name": "ANTHROPIC_AUTH_TOKEN",
+      "value": "{apiKey}",
+      "description": "Bearer credential. ANTHROPIC_API_KEY is not set."
+    },
+    {
+      "name": "ANTHROPIC_MODEL",
+      "value": "{model}",
+      "override": ["ANTHROPIC_MODEL"],
+      "description": "Main model."
+    },
+    {
+      "name": "ANTHROPIC_SMALL_FAST_MODEL",
+      "value": "{model}",
+      "override": ["ANTHROPIC_SMALL_FAST_MODEL"],
+      "description": "Small/fast background model."
+    },
+    {
+      "name": "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
+      "value": "0",
+      "description": "Turns off gateway model discovery; the picker comes from --settings."
+    },
+    {
+      "name": "CLAUDE_CODE_AUTO_MODE_SERVER",
+      "value": "0",
+      "description": "Runs the auto-mode classifier locally: gateway upstreams cannot perform Anthropic's server-side check (https://code.claude.com/docs/en/auto-mode-classifier-billing)."
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS",
+      "value": "${MAX_CONCURRENT_SUBAGENTS}",
+      "description": "Concurrent subagents."
+    },
+    {
+      "name": "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH",
+      "value": "${MAX_SUBAGENT_SPAWN_DEPTH}",
+      "description": "Subagent nesting depth."
+    },
+    {
+      "name": "CLAUDE_CODE_ENABLE_TELEMETRY",
+      "value": "1",
+      "override": ["CLAUDE_CODE_ENABLE_TELEMETRY"],
+      "description": "Enables OTEL api_request logs, which the gateway uses for purpose attribution (https://code.claude.com/docs/en/monitoring-usage#api-request-event)."
+    },
+    {
+      "name": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+      "value": "1",
+      "override": ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"],
+      "description": "Disables non-essential network traffic."
+    },
+    {
+      "name": "ENABLE_CLAUDEAI_MCP_SERVERS",
+      "value": "false",
+      "description": "Disables claude.ai connectors, which need subscription OAuth and cannot run against the gateway."
+    },
+    {
+      "name": "OTEL_LOGS_EXPORTER",
+      "value": "otlp",
+      "override": ["OTEL_LOGS_EXPORTER"],
+      "description": "Log exporter. OTEL_TRACES_EXPORTER and OTEL_METRICS_EXPORTER are never set: Claude's telemetry init can abort on an exporter type it does not know."
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_PROTOCOL",
+      "value": "http/json",
+      "override": ["OTEL_EXPORTER_OTLP_PROTOCOL"],
+      "description": "OTLP protocol."
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
+      "value": "${ANTHROPIC_BASE_URL}/v1/logs",
+      "description": "Gateway log endpoint."
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_HEADERS",
+      "value": "x-api-key={apiKey}",
+      "description": "Credential on log export."
+    },
+    {
+      "name": "OTEL_EXPORTER_OTLP_TIMEOUT",
+      "value": "2000",
+      "override": ["OTEL_EXPORTER_OTLP_TIMEOUT"],
+      "description": "Export timeout in ms."
+    },
+    {
+      "name": "OTEL_LOGS_EXPORT_INTERVAL",
+      "value": "2000",
+      "override": ["OTEL_LOGS_EXPORT_INTERVAL"],
+      "description": "Export interval in ms."
+    }
+  ],
+  "config": [
+    {
+      "kind": "cli-flag",
+      "name": "--settings",
+      "lifetime": "launch",
+      "value": {
+        "availableModels": "{catalog}",
+        "modelPicker": {
+          "replaceBuiltInOptions": true,
+          "options": "one entry per catalog model"
+        }
+      },
+      "description": "Replaces the built-in model picker with the live catalog and allowlists only those models."
+    },
+    {
+      "kind": "file",
+      "path": "~/.claude/subconscious-gateway.env",
+      "lifetime": "legacy",
+      "description": "Written only by older persistent setup. subc claude uninstall removes it; launch never writes it."
+    }
+  ],
+  "capabilities": {
+    "compaction": {
+      "default": "on",
+      "on": {
+        "set_by_subc": true,
+        "kind": "env",
+        "name": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+        "value": "${CLAUDE_CODE_AUTO_COMPACT_WINDOW}",
+        "verified": true,
+        "note": "Auto-compaction stays on; subc only moves the window."
+      },
+      "off": {
+        "set_by_subc": false,
+        "kind": "env",
+        "name": "DISABLE_AUTO_COMPACT",
+        "value": "1",
+        "verified": false,
+        "note": "Upstream Claude Code variable. subc never sets it, and this repo does not confirm its behaviour."
+      },
+      "threshold": {
+        "set_by_subc": true,
+        "kind": "env",
+        "name": "CLAUDE_CODE_AUTO_COMPACT_WINDOW",
+        "value": "${CLAUDE_CODE_AUTO_COMPACT_WINDOW}",
+        "verified": true,
+        "semantics": "window",
+        "range": {
+          "verified": false,
+          "note": "The bounds of the profile setting, from the Claude Code docs (https://code.claude.com/docs/en/context-window#set-the-auto-compact-window). A launch value is not clamped."
+        }
+      }
+    },
+    "mcp": {
+      "configured_by_subc": false,
+      "transports": null,
+      "verified": false,
+      "note": "subc adds no MCP servers. It disables claude.ai connectors with ENABLE_CLAUDEAI_MCP_SERVERS=false. User MCP config is left alone."
+    },
+    "headers": [
+      {
+        "name": "x-api-key",
+        "value": "{apiKey}",
+        "on": "OTLP log export to {baseUrl}/v1/logs",
+        "set_by_subc": true,
+        "verified": true
+      },
+      {
+        "name": "x-claude-code-session-id",
+        "value": "session ID",
+        "on": "model requests",
+        "set_by_subc": false,
+        "verified": false,
+        "note": "Sent by Claude Code itself, per a comment in install.sh. Not set by subc."
+      }
+    ],
+    "hooks": []
+  }
+}

@@ -1,0 +1,185 @@
+{
+  "id": "copilot",
+  "command": "copilot",
+  "aliases": ["vscode", "vs-code"],
+  "name": "GitHub Copilot (VS Code)",
+  "description": "Install the VS Code custom endpoint and Copilot conversation/compaction hooks.",
+  "protocol": "openai",
+  "homepage": "https://code.visualstudio.com/docs/copilot/overview",
+  "install": {
+    "commands": null,
+    "method": "user",
+    "package": null,
+    "version": null,
+    "minimum_version": null,
+    "verified": true,
+    "note": "VS Code installed by the user. The provider API key is entered once in VS Code's Manage Language Models."
+  },
+  "runbook": {
+    "mode": "setup",
+    "setup_script": "install.sh",
+    "setup_actions": ["install", "status", "uninstall"]
+  },
+  "help": {
+    "usage": "subc [-p NAME] copilot [help|install|status|uninstall]",
+    "behavior": "Manages the VS Code model provider and Copilot correlation hooks.",
+    "options": [
+      ["help", "Show this help"],
+      ["install", "Install or update the provider and hooks (default action)"],
+      ["status", "Inspect the installed provider and hooks"],
+      ["uninstall", "Remove the Subconscious provider and hooks"]
+    ]
+  },
+  "prerequisites": [
+    { "command": "jq", "needed_for": "install", "required": true },
+    { "command": "curl", "needed_for": "install", "required": true }
+  ],
+  "launch": null,
+  "inputs": [
+    {
+      "name": "COPILOT_API_KEY",
+      "label": "Copilot hook API key",
+      "description": "Copilot hook credential override; blank uses API_KEY.",
+      "type": "secret"
+    },
+    {
+      "name": "COPILOT_MAX_INPUT_TOKENS",
+      "default": 5000000,
+      "label": "Maximum input tokens",
+      "description": "Input-token capacity advertised to VS Code.",
+      "type": "integer",
+      "min": 1
+    },
+    {
+      "name": "COPILOT_MAX_OUTPUT_TOKENS",
+      "default": 65536,
+      "label": "Maximum output tokens",
+      "description": "Output-token capacity advertised to VS Code.",
+      "type": "integer",
+      "min": 1
+    },
+    {
+      "name": "VSCODE_APP",
+      "label": "VS Code application",
+      "description": "Optional application override; blank enables auto-detection.",
+      "type": "choice",
+      "choices": ["", "Code", "Code - Insiders", "VSCodium"]
+    }
+  ],
+  "env": [],
+  "config": [
+    {
+      "kind": "file",
+      "path": "<VS Code user dir>/chatLanguageModels.json",
+      "lifetime": "persistent",
+      "value": {
+        "name": "Subconscious Gateway",
+        "vendor": "customendpoint",
+        "apiType": "messages",
+        "apiKey": "${input:chat.lm.secret.subconscious-gateway}",
+        "models.<id>.url": "{baseUrl}/v1/messages",
+        "models.<id>.maxInputTokens": "${COPILOT_MAX_INPUT_TOKENS}",
+        "models.<id>.maxOutputTokens": "${COPILOT_MAX_OUTPUT_TOKENS}",
+        "models.<id>.requestHeaders": {
+          "x-subconscious-client": "copilot"
+        }
+      },
+      "description": "Custom Endpoint provider, written by install.sh and merged into the user's list."
+    },
+    {
+      "kind": "file",
+      "path": "~/.copilot/hooks/subconscious-hooks.json",
+      "lifetime": "persistent",
+      "description": "UserPromptSubmit and PreCompact hooks."
+    },
+    {
+      "kind": "file",
+      "path": "~/.copilot/hooks/subconscious-hook.sh",
+      "lifetime": "persistent",
+      "description": "Hook script."
+    },
+    {
+      "kind": "file",
+      "path": "~/.copilot/subconscious-hooks.env",
+      "lifetime": "persistent",
+      "description": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600)."
+    },
+    {
+      "kind": "dir",
+      "path": "~/.copilot/subconscious-compact-pending",
+      "lifetime": "persistent",
+      "description": "Pending-compaction markers written by the hook."
+    }
+  ],
+  "capabilities": {
+    "compaction": {
+      "default": "unknown",
+      "on": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "subc only sets maxInputTokens; whether VS Code compacts from it is not confirmed here."
+      },
+      "off": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "subc does not configure Copilot compaction."
+      },
+      "threshold": {
+        "set_by_subc": true,
+        "kind": "config-field",
+        "name": "models.<id>.maxInputTokens",
+        "value": "${COPILOT_MAX_INPUT_TOKENS}",
+        "verified": false,
+        "note": "subc sets this capacity; its effect on compaction is not confirmed here.",
+        "semantics": "window",
+        "config": "<VS Code user dir>/chatLanguageModels.json"
+      }
+    },
+    "mcp": {
+      "configured_by_subc": false,
+      "transports": null,
+      "verified": false,
+      "note": "subc configures no MCP servers."
+    },
+    "headers": [
+      {
+        "name": "x-subconscious-client",
+        "value": "copilot",
+        "on": "model requests and hook POSTs",
+        "set_by_subc": true,
+        "verified": true
+      },
+      {
+        "name": "Authorization",
+        "value": "Bearer {apiKey}",
+        "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+        "set_by_subc": true,
+        "verified": true
+      }
+    ],
+    "hooks": [
+      {
+        "event": "UserPromptSubmit",
+        "posts": "conversation_ensure, plus conversation_compaction phase=end when one is pending",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.copilot/hooks/subconscious-hooks.json",
+        "installed_by": ["install"],
+        "verified": true
+      },
+      {
+        "event": "PreCompact",
+        "posts": "conversation_compaction phase=start",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.copilot/hooks/subconscious-hooks.json",
+        "installed_by": ["install"],
+        "verified": true
+      }
+    ]
+  }
+}

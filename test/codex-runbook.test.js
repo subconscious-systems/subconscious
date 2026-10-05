@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { launchCommand, runSync } from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-codex-test-'));
 const fakeCodex = path.join(testDir, 'codex');
@@ -35,11 +35,8 @@ test('Codex advertises image input for DeepSeek V4.1 only, selected or in the pi
   const visionModel = 'subconscious/deepseek-v4.1-flash-marathon';
   const otherModel = 'subconscious/deepseek-v4-flash-marathon';
   for (const selected of [visionModel, otherModel]) {
-    const result = spawnSync(
-      'bash',
-      [new URL('../bin/runbook/codex/run.sh', import.meta.url).pathname],
-      {
-        encoding: 'utf8',
+    const result = runSync(
+      launchCommand('codex', {
         env: {
           ...process.env,
           PATH: `${testDir}:${process.env.PATH}`,
@@ -51,11 +48,10 @@ test('Codex advertises image input for DeepSeek V4.1 only, selected or in the pi
             visionModel,
             `${visionModel}-other`,
           ].join('\n'),
-          SUBC_ENV_FILE: os.devNull,
           CODEX_DIR: path.join(testDir, '.codex'),
           CAPTURED_CATALOG: capturedCatalog,
         },
-      },
+      }),
     );
     assert.equal(result.status, 0, result.stderr);
     const catalog = JSON.parse(await fs.readFile(capturedCatalog, 'utf8'));
@@ -73,22 +69,21 @@ test('Codex advertises image input for DeepSeek V4.1 only, selected or in the pi
 // Runs the runbook against the stub `codex` above and returns the model catalog
 // it generated. `env` overrides are layered on top of the shared defaults.
 async function captureCatalog(env = {}) {
-  const runbook = new URL('../bin/runbook/codex/run.sh', import.meta.url);
-  const result = spawnSync('bash', [runbook.pathname], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${testDir}:${process.env.PATH}`,
-      GATEWAY_URL: 'https://gateway.example',
-      API_KEY: 'sk-test',
-      MODEL: 'subconscious/glm-5.3-marathon',
-      SUBC_ENV_FILE: os.devNull,
-      CODEX_DIR: path.join(testDir, '.codex'),
-      CAPTURED_CATALOG: capturedCatalog,
-      CAPTURED_ARGS: capturedArgs,
-      ...env,
-    },
-  });
+  const result = runSync(
+    launchCommand('codex', {
+      env: {
+        ...process.env,
+        PATH: `${testDir}:${process.env.PATH}`,
+        GATEWAY_URL: 'https://gateway.example',
+        API_KEY: 'sk-test',
+        MODEL: 'subconscious/glm-5.3-marathon',
+        CODEX_DIR: path.join(testDir, '.codex'),
+        CAPTURED_CATALOG: capturedCatalog,
+        CAPTURED_ARGS: capturedArgs,
+        ...env,
+      },
+    }),
+  );
 
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(await fs.readFile(capturedCatalog, 'utf8'));

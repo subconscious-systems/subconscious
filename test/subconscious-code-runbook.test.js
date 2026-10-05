@@ -6,13 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
+import { launchCommand, run } from './helpers/agent-command.js';
 
 const exec = promisify(execFile);
 
-const runPath = new URL(
-  '../bin/runbook/subconscious-code/run.sh',
-  import.meta.url,
-);
 const installPath = new URL(
   '../bin/runbook/subconscious-code/install.sh',
   import.meta.url,
@@ -39,8 +36,9 @@ exit "\${SC_TEST_EXIT_CODE:-0}"
 }
 
 function runSc(root, binDir, args = [], overrides = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('bash', [runPath.pathname, ...args], {
+  return run(
+    launchCommand('subconscious-code', {
+      args,
       env: {
         ...process.env,
         PATH: `${binDir}${path.delimiter}${process.env.PATH || ''}`,
@@ -56,16 +54,8 @@ function runSc(root, binDir, args = [], overrides = {}) {
         SC_TEST_MODEL_FILE: path.join(root, 'model'),
         ...overrides,
       },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stderr = '';
-    child.stderr.setEncoding('utf8');
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stderr }));
-  });
+    }),
+  );
 }
 
 function runInstaller(root, binDir, overrides = {}) {

@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { modelIds, positiveInteger } from './launch-values.js';
 import { modelSupportsVision } from './model-capabilities.js';
 
 export const OPENCODE_PROVIDER_ID = 'subconscious';
@@ -86,4 +87,18 @@ export function buildOpenCodeConfig({
     },
     model: `${OPENCODE_PROVIDER_ID}/${model}`,
   };
+}
+
+/** The launch config for the env subc passes to OpenCode. */
+export function openCodeConfigFromEnv(env) {
+  return buildOpenCodeConfig({
+    baseUrl: String(env.GATEWAY_URL ?? '').replace(/\/+$/, ''),
+    model: env.MODEL,
+    modelIds: modelIds(env),
+    context: positiveInteger(
+      env.OPENCODE_CONTEXT_LIMIT,
+      'OPENCODE_CONTEXT_LIMIT',
+    ),
+    output: positiveInteger(env.OPENCODE_OUTPUT_LIMIT, 'OPENCODE_OUTPUT_LIMIT'),
+  });
 }

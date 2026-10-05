@@ -1,0 +1,137 @@
+{
+  "id": "cursor",
+  "command": "cursor",
+  "aliases": [],
+  "name": "Cursor",
+  "description": "Install Cursor conversation and compaction hooks, then finish model setup in Cursor Settings.",
+  "protocol": "openai",
+  "homepage": "https://cursor.com",
+  "install": {
+    "commands": null,
+    "method": "user",
+    "package": null,
+    "version": null,
+    "minimum_version": null,
+    "verified": true,
+    "note": "IDE installed by the user. The model endpoint is set by hand in Cursor Settings (OpenAI API Key Override)."
+  },
+  "runbook": {
+    "mode": "setup",
+    "setup_script": "install.sh",
+    "setup_actions": ["install", "status", "uninstall"]
+  },
+  "help": {
+    "usage": "subc [-p NAME] cursor [help|install|status|uninstall]",
+    "behavior": "Manages Cursor correlation hooks; model endpoint setup is completed in Cursor Settings.",
+    "options": [
+      ["help", "Show this help"],
+      ["install", "Install or update the Cursor hooks (default action)"],
+      ["status", "Inspect the installed hook configuration"],
+      ["uninstall", "Remove only the Subconscious Cursor hooks"]
+    ]
+  },
+  "prerequisites": [
+    { "command": "jq", "needed_for": "install", "required": true },
+    { "command": "curl", "needed_for": "install", "required": true }
+  ],
+  "launch": null,
+  "inputs": [
+    {
+      "name": "CURSOR_API_KEY",
+      "label": "Cursor hook API key",
+      "description": "Cursor hook credential override; blank uses API_KEY.",
+      "type": "secret"
+    }
+  ],
+  "env": [],
+  "config": [
+    {
+      "kind": "file",
+      "path": "~/.cursor/hooks.json",
+      "lifetime": "persistent",
+      "description": "beforeSubmitPrompt and preCompact entries are merged in; other entries are kept."
+    },
+    {
+      "kind": "file",
+      "path": "~/.cursor/hooks/subconscious-hook.sh",
+      "lifetime": "persistent",
+      "description": "Hook script."
+    },
+    {
+      "kind": "file",
+      "path": "~/.cursor/subconscious-hooks.env",
+      "lifetime": "persistent",
+      "description": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600)."
+    }
+  ],
+  "capabilities": {
+    "compaction": {
+      "default": "unknown",
+      "on": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "subc does not configure Cursor compaction."
+      },
+      "off": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "subc does not configure Cursor compaction."
+      },
+      "threshold": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "subc does not configure Cursor compaction."
+      }
+    },
+    "mcp": {
+      "configured_by_subc": false,
+      "transports": null,
+      "verified": false,
+      "note": "subc configures no MCP servers."
+    },
+    "headers": [
+      {
+        "name": "x-subconscious-client",
+        "value": "cursor",
+        "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+        "set_by_subc": true,
+        "verified": true,
+        "note": "Cursor cannot add headers to model requests."
+      },
+      {
+        "name": "Authorization",
+        "value": "Bearer {apiKey}",
+        "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+        "set_by_subc": true,
+        "verified": true
+      }
+    ],
+    "hooks": [
+      {
+        "event": "beforeSubmitPrompt",
+        "posts": "conversation_ensure",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.cursor/hooks.json",
+        "installed_by": ["install"],
+        "verified": true
+      },
+      {
+        "event": "preCompact",
+        "posts": "conversation_compaction phase=point",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.cursor/hooks.json",
+        "installed_by": ["install"],
+        "verified": true
+      }
+    ]
+  }
+}

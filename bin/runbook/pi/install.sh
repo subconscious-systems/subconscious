@@ -47,27 +47,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../model-capabilities.generated.sh"
+source "${SCRIPT_DIR}/../lib.sh"
 EXTENSION_SRC="${SCRIPT_DIR}/subconscious-compaction.ts"
 IMAGE_WINDOW_SRC="${SCRIPT_DIR}/../image-window"
-
-# Load shared env from SUBC_ENV_FILE, or a sibling .env / env.example.
-SHARED_ENV="${SUBC_ENV_FILE:-${SCRIPT_DIR}/../.env}"
-[[ -f "$SHARED_ENV" ]] || SHARED_ENV="${SCRIPT_DIR}/../env.example"
-if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
 COMMAND="install"
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${PI_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
-CONTEXT_WINDOW="${PI_CONTEXT_WINDOW:-5000000}"
-MAX_TOKENS="${PI_MAX_TOKENS:-65536}"
+CONTEXT_WINDOW="${PI_CONTEXT_WINDOW:-}"
+MAX_TOKENS="${PI_MAX_TOKENS:-}"
 
 usage() {
   cat <<'EOF'
 Usage:
-  subc pi install [--gateway-url URL] [--api-key KEY] [--model MODEL]
-             [--context-window N] [--max-tokens N]
+  subc pi install [--gateway-url URL] [--api-key KEY] [--context-window N]
+             [--max-tokens N]
   subc pi uninstall
   subc pi status
 
@@ -92,10 +86,6 @@ while [[ $# -gt 0 ]]; do
       API_KEY="${2:-}"
       shift 2
       ;;
-    --model)
-      MODEL="${2:-}"
-      shift 2
-      ;;
     --context-window)
       CONTEXT_WINDOW="${2:-}"
       shift 2
@@ -116,35 +106,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
-subconscious/glm-5.2
-subconscious/tim-qwen3.6-27b
-subconscious/deepseek-v4-flash-marathon
-subconscious/deepseek-v4.1-flash-marathon"
-SUPPORTED_MODELS=()
-
-add_supported_model() {
-  local model_id="$1" existing
-  [[ -n "$model_id" ]] || return 0
-  if [[ ! "$model_id" =~ ^[-A-Za-z0-9._:/+]+$ ]]; then
-    echo "error: invalid model id: $model_id" >&2
-    exit 1
-  fi
-  if [[ "${#SUPPORTED_MODELS[@]}" -gt 0 ]]; then
-    for existing in "${SUPPORTED_MODELS[@]}"; do
-      [[ "$existing" == "$model_id" ]] && return 0
-    done
-  fi
-  SUPPORTED_MODELS+=("$model_id")
-}
-
-add_supported_model "$MODEL"
-while IFS= read -r model_id; do
-  add_supported_model "$model_id"
-done <<< "${SUBCONSCIOUS_MODELS:-$DEFAULT_SUBCONSCIOUS_MODELS}"
-
 MODEL_ENTRIES_JSON=""
-for model_id in "${SUPPORTED_MODELS[@]}"; do
+while IFS= read -r model_id; do
   vision_fields=""
   if subc_model_supports_vision "$model_id"; then
     vision_fields=',"input":["text","image"]'
@@ -155,7 +118,7 @@ for model_id in "${SUPPORTED_MODELS[@]}"; do
   else
     MODEL_ENTRIES_JSON="$model_json"
   fi
-done
+done <<< "$SUBC_MODEL_IDS"
 
 PI_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
 MODELS_JSON="${PI_DIR}/models.json"

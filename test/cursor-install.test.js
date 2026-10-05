@@ -1,45 +1,24 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-
-const installPath = new URL(
-  '../bin/runbook/cursor/install.sh',
-  import.meta.url,
-);
+import { run, setupCommand } from './helpers/agent-command.js';
 
 function runInstall(home) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('bash', [installPath.pathname, 'install'], {
-      env: {
-        ...process.env,
-        HOME: home,
-        GATEWAY_URL: 'https://gateway.example',
-        API_KEY: 'test-cursor-key',
-        MODEL: 'subconscious/glm-5.3-marathon',
-        SUBCONSCIOUS_MODELS: [
-          'subconscious/glm-5.3-marathon',
-          'subconscious/tim-qwen3.6-27b',
-        ].join('\n'),
-        SUBC_ENV_FILE: '/dev/null',
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-  });
+  return run(
+    setupCommand('cursor', ['install'], {
+      ...process.env,
+      HOME: home,
+      GATEWAY_URL: 'https://gateway.example',
+      API_KEY: 'test-cursor-key',
+      MODEL: 'subconscious/glm-5.3-marathon',
+      SUBCONSCIOUS_MODELS: [
+        'subconscious/glm-5.3-marathon',
+        'subconscious/tim-qwen3.6-27b',
+      ].join('\n'),
+    }),
+  );
 }
 
 test('Cursor installer separates the UI /v1 URL from the hook origin', async () => {

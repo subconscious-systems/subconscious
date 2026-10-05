@@ -1,0 +1,216 @@
+{
+  "id": "pi",
+  "command": "pi",
+  "aliases": [],
+  "name": "Pi",
+  "description": "Refresh Pi with the live Subconscious model catalog and launch the active profile model.",
+  "protocol": "openai",
+  "homepage": "https://pi.dev",
+  "install": {
+    "commands": null,
+    "method": null,
+    "package": null,
+    "version": null,
+    "minimum_version": null,
+    "verified": false,
+    "note": "No install command is defined; subc expects pi on PATH."
+  },
+  "runbook": {
+    "mode": "launch",
+    "script": "run.sh",
+    "setup_script": "install.sh",
+    "setup_actions": ["install", "status", "uninstall"],
+    "after_install": "Start a fresh session with subc pi."
+  },
+  "help": {
+    "usage": "subc [-p NAME] pi [help|install|status|uninstall] [Pi arguments...]",
+    "behavior": "Refreshes the persistent Subconscious provider from the live catalog, then launches Pi.",
+    "options": [
+      ["help", "Show this help"],
+      ["install", "Refresh the Subconscious provider without launching Pi"],
+      ["status", "Inspect the persistent Pi provider"],
+      ["uninstall", "Remove only the Subconscious Pi provider and extension"],
+      ["--model MODEL", "Override the profile model for this launch"]
+    ],
+    "args": ["ARGS...", "Pass arguments directly to Pi"]
+  },
+  "sessions": { "key": "pi", "portable": true },
+  "prerequisites": [
+    {
+      "command": "jq",
+      "needed_for": "install and every launch",
+      "required": true
+    }
+  ],
+  "launch": {
+    "argv": [
+      "pi",
+      "--provider",
+      "subconscious",
+      "--model",
+      "{model}",
+      "{args}"
+    ],
+    "headless_argv": [
+      "pi",
+      "--provider",
+      "subconscious",
+      "--model",
+      "{model}",
+      "--print",
+      "{args}"
+    ],
+    "headless_stdin": "{prompt}",
+    "headless_platforms": ["darwin", "linux"],
+    "resume": ["--session", "{sessionFile}"],
+    "handoff": ["{prompt}"],
+    "persistent_setup": true,
+    "note": "Each launch first runs install.sh install, which rewrites the persistent files below."
+  },
+  "inputs": [
+    {
+      "name": "PI_API_KEY",
+      "label": "Pi API key",
+      "description": "Pi-specific credential override; blank uses API_KEY.",
+      "type": "secret"
+    },
+    {
+      "name": "PI_CONTEXT_WINDOW",
+      "default": 5000000,
+      "label": "Context window",
+      "description": "Pi context window used to determine compaction.",
+      "type": "integer",
+      "min": 1
+    },
+    {
+      "name": "PI_MAX_TOKENS",
+      "default": 65536,
+      "label": "Maximum output tokens",
+      "description": "Maximum output tokens advertised to Pi.",
+      "type": "integer",
+      "min": 1
+    }
+  ],
+  "env": [],
+  "config": [
+    {
+      "kind": "file",
+      "path": "~/.pi/agent/models.json",
+      "lifetime": "persistent",
+      "value": {
+        "providers.subconscious.baseUrl": "{baseUrlV1}",
+        "providers.subconscious.api": "openai-completions",
+        "providers.subconscious.apiKey": "{apiKey}",
+        "providers.subconscious.headers": {
+          "x-subconscious-client": "pi"
+        },
+        "providers.subconscious.models[].contextWindow": "${PI_CONTEXT_WINDOW}",
+        "providers.subconscious.models[].maxTokens": "${PI_MAX_TOKENS}",
+        "providers.subconscious.models[].compat": {
+          "sendSessionAffinityHeaders": true,
+          "sessionAffinityFormat": "openai-nosession"
+        }
+      },
+      "description": "Subconscious provider, written by install.sh and merged in; other providers are kept. Mode 600; holds the key in plain text."
+    },
+    {
+      "kind": "file",
+      "path": "~/.pi/agent/subconscious.env",
+      "lifetime": "persistent",
+      "description": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the compaction extension (mode 600)."
+    },
+    {
+      "kind": "file",
+      "path": "~/.pi/agent/extensions/subconscious-compaction.ts",
+      "lifetime": "persistent",
+      "description": "Compaction reporting extension."
+    },
+    {
+      "kind": "dir",
+      "path": "~/.pi/agent/extensions/subconscious-image-window",
+      "lifetime": "persistent",
+      "description": "Extension that keeps requests to the newest 30 images."
+    }
+  ],
+  "capabilities": {
+    "compaction": {
+      "default": "on",
+      "on": {
+        "set_by_subc": true,
+        "kind": "config-field",
+        "name": "providers.subconscious.models[].contextWindow",
+        "value": "${PI_CONTEXT_WINDOW}",
+        "verified": false,
+        "note": "subc sets contextWindow. That Pi compacts relative to it comes only from the profile setting description.",
+        "config": "~/.pi/agent/models.json"
+      },
+      "off": {
+        "set_by_subc": false,
+        "kind": "config-field",
+        "name": "compaction.enabled",
+        "value": false,
+        "verified": false,
+        "note": "Upstream Pi setting. subc never sets it, and this repo does not confirm its location or behaviour.",
+        "config": "Pi settings (location unverified)"
+      },
+      "threshold": {
+        "set_by_subc": true,
+        "kind": "config-field",
+        "name": "providers.subconscious.models[].contextWindow",
+        "value": "${PI_CONTEXT_WINDOW}",
+        "verified": false,
+        "note": "subc sets contextWindow. That Pi compacts relative to it comes only from the profile setting description. Pi's reserveTokens also moves the trigger; subc never sets it.",
+        "semantics": "window",
+        "config": "~/.pi/agent/models.json"
+      }
+    },
+    "mcp": {
+      "configured_by_subc": false,
+      "transports": null,
+      "verified": false,
+      "note": "subc configures no MCP servers."
+    },
+    "headers": [
+      {
+        "name": "x-subconscious-client",
+        "value": "pi",
+        "on": "model requests",
+        "set_by_subc": true,
+        "verified": true
+      },
+      {
+        "name": "x-session-affinity",
+        "value": "session ID",
+        "on": "model requests",
+        "set_by_subc": true,
+        "verified": false,
+        "note": "Enabled by compat.sendSessionAffinityHeaders; the header name comes from an install.sh comment."
+      },
+      {
+        "name": "Authorization",
+        "value": "Bearer {apiKey}",
+        "on": "extension POSTs to {baseUrl}/v1/agent-hooks",
+        "set_by_subc": true,
+        "verified": true
+      }
+    ],
+    "hooks": [
+      {
+        "event": "session_before_compact",
+        "posts": "conversation_compaction phase=start",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.pi/agent/extensions/subconscious-compaction.ts",
+        "installed_by": ["launch", "install"],
+        "verified": true
+      },
+      {
+        "event": "session_compact",
+        "posts": "conversation_compaction phase=end",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.pi/agent/extensions/subconscious-compaction.ts",
+        "installed_by": ["launch", "install"],
+        "verified": true
+      }
+    ]
+  }
+}

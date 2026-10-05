@@ -1,0 +1,156 @@
+{
+  "id": "subconscious-code",
+  "command": "marathon",
+  "aliases": ["sc", "subconscious-code"],
+  "name": "Marathon",
+  "description": "Launch the native Subconscious coding agent with the active profile, gateway, and model.",
+  "protocol": "openai",
+  "homepage": "https://github.com/subconscious-systems/subconscious-code",
+  "install": {
+    "commands": {
+      "darwin": "subc marathon install",
+      "linux": "subc marathon install",
+      "win32": "subc marathon install"
+    },
+    "method": "github-release",
+    "repository": "subconscious-systems/subconscious-code",
+    "version": "latest",
+    "pin_env": "SC_CODE_VERSION",
+    "asset": "marathon-{target}.tar.gz",
+    "checksum": "marathon-{target}.tar.gz.sha256",
+    "legacy_asset": "sc-{target}.tar.gz",
+    "targets": [
+      "aarch64-apple-darwin",
+      "x86_64-apple-darwin",
+      "aarch64-unknown-linux-musl",
+      "x86_64-unknown-linux-musl"
+    ],
+    "install_dir": "~/.local/bin",
+    "install_dir_env": "SC_INSTALL_DIR",
+    "minimum_version": null,
+    "verified": true,
+    "windows_targets": ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"],
+    "windows_assets": [
+      "marathon-{target}.zip",
+      "marathon-{target}.exe",
+      "sc-{target}.zip",
+      "sc-{target}.exe"
+    ],
+    "note": "Windows installs come from the native launcher, which takes the first asset in windows_assets that the release has, plus its .sha256."
+  },
+  "runbook": {
+    "mode": "launch",
+    "setup_script": "install.sh",
+    "setup_actions": ["install"],
+    "setup_needs_auth": false,
+    "binary_install_script": "install.sh"
+  },
+  "help": {
+    "usage": "subc [-p NAME] marathon [help|install] [Marathon arguments...]",
+    "behavior": "Launches the native Subconscious coding agent with the selected profile gateway, credential, and model.",
+    "options": [
+      ["help", "Show this help"],
+      [
+        "install",
+        {
+          "win32": "Install a verified Windows release, when published upstream",
+          "default": "Install the latest precompiled Linux or macOS release"
+        }
+      ],
+      ["--model MODEL", "Override the profile model for this launch"]
+    ],
+    "args": ["ARGS...", "Pass arguments directly to Marathon"]
+  },
+  "sessions": { "key": "sc", "portable": false },
+  "prerequisites": [
+    { "command": "gh|curl", "needed_for": "install", "required": true },
+    {
+      "command": "sha256sum|shasum",
+      "needed_for": "install",
+      "required": true
+    },
+    { "command": "tar", "needed_for": "install", "required": true }
+  ],
+  "launch": {
+    "argv": ["marathon", "{args}"],
+    "headless_argv": ["marathon", "--print={prompt}", "{args}"],
+    "headless_platforms": ["darwin", "linux"],
+    "resume": ["--resume", "{sessionFile}"],
+    "persistent_setup": false
+  },
+  "inputs": [
+    {
+      "name": "SC_API_KEY",
+      "label": "Subconscious Code API key",
+      "description": "Subconscious Code credential override; blank uses API_KEY.",
+      "type": "secret"
+    }
+  ],
+  "env": [
+    {
+      "name": "SC_API_KEY",
+      "value": "{apiKey}",
+      "description": "Gateway credential."
+    },
+    {
+      "name": "SC_BASE_URL",
+      "value": "{baseUrlV1}",
+      "description": "OpenAI-compatible base URL for model requests."
+    },
+    {
+      "name": "SC_DLR_URL",
+      "value": "{baseUrl}",
+      "description": "Gateway origin for Marathon's DLR feature.",
+      "note": "What DLR does is defined in the Marathon binary, not in this repo."
+    },
+    {
+      "name": "SC_DLR_ENABLED",
+      "value": "true",
+      "description": "Turns Marathon's DLR feature on.",
+      "note": "What DLR does is defined in the Marathon binary, not in this repo."
+    },
+    {
+      "name": "SC_MODEL",
+      "value": "{model}",
+      "description": "Model for the session."
+    }
+  ],
+  "config": [],
+  "capabilities": {
+    "compaction": {
+      "default": "unknown",
+      "on": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "subc sets no compaction knob; Marathon's built-in behaviour applies."
+      },
+      "off": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "No off knob is set or documented by subc."
+      },
+      "threshold": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "No threshold knob is set or documented by subc."
+      }
+    },
+    "mcp": {
+      "configured_by_subc": false,
+      "transports": null,
+      "verified": false,
+      "note": "subc configures no MCP servers. Transports Marathon supports are not described in this repo."
+    },
+    "headers": [],
+    "hooks": []
+  }
+}

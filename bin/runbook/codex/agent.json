@@ -1,0 +1,453 @@
+{
+  "id": "codex",
+  "command": "codex",
+  "aliases": [],
+  "name": "Codex CLI",
+  "description": "Run Codex on your hosted Subconscious model with a temporary provider catalog and compaction hooks.",
+  "protocol": "openai",
+  "homepage": "https://developers.openai.com/codex",
+  "install": {
+    "commands": {
+      "darwin": "npm i -g {package}",
+      "linux": "npm i -g {package}",
+      "win32": "npm i -g {package}"
+    },
+    "method": "npm",
+    "package": "@openai/codex",
+    "version": null,
+    "channel": "latest (unpinned)",
+    "minimum_version": "0.143.0",
+    "verified": true,
+    "note": "Below minimum_version Codex ignores multi_agent_version and runs without subagents. subc warns and does not block."
+  },
+  "runbook": {
+    "mode": "launch",
+    "script": "run.sh",
+    "setup_script": "install.sh",
+    "setup_actions": ["install", "status", "uninstall"]
+  },
+  "help": {
+    "usage": "subc [-p NAME] codex [help|install|status|uninstall] [Codex arguments...]",
+    "behavior": "Launches Codex with a temporary Subconscious provider catalog. Compaction hooks are merged into ~/.codex/hooks.json on first launch and removed with subc codex uninstall; Codex will not run them until you trust them with /hooks once.",
+    "options": [
+      ["help", "Show this help"],
+      [
+        "install",
+        "Install the Subconscious compaction hooks (then trust with /hooks)"
+      ],
+      ["status", "Inspect the installed compaction hooks"],
+      ["uninstall", "Remove only the Subconscious Codex hooks"],
+      ["--model MODEL", "Override the profile model for this launch"]
+    ],
+    "args": ["-- ARGS...", "Pass remaining arguments to Codex"]
+  },
+  "sessions": {
+    "key": "codex",
+    "portable": true
+  },
+  "prerequisites": [
+    {
+      "command": "jq",
+      "needed_for": "hooks",
+      "required": false,
+      "note": "Without jq a launch skips the hooks with a warning, and subc codex install fails."
+    },
+    {
+      "command": "curl",
+      "needed_for": "hooks",
+      "required": false,
+      "note": "Without curl the hook exits without reporting."
+    }
+  ],
+  "launch": {
+    "argv": ["codex", "{config}", "{args}"],
+    "headless_argv": ["codex", "{config}", "exec", "{args}", "--", "{prompt}"],
+    "headless_platforms": ["darwin", "linux"],
+    "resume": ["resume", "{sessionId}"],
+    "handoff": ["{prompt}"],
+    "config_flag": "-c",
+    "persistent_setup": true,
+    "note": "Each launch merges the compaction hooks into ~/.codex/hooks.json when they are missing or stale (best effort). The root -c overrides also apply to codex exec."
+  },
+  "inputs": [
+    {
+      "name": "CODEX_API_KEY",
+      "label": "Codex API key",
+      "description": "Codex-specific credential override; blank uses API_KEY.",
+      "type": "secret"
+    },
+    {
+      "name": "CODEX_CONTEXT_WINDOW",
+      "default": 5000000,
+      "flag": "--context-window",
+      "metavar": "N",
+      "help": "Override catalog context_window",
+      "label": "Context window",
+      "description": "Context window written into the Codex model catalog.",
+      "type": "integer",
+      "min": 1
+    },
+    {
+      "name": "CODEX_MAX_CONTEXT_WINDOW",
+      "default": "${CODEX_CONTEXT_WINDOW}",
+      "flag": "--max-context-window",
+      "metavar": "N",
+      "help": "Override catalog max_context_window",
+      "label": "Maximum context window",
+      "description": "Maximum context window written into the Codex catalog.",
+      "type": "integer",
+      "min": 1
+    },
+    {
+      "name": "CODEX_AUTO_COMPACT_TOKEN_LIMIT",
+      "default": 4500000,
+      "flag": "--auto-compact-token-limit",
+      "metavar": "N",
+      "help": "Override the automatic compaction threshold",
+      "label": "Auto-compact token limit",
+      "description": "Codex token threshold that triggers automatic compaction.",
+      "type": "integer",
+      "min": 1
+    },
+    {
+      "name": "CODEX_REASONING_EFFORT",
+      "default": "max",
+      "flag": "--reasoning-effort",
+      "metavar": "LEVEL",
+      "help": "Use none, low, medium, high, or max",
+      "label": "Reasoning effort",
+      "description": "Default Codex reasoning effort.",
+      "type": "choice",
+      "choices": ["none", "low", "medium", "high", "max"],
+      "strict": true
+    },
+    {
+      "name": "CODEX_EXTERNAL_TOOLS",
+      "default": "false",
+      "flag": "--external-tools",
+      "flag_value": "true",
+      "help": "Enable Codex apps/plugins for this launch",
+      "label": "External tools",
+      "description": "Enable Codex apps/plugins; may exceed the gateway tool limit.",
+      "type": "choice",
+      "choices": ["false", "true"]
+    },
+    {
+      "name": "CODEX_STREAM_IDLE_TIMEOUT_MS",
+      "default": 900000,
+      "flag": "--stream-idle-timeout",
+      "metavar": "MS",
+      "help": "Allow a longer silent think before timing out",
+      "label": "Stream idle timeout (ms)",
+      "description": "How long Codex waits on a silent stream before giving up. Needs to exceed the longest think the model will take.",
+      "type": "integer",
+      "min": 1,
+      "template": false,
+      "note": "The marathon models at max reasoning effort routinely think for longer than five minutes without emitting a token, and a subagent's turn is one uninterrupted think, so the old 300s ceiling cut off work that was still running."
+    },
+    {
+      "name": "CODEX_MULTI_AGENT_VERSION",
+      "default": "v2",
+      "keep_empty": true,
+      "label": "Codex multi-agent version",
+      "description": "Which subagent implementation Codex offers: v2 gives the collaboration tools. Leave empty to turn subagents off entirely.",
+      "type": "text",
+      "template": false,
+      "note": "The catalog field selects which implementation Codex offers, not whether it offers one: v2 gives the collaboration namespace, \"v1\" registers nothing, and an empty field falls back to multi_agent_v1. Only agents.enabled=false turns subagents off, so an empty value sets both."
+    },
+    {
+      "name": "CODEX_SUBAGENT_REASONING_EFFORT",
+      "default": "low",
+      "keep_empty": true,
+      "flag": "--subagent-effort",
+      "metavar": "LEVEL",
+      "help": "Effort for subagents, separate from the parent",
+      "label": "Subagent reasoning effort",
+      "description": "Effort for Codex subagents, set separately from the parent: a marathon model at max thinks for minutes without emitting a token, and a subagent turn is one uninterrupted think, so inheriting max makes every delegated subtask look like a hang.",
+      "type": "text",
+      "template": false,
+      "note": "Empty inherits Codex's default. Low rather than medium: the gateway rounds medium up to high for GLM, and at high a subagent handed an open-ended task keeps deliberating without ever writing the closing </think>, so the turn comes back as prose with no tool call and the agent reports success having produced no files. Measured against the worker on one broad task: low closed and called a tool in ~1.5k characters, high ran past 76k and was still going."
+    },
+    {
+      "name": "MAX_CONCURRENT_SUBAGENTS",
+      "flag": "--max-subagents",
+      "metavar": "N",
+      "help": "Subagents allowed to run at once",
+      "template": false,
+      "note": "A ceiling, not a default: Codex spawns a subagent only when asked. Codex documents no nesting-depth limit, so concurrency is the only lever. Four is a floor rather than a considered limit: Codex's own default is three, and exceeding either fails the spawn outright rather than queueing it."
+    }
+  ],
+  "env": [
+    {
+      "name": "SUBCONSCIOUS_API_KEY",
+      "value": "{apiKey}",
+      "description": "Credential Codex reads through model_providers.subconscious.env_key."
+    },
+    {
+      "name": "SUBCONSCIOUS_GATEWAY_URL",
+      "value": "{baseUrl}",
+      "description": "Gateway origin for the hook environment."
+    }
+  ],
+  "config": [
+    {
+      "kind": "cli-config",
+      "name": "model",
+      "value": "{model}",
+      "lifetime": "launch",
+      "description": "Model."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_provider",
+      "value": "subconscious",
+      "lifetime": "launch",
+      "description": "Selects the provider below."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_catalog_json",
+      "value": "{tempFile}",
+      "lifetime": "persistent",
+      "description": "Temporary model catalog written by the runbook; see the file entry."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_reasoning_effort",
+      "value": "${CODEX_REASONING_EFFORT}",
+      "lifetime": "launch",
+      "description": "Parent reasoning effort."
+    },
+    {
+      "kind": "cli-config",
+      "name": "web_search",
+      "value": "disabled",
+      "lifetime": "launch",
+      "description": "Keeps hosted web search, which the gateway cannot run, out of requests."
+    },
+    {
+      "kind": "cli-config",
+      "name": "features.apps",
+      "value": false,
+      "when": {
+        "CODEX_EXTERNAL_TOOLS": {
+          "not": "true"
+        }
+      },
+      "lifetime": "launch",
+      "description": "Keeps the request under the gateway's 128-tool limit.",
+      "note": "The gateway accepts at most 128 tools per request, and Codex apps and installed plugins can exceed that before any core coding tools are added."
+    },
+    {
+      "kind": "cli-config",
+      "name": "features.plugins",
+      "value": false,
+      "when": {
+        "CODEX_EXTERNAL_TOOLS": {
+          "not": "true"
+        }
+      },
+      "lifetime": "launch",
+      "description": "Keeps the request under the gateway's 128-tool limit."
+    },
+    {
+      "kind": "cli-config",
+      "name": "apps._default.enabled",
+      "value": false,
+      "when": {
+        "CODEX_EXTERNAL_TOOLS": {
+          "not": "true"
+        }
+      },
+      "lifetime": "launch",
+      "description": "Keeps the request under the gateway's 128-tool limit."
+    },
+    {
+      "kind": "cli-config",
+      "name": "agents.max_concurrent_threads_per_session",
+      "value": "${MAX_CONCURRENT_SUBAGENTS}",
+      "when": {
+        "CODEX_MULTI_AGENT_VERSION": "set"
+      },
+      "lifetime": "launch",
+      "description": "Concurrent subagents."
+    },
+    {
+      "kind": "cli-config",
+      "name": "agents.interrupt_message",
+      "value": true,
+      "when": {
+        "CODEX_MULTI_AGENT_VERSION": "set"
+      },
+      "lifetime": "launch",
+      "description": "Subagent interrupt messages."
+    },
+    {
+      "kind": "cli-config",
+      "name": "agents.default_subagent_reasoning_effort",
+      "value": "${CODEX_SUBAGENT_REASONING_EFFORT}",
+      "when": {
+        "CODEX_MULTI_AGENT_VERSION": "set",
+        "CODEX_SUBAGENT_REASONING_EFFORT": "set"
+      },
+      "lifetime": "launch",
+      "description": "Subagent reasoning effort."
+    },
+    {
+      "kind": "cli-config",
+      "name": "agents.enabled",
+      "value": false,
+      "when": {
+        "CODEX_MULTI_AGENT_VERSION": "empty"
+      },
+      "lifetime": "launch",
+      "description": "Turns subagents off.",
+      "note": "Clearing the catalog field alone only downgrades Codex to multi-agent v1, whose tools this gateway has never been exercised against."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_providers.subconscious.name",
+      "value": "Subconscious",
+      "lifetime": "launch",
+      "description": "Provider display name."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_providers.subconscious.base_url",
+      "value": "{baseUrlV1}",
+      "lifetime": "launch",
+      "description": "Gateway endpoint; no relay."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_providers.subconscious.wire_api",
+      "value": "responses",
+      "lifetime": "launch",
+      "description": "Uses the Responses API."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_providers.subconscious.env_key",
+      "value": "SUBCONSCIOUS_API_KEY",
+      "lifetime": "launch",
+      "description": "Env var holding the credential."
+    },
+    {
+      "kind": "cli-config",
+      "name": "model_providers.subconscious.stream_idle_timeout_ms",
+      "value": "${CODEX_STREAM_IDLE_TIMEOUT_MS}",
+      "lifetime": "launch",
+      "description": "Silent-stream timeout."
+    },
+    {
+      "kind": "file",
+      "path": "{tmp}/codex-model-catalog.XXXXXX.json",
+      "lifetime": "persistent",
+      "value": {
+        "context_window": "${CODEX_CONTEXT_WINDOW}",
+        "max_context_window": "${CODEX_MAX_CONTEXT_WINDOW}",
+        "auto_compact_token_limit": "${CODEX_AUTO_COMPACT_TOKEN_LIMIT}",
+        "multi_agent_version": "${CODEX_MULTI_AGENT_VERSION}"
+      },
+      "description": "One entry per catalog model, written by the runbook. Image input is advertised only for vision models. Left in the temp directory: the runbook execs codex, so its exit trap never runs."
+    },
+    {
+      "kind": "file",
+      "path": "~/.codex/hooks.json",
+      "lifetime": "persistent",
+      "description": "PreCompact and PostCompact entries are merged in; other entries are kept."
+    },
+    {
+      "kind": "file",
+      "path": "~/.codex/subconscious-hook.sh",
+      "lifetime": "persistent",
+      "description": "Hook script."
+    },
+    {
+      "kind": "file",
+      "path": "~/.codex/subconscious-hooks.env",
+      "lifetime": "persistent",
+      "description": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600)."
+    },
+    {
+      "kind": "dir",
+      "path": "~/.codex/subconscious-hook-logs",
+      "lifetime": "persistent",
+      "description": "Hook fire log, one file per session."
+    }
+  ],
+  "capabilities": {
+    "compaction": {
+      "default": "on",
+      "on": {
+        "set_by_subc": true,
+        "kind": "model-catalog-field",
+        "name": "auto_compact_token_limit",
+        "value": "${CODEX_AUTO_COMPACT_TOKEN_LIMIT}",
+        "verified": true,
+        "note": "Auto-compaction is on through the catalog threshold.",
+        "config": "{tmp}/codex-model-catalog.XXXXXX.json"
+      },
+      "off": {
+        "set_by_subc": false,
+        "kind": null,
+        "name": null,
+        "value": null,
+        "verified": false,
+        "note": "The runbook has no off switch. Setting a threshold above context_window may work, but that is not confirmed."
+      },
+      "threshold": {
+        "set_by_subc": true,
+        "kind": "model-catalog-field",
+        "name": "auto_compact_token_limit",
+        "value": "${CODEX_AUTO_COMPACT_TOKEN_LIMIT}",
+        "verified": true,
+        "note": "Written per model into model_catalog_json. subc does not use the model_auto_compact_token_limit config key.",
+        "semantics": "trigger",
+        "config": "{tmp}/codex-model-catalog.XXXXXX.json"
+      }
+    },
+    "mcp": {
+      "configured_by_subc": false,
+      "transports": null,
+      "verified": false,
+      "note": "subc adds no MCP servers. User MCP config in ~/.codex/config.toml is left alone."
+    },
+    "headers": [
+      {
+        "name": "x-subconscious-client",
+        "value": "codex",
+        "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+        "set_by_subc": true,
+        "verified": true,
+        "note": "Model requests carry no subc-set header."
+      },
+      {
+        "name": "Authorization",
+        "value": "Bearer {apiKey}",
+        "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
+        "set_by_subc": true,
+        "verified": true
+      }
+    ],
+    "hooks": [
+      {
+        "event": "PreCompact",
+        "posts": "conversation_compaction phase=start",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.codex/hooks.json",
+        "installed_by": ["launch", "install"],
+        "verified": true,
+        "note": "Per install.sh help: Codex runs hooks only once trusted with /hooks, and codex exec needs --dangerously-bypass-hook-trust, which subc never passes."
+      },
+      {
+        "event": "PostCompact",
+        "posts": "conversation_compaction phase=end",
+        "endpoint": "{baseUrl}/v1/agent-hooks",
+        "config": "~/.codex/hooks.json",
+        "installed_by": ["launch", "install"],
+        "verified": true
+      }
+    ]
+  }
+}

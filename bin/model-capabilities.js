@@ -1,14 +1,15 @@
-import { readFileSync } from 'node:fs';
+import { MODEL_CAPABILITIES } from './agent-data.js';
 
-// The models endpoint currently supplies IDs, not modality metadata. Keep
-// explicit capabilities in the same registry used to generate the Unix lookup.
-const { modelCapabilities = {} } = JSON.parse(
-  readFileSync(new URL('./registry.generated.json', import.meta.url), 'utf8'),
-);
-
+// The models endpoint supplies IDs, not modality metadata, so capabilities
+// are listed by exact model ID: similarly named models inherit nothing.
 export function modelSupportsVision(modelId) {
   return (
-    Object.hasOwn(modelCapabilities, modelId) &&
-    modelCapabilities[modelId].vision === true
+    Object.hasOwn(MODEL_CAPABILITIES, modelId) &&
+    MODEL_CAPABILITIES[modelId].vision === true
   );
+}
+
+/** Vision model IDs, newline-separated, for the runbooks' shell lookup. */
+export function visionModelList() {
+  return Object.keys(MODEL_CAPABILITIES).filter(modelSupportsVision).join('\n');
 }

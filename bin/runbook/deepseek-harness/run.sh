@@ -1,28 +1,15 @@
 #!/usr/bin/env bash
-# Launch DeepSeek Harness with a temporary Cordis overlay that adds the live
-# Subconscious catalog. The user's DSH settings and profiles are not rewritten.
+# Write a temporary Cordis overlay that adds the live Subconscious catalog,
+# then start the dsh argv subc built. The user's DSH settings and profiles are
+# not rewritten.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../model-capabilities.generated.sh"
+source "${SCRIPT_DIR}/../lib.sh"
 
-GATEWAY_URL="${GATEWAY_URL:-}"
-API_KEY="${DEEPSEEK_HARNESS_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
-CONTEXT_WINDOW="${DEEPSEEK_HARNESS_CONTEXT_WINDOW:-5000000}"
-MAX_TOKENS="${DEEPSEEK_HARNESS_MAX_TOKENS:-65536}"
-
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
-subconscious/glm-5.2
-subconscious/tim-qwen3.6-27b
-subconscious/deepseek-v4-flash-marathon
-subconscious/deepseek-v4.1-flash-marathon"
-
-if [[ -z "$GATEWAY_URL" || -z "$API_KEY" ]]; then
-  echo "error: GATEWAY_URL and API_KEY are required to launch DeepSeek Harness" >&2
-  exit 1
-fi
+CONTEXT_WINDOW="$DEEPSEEK_HARNESS_CONTEXT_WINDOW"
+MAX_TOKENS="$DEEPSEEK_HARNESS_MAX_TOKENS"
 if [[ ! "$CONTEXT_WINDOW" =~ ^[1-9][0-9]*$ ]]; then
   echo "error: DEEPSEEK_HARNESS_CONTEXT_WINDOW must be a positive integer" >&2
   exit 1
@@ -31,27 +18,6 @@ if [[ ! "$MAX_TOKENS" =~ ^[1-9][0-9]*$ ]]; then
   echo "error: DEEPSEEK_HARNESS_MAX_TOKENS must be a positive integer" >&2
   exit 1
 fi
-
-SUPPORTED_MODELS=()
-add_supported_model() {
-  local model_id="$1" existing
-  [[ -n "$model_id" ]] || return 0
-  if [[ ! "$model_id" =~ ^[-A-Za-z0-9._:/+]+$ ]]; then
-    echo "error: invalid model id: $model_id" >&2
-    exit 1
-  fi
-  if [[ "${#SUPPORTED_MODELS[@]}" -gt 0 ]]; then
-    for existing in "${SUPPORTED_MODELS[@]}"; do
-      [[ "$existing" == "$model_id" ]] && return 0
-    done
-  fi
-  SUPPORTED_MODELS+=("$model_id")
-}
-
-add_supported_model "$MODEL"
-while IFS= read -r model_id; do
-  add_supported_model "$model_id"
-done <<< "${SUBCONSCIOUS_MODELS:-$DEFAULT_SUBCONSCIOUS_MODELS}"
 
 OVERLAY_DIR="$(mktemp -d "${TMPDIR:-/tmp}/subc-dsh.XXXXXX")"
 OVERLAY_FILE="${OVERLAY_DIR}/subconscious.cordis.yml"
@@ -80,7 +46,7 @@ trap cleanup EXIT HUP INT TERM
     "        defaultContextWindow: ${CONTEXT_WINDOW}" \
     "        defaultMaxTokens: ${MAX_TOKENS}" \
     '        models:'
-  for model_id in "${SUPPORTED_MODELS[@]}"; do
+  while IFS= read -r model_id; do
     printf "          - id: '%s'\n" "$model_id"
     printf "            name: '%s'\n" "$model_id"
     if subc_model_supports_vision "$model_id"; then
@@ -88,7 +54,7 @@ trap cleanup EXIT HUP INT TERM
     fi
     printf "            contextWindow: %s\n" "$CONTEXT_WINDOW"
     printf "            maxTokens: %s\n" "$MAX_TOKENS"
-  done
+  done <<< "$SUBC_MODEL_IDS"
   printf '%s\n' \
     '- id: agent-default-model' \
     '  config:' \
@@ -96,36 +62,6 @@ trap cleanup EXIT HUP INT TERM
     "    model: '${MODEL}'"
 } >"$OVERLAY_FILE"
 chmod 600 "$OVERLAY_FILE"
-
-export SUBCONSCIOUS_API_KEY="$API_KEY"
-export SUBCONSCIOUS_DSH_BASE_URL="${GATEWAY_URL%/}/v1"
-
-mode="web"
-if [[ "${1:-}" == "web" || "${1:-}" == "headless" ]]; then
-  mode="$1"
-  shift
-fi
-HEADLESS_PROMPT=""
-if [[ "$mode" == "headless" ]]; then
-  prompt_text="${1:-}"
-  if [[ -z "${prompt_text//[[:space:]]/}" || "$1" == "-h" || "$1" == "--help" ]]; then
-    echo "usage: subc dsh headless PROMPT [args...]" >&2
-    exit 2
-  fi
-  HEADLESS_PROMPT="$1"
-  shift
-fi
-
-# Drop the first "--": everything after it already belongs to the agent.
-AGENT_ARGS=()
-separator_dropped=false
-for arg in "$@"; do
-  if [[ "$separator_dropped" == false && "$arg" == "--" ]]; then
-    separator_dropped=true
-    continue
-  fi
-  AGENT_ARGS+=("$arg")
-done
 
 # dsh replaces this shell, keeping its PID, so signals and the exit status
 # are dsh's own. A detached watcher removes the overlay once that PID exits.
@@ -139,8 +75,4 @@ runbook_pid=$$
 ) </dev/null >/dev/null 2>&1 &
 trap - EXIT HUP INT TERM
 
-if [[ "$mode" == "headless" ]]; then
-  # The task goes on stdin: as an argument, a leading "-" parses as an option.
-  exec dsh --profile headless --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"} < <(printf '%s' "$HEADLESS_PROMPT")
-fi
-exec dsh web --patch "$OVERLAY_FILE" ${AGENT_ARGS[@]+"${AGENT_ARGS[@]}"}
+subc_exec "{tempFile}" "$OVERLAY_FILE" -- "$@"

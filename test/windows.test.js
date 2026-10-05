@@ -7,6 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { agentBinary } from '../bin/agent-data.js';
 import { agentList, resolveAgent } from '../bin/agents.js';
 import { nativeTargetName } from '../bin/tui.js';
 import { detectInstallTarget } from '../bin/update-check.js';
@@ -48,7 +49,7 @@ test('Marathon is the native binary on every platform and legacy aliases are saf
   const agent = resolveAgent('marathon');
   assert.equal(agent.id, 'subconscious-code');
   assert.equal(agent.command, 'marathon');
-  assert.equal(agent.bin, 'marathon');
+  assert.equal(agentBinary(agent), 'marathon');
   assert.equal(resolveAgent('sc'), agent);
   assert.equal(resolveAgent('subconscious-code'), agent);
   assert.equal(

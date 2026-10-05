@@ -1,47 +1,26 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-
-const installPath = new URL(
-  '../bin/runbook/copilot/install.sh',
-  import.meta.url,
-);
+import { run, setupCommand } from './helpers/agent-command.js';
 
 function runInstall(
   home,
   gatewayUrl = 'https://gateway.example',
   overrides = {},
 ) {
-  return new Promise((resolve, reject) => {
-    const child = spawn('bash', [installPath.pathname, 'install'], {
-      env: {
-        ...process.env,
-        HOME: home,
-        GATEWAY_URL: gatewayUrl,
-        API_KEY: 'test-copilot-key',
-        MODEL: 'subconscious/glm-5.3-marathon',
-        SUBCONSCIOUS_MODELS: 'subconscious/glm-5.3-marathon',
-        MBTA_ENV_FILE: '/dev/null',
-        ...overrides,
-      },
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-  });
+  return run(
+    setupCommand('copilot', ['install'], {
+      ...process.env,
+      HOME: home,
+      GATEWAY_URL: gatewayUrl,
+      API_KEY: 'test-copilot-key',
+      MODEL: 'subconscious/glm-5.3-marathon',
+      SUBCONSCIOUS_MODELS: 'subconscious/glm-5.3-marathon',
+      ...overrides,
+    }),
+  );
 }
 
 async function createVsCodeUserDirectory(home) {
@@ -102,7 +81,6 @@ test('Copilot enables vision for DeepSeek V4.1 without enabling it for other mod
     const result = await runInstall(home, 'https://gateway.example', {
       MODEL: visionModel,
       SUBCONSCIOUS_MODELS: models.join('\n'),
-      SUBC_ENV_FILE: os.devNull,
     });
     assert.equal(result.code, 0, result.stderr);
     const providers = JSON.parse(

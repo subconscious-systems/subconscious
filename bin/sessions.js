@@ -2,6 +2,7 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { AGENTS, agentById, agentCommandName } from './agent-data.js';
 import { resolveAgent, runAgent } from './agents.js';
 
 import { c } from './colors.js';
@@ -16,13 +17,19 @@ const MAX_HANDOFF_CHARS = 24_000;
 const MAX_MESSAGE_CHARS = 4_000;
 const SESSION_KEY_PATTERN = /^(claude|codex|opencode|pi|sc):[-A-Za-z0-9._]+$/;
 
-export const SESSION_HARNESSES = Object.freeze({
-  claude: { name: 'Claude Code', command: 'claude', portable: true },
-  codex: { name: 'Codex CLI', command: 'codex', portable: true },
-  opencode: { name: 'OpenCode', command: 'opencode', portable: true },
-  pi: { name: 'Pi', command: 'pi', portable: true },
-  sc: { name: 'Marathon', command: 'marathon', portable: false },
-});
+export const SESSION_HARNESSES = Object.freeze(
+  Object.fromEntries(
+    AGENTS.filter((agent) => agent.sessions).map((agent) => [
+      agent.sessions.key,
+      Object.freeze({
+        name: agent.name,
+        command: agentCommandName(agent),
+        portable: agent.sessions.portable,
+        agentId: agent.id,
+      }),
+    ]),
+  ),
+);
 
 function cleanText(value) {
   return String(value || '')
@@ -594,22 +601,38 @@ export function buildHandoffPrompt(session, messages) {
     .join('\n\n');
 }
 
+function sessionLaunch(harness) {
+  return agentById(SESSION_HARNESSES[harness]?.agentId)?.launch ?? {};
+}
+
+// One pass, so a prompt that mentions a placeholder is passed unchanged.
+function fillWords(words, values) {
+  return words.map((word) =>
+    word.replace(/\{(sessionId|sessionFile|prompt)\}/g, (_, name) =>
+      String(values[name]),
+    ),
+  );
+}
+
 export function nativeResumeArgs(session) {
-  if (session.harness === 'claude') return ['--resume', session.id];
-  if (session.harness === 'codex') return ['resume', session.id];
-  if (session.harness === 'opencode') return ['--session', session.id];
-  if (session.harness === 'pi')
-    return ['--session', session.sourcePath || session.id];
-  if (session.harness === 'sc') return ['--resume', session.sourcePath];
-  throw new Error(`Native resume is not supported for ${session.harnessName}.`);
+  const { resume } = sessionLaunch(session.harness);
+  if (!resume)
+    throw new Error(
+      `Native resume is not supported for ${session.harnessName}.`,
+    );
+  return fillWords(resume, {
+    sessionId: session.id,
+    sessionFile: session.sourcePath || session.id,
+  });
 }
 
 export function handoffLaunchArgs(targetHarness, prompt) {
-  if (targetHarness === 'opencode') return ['--prompt', prompt];
-  if (['claude', 'codex', 'pi'].includes(targetHarness)) return [prompt];
-  throw new Error(
-    `${SESSION_HARNESSES[targetHarness]?.name || targetHarness} cannot start an interactive handoff yet.`,
-  );
+  const { handoff } = sessionLaunch(targetHarness);
+  if (!handoff)
+    throw new Error(
+      `${SESSION_HARNESSES[targetHarness]?.name || targetHarness} cannot start an interactive handoff yet.`,
+    );
+  return fillWords(handoff, { prompt });
 }
 
 function sessionByKey(sessions, key) {

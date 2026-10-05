@@ -64,23 +64,17 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../model-capabilities.generated.sh"
+source "${SCRIPT_DIR}/../lib.sh"
 HOOK_SRC="${SCRIPT_DIR}/hook.sh"
 HOOKS_TEMPLATE="${SCRIPT_DIR}/hooks.json"
-
-# Load shared env from SUBC_ENV_FILE, or a sibling .env / env.example.
-SHARED_ENV="${SUBC_ENV_FILE:-${SCRIPT_DIR}/../.env}"
-[[ -f "$SHARED_ENV" ]] || SHARED_ENV="${SCRIPT_DIR}/../env.example"
-if [[ -f "$SHARED_ENV" ]]; then set -a; source "$SHARED_ENV"; set +a; fi
 
 # Default to `install` so `./install.sh --gateway-url URL` works without an
 # explicit `install` subcommand. `status` / `uninstall` still work.
 COMMAND="install"
 GATEWAY_URL="${GATEWAY_URL:-}"
 API_KEY="${COPILOT_API_KEY:-${API_KEY:-}}"
-MODEL="${MODEL:-subconscious/glm-5.3-marathon}"
-MAX_INPUT_TOKENS="${COPILOT_MAX_INPUT_TOKENS:-5000000}"
-MAX_OUTPUT_TOKENS="${COPILOT_MAX_OUTPUT_TOKENS:-65536}"
+MAX_INPUT_TOKENS="${COPILOT_MAX_INPUT_TOKENS:-}"
+MAX_OUTPUT_TOKENS="${COPILOT_MAX_OUTPUT_TOKENS:-}"
 VSCODE_APP="${VSCODE_APP:-}"  # auto-detected: Code | Code - Insiders | VSCodium
 
 # VS Code's customendpoint provider requires the apiKey to be a
@@ -101,7 +95,7 @@ MARKER="subconscious-hook.sh"
 usage() {
   cat <<'EOF'
 Usage:
-  subc copilot install [--gateway-url URL] [--api-key KEY] [--model MODEL]
+  subc copilot install [--gateway-url URL] [--api-key KEY]
   subc copilot uninstall
   subc copilot status
 
@@ -117,15 +111,14 @@ paste the key once via Manage Language Models).
 The API key for the hooks is read from the profile env or --api-key and
 stored in ~/.copilot/subconscious-hooks.env (mode 600).
 
-Reads GATEWAY_URL, API_KEY, and MODEL from the profile env by
-default. Restart VS Code after install.
+Reads GATEWAY_URL, API_KEY, the model catalog, and the COPILOT_* settings
+from the env subc passes. Restart VS Code after install.
 
 Options:
-  --gateway-url URL         Gateway origin (default: $GATEWAY_URL from .env)
-  --api-key KEY             Gateway API key for hooks (default: $API_KEY from .env)
-  --model MODEL             Model id (default: subconscious/glm-5.3-marathon)
-  --max-input-tokens N      Model context window input tokens (default: 5000000)
-  --max-output-tokens N     Model max output tokens (default: 65536)
+  --gateway-url URL         Gateway origin (default: $GATEWAY_URL)
+  --api-key KEY             Gateway API key for hooks (default: $API_KEY)
+  --max-input-tokens N      Model context window input tokens (default: COPILOT_MAX_INPUT_TOKENS)
+  --max-output-tokens N     Model max output tokens (default: COPILOT_MAX_OUTPUT_TOKENS)
   --vscode-app APP          Code, Code - Insiders, or VSCodium (auto-detected)
 
 Requires: jq, curl. Restart VS Code after install, then enter your model API
@@ -145,10 +138,6 @@ while [[ $# -gt 0 ]]; do
       ;;
     --api-key)
       API_KEY="${2:-}"
-      shift 2
-      ;;
-    --model)
-      MODEL="${2:-}"
       shift 2
       ;;
     --max-input-tokens)
@@ -174,29 +163,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
-DEFAULT_SUBCONSCIOUS_MODELS="subconscious/glm-5.3-marathon
-subconscious/glm-5.2
-subconscious/tim-qwen3.6-27b
-subconscious/deepseek-v4-flash-marathon
-subconscious/deepseek-v4.1-flash-marathon"
-SUPPORTED_MODELS=()
-
-add_supported_model() {
-  local model_id="$1" existing
-  [[ -n "$model_id" ]] || return 0
-  if [[ "${#SUPPORTED_MODELS[@]}" -gt 0 ]]; then
-    for existing in "${SUPPORTED_MODELS[@]}"; do
-      [[ "$existing" == "$model_id" ]] && return 0
-    done
-  fi
-  SUPPORTED_MODELS+=("$model_id")
-}
-
-add_supported_model "$MODEL"
-while IFS= read -r model_id; do
-  add_supported_model "$model_id"
-done <<< "${SUBCONSCIOUS_MODELS:-$DEFAULT_SUBCONSCIOUS_MODELS}"
 
 PROVIDER_NAME="Subconscious Gateway"
 MARKER='Subconscious Gateway'
@@ -297,7 +263,7 @@ write_config() {
   existing="$(strip_subconscious "$models_json")"
 
   local provider_models='[]' model_id vision
-  for model_id in "${SUPPORTED_MODELS[@]}"; do
+  while IFS= read -r model_id; do
     vision=false
     if subc_model_supports_vision "$model_id"; then vision=true; fi
     provider_models=$(jq -cn \
@@ -320,7 +286,7 @@ write_config() {
         streaming: true,
         requestHeaders: { "x-subconscious-client": "copilot" }
       }]')
-  done
+  done <<< "$SUBC_MODEL_IDS"
 
   local new_provider
   new_provider=$(jq -n \
