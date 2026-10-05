@@ -390,7 +390,7 @@ export function selectLaunchModel(requestedModel, modelSource, catalog) {
 async function runRunbookSetup(agent, argv, profile) {
   const script = agent.runbook.setup_script;
   if (isSetupWithoutAuth(argv) || agent.runbook.setup_needs_auth === false) {
-    // Status, uninstall, and Marathon's binary install read no model or
+    // Status and uninstall read no model or
     // agent setting, so an invalid saved one must not block them.
     const lenient = { strict: false };
     const base = { ...(profile?.values || {}), ...process.env };

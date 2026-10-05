@@ -18,7 +18,7 @@ let roots;
 before(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sessions-test-'));
   roots = Object.fromEntries(
-    ['claude', 'codex', 'pi', 'sc'].map((harness) => [
+    ['claude', 'codex', 'pi'].map((harness) => [
       harness,
       path.join(root, harness),
     ]),
@@ -98,20 +98,6 @@ before(async () => {
       .map(JSON.stringify)
       .join('\n'),
   );
-  await fs.writeFile(
-    path.join(roots.sc, 'session-sc-id.jsonl'),
-    [
-      { id: 'session-sc-id', cwd: '/work/sc', model: 'subconscious/sc' },
-      { type: 'user', content: 'Run the tests' },
-      {
-        type: 'assistant',
-        text: 'Tests pass.',
-        reasoning: 'hidden chain of thought',
-      },
-    ]
-      .map(JSON.stringify)
-      .join('\n'),
-  );
 });
 
 after(async () => {
@@ -158,7 +144,6 @@ test('discovers supported native sessions with stable harness keys', async () =>
       'codex:codex-id',
       'opencode:open-id',
       'pi:pi-id',
-      'sc:sc-id',
     ]),
   );
   const claude = sessions.find((session) => session.harness === 'claude');
@@ -190,12 +175,6 @@ test('builds a bounded text-only handoff without tools or hidden reasoning', asy
     { role: 'user', text: 'Migrate the endpoint' },
     { role: 'assistant', text: 'Endpoint migrated.' },
   ]);
-
-  const sc = sessions.find((session) => session.harness === 'sc');
-  assert.match(
-    buildHandoffPrompt(sc, await readSessionMessages(sc)),
-    /Run the tests/,
-  );
 });
 
 test('maps native resumes and portable launches to each harness CLI', () => {
@@ -214,10 +193,6 @@ test('maps native resumes and portable launches to each harness CLI', () => {
   assert.deepEqual(
     nativeResumeArgs({ harness: 'pi', id: 'abc', sourcePath: '/tmp/pi.jsonl' }),
     ['--session', '/tmp/pi.jsonl'],
-  );
-  assert.deepEqual(
-    nativeResumeArgs({ harness: 'sc', id: 'abc', sourcePath: '/tmp/sc.jsonl' }),
-    ['--resume', '/tmp/sc.jsonl'],
   );
   assert.deepEqual(handoffLaunchArgs('codex', 'context'), ['context']);
   assert.deepEqual(handoffLaunchArgs('opencode', 'context'), [
@@ -278,7 +253,7 @@ test('transcript readers ignore non-object JSONL records without losing messages
     [],
     { type: 'user', content: 'Keep this message' },
   ];
-  for (const harness of ['claude', 'codex', 'pi', 'sc']) {
+  for (const harness of ['claude', 'codex', 'pi']) {
     const sourcePath = path.join(root, `mixed-${harness}.jsonl`);
     const message =
       harness === 'codex'

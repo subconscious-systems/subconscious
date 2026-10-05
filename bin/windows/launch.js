@@ -14,7 +14,7 @@ import { modelIds, positiveInteger } from '../launch-values.js';
 import { modelSupportsVision } from '../model-capabilities.js';
 import { defaults, origin, value, writeJson } from './common.js';
 
-const PLANNED = new Set(['claude-code', 'subconscious-code', 'pi', 'opencode']);
+const PLANNED = new Set(['claude-code', 'pi', 'opencode']);
 
 // Windows trims a configured gateway to its origin and gives every agent but
 // Claude the gateway and key as SUBCONSCIOUS_*. Claude has always been given

@@ -8,7 +8,6 @@ the default gateway, model capabilities, and the settings every agent uses
 
 | Agent | Launch | Setup |
 | --- | --- | --- |
-| `subconscious-code` (Marathon) | binary | `install.sh` (binary installer) |
 | `claude-code` | binary | `install.sh` (leftover status/uninstall) |
 | `codex` | `run.sh` | `install.sh` (hooks) |
 | `opencode` | binary | `install.sh` (leftover status/uninstall) |

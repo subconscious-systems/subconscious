@@ -3,7 +3,7 @@
   "command": "cursor",
   "aliases": [],
   "name": "Cursor",
-  "description": "Install Cursor conversation and compaction hooks, then finish model setup in Cursor Settings.",
+  "description": "Install Cursor conversation and compaction hooks in the Cursor desktop app and IDE, then finish model setup in Cursor Settings. The Cursor CLI is not supported.",
   "protocol": "openai",
   "homepage": "https://cursor.com",
   "install": {
@@ -22,7 +22,7 @@
   },
   "help": {
     "usage": "subc [-p NAME] cursor [help|install|status|uninstall]",
-    "behavior": "Manages Cursor correlation hooks; model endpoint setup is completed in Cursor Settings.",
+    "behavior": "Manages Cursor correlation hooks in the Cursor desktop app and IDE; model endpoint setup is completed in Cursor Settings. The Cursor CLI is not supported.",
     "options": [
       ["help", "Show this help"],
       ["install", "Install or update the Cursor hooks (default action)"],

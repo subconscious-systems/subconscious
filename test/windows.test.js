@@ -1,22 +1,15 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { agentBinary } from '../bin/agent-data.js';
-import { agentList, resolveAgent } from '../bin/agents.js';
 import { nativeTargetName } from '../bin/tui.js';
 import { detectInstallTarget } from '../bin/update-check.js';
 import { parseOptions, writeJson } from '../bin/windows/common.js';
-import {
-  installWindowsSC,
-  windowsInstallSpec,
-  windowsReleaseAsset,
-} from '../bin/windows/install.js';
+import { windowsInstallSpec } from '../bin/windows/install.js';
 import { executeWindowsLaunch, windowsLaunch } from '../bin/windows/launch.js';
 import {
   powershellCommand,
@@ -44,19 +37,6 @@ const hook = fileURLToPath(new URL('../bin/windows/hook.cjs', import.meta.url));
 const cli = fileURLToPath(new URL('../bin/cli.js', import.meta.url));
 const quiet = () => {};
 const isWindows = process.platform === 'win32';
-
-test('Marathon is the native binary on every platform and legacy aliases are safe', () => {
-  const agent = resolveAgent('marathon');
-  assert.equal(agent.id, 'subconscious-code');
-  assert.equal(agent.command, 'marathon');
-  assert.equal(agentBinary(agent), 'marathon');
-  assert.equal(resolveAgent('sc'), agent);
-  assert.equal(resolveAgent('subconscious-code'), agent);
-  assert.equal(
-    agentList().find((item) => item.id === agent.id).alias,
-    'marathon',
-  );
-});
 
 async function temporary(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-windows-test-'));
@@ -543,7 +523,7 @@ for (const selectedVision of [true, false])
     }
   });
 
-test('OpenCode, Pi and sc have independent native launch specifications', async () => {
+test('OpenCode and Pi have independent native launch specifications', async () => {
   const oc = await windowsLaunch('opencode', ['--', '--continue'], {
     ...env,
     OPENCODE_CONTEXT_LIMIT: '123456',
@@ -579,15 +559,6 @@ test('OpenCode, Pi and sc have independent native launch specifications', async 
     env.MODEL,
     '--continue',
   ]);
-  const sc = await windowsLaunch(
-    'subconscious-code',
-    ['--prompt', 'x & y'],
-    env,
-  );
-  assert.equal(sc.command, 'marathon');
-  assert.equal(sc.env.SC_BASE_URL, 'https://gateway.example/v1');
-  assert.equal(sc.env.SC_DLR_URL, 'https://gateway.example');
-  assert.deepEqual(sc.args, ['--prompt', 'x & y']);
 });
 
 test('DeepSeek overlay is ephemeral, has no API key, and supports headless argv', async (t) => {
@@ -955,74 +926,6 @@ test('Windows installers never select Unix commands and check upstream asset sup
     if (id === 'claude-code') assert.equal(spec.fallback.command, 'npm');
   }
   assert.equal(windowsInstallSpec('pi'), null);
-  assert.throws(
-    () => windowsReleaseAsset({ tag_name: 'v1', assets: [] }, 'x64'),
-    /no published native Windows/,
-  );
-  const asset = { name: 'sc-aarch64-pc-windows-msvc.zip' };
-  assert.throws(
-    () => windowsReleaseAsset({ assets: [asset] }, 'arm64'),
-    /missing.*sha256/,
-  );
-  assert.deepEqual(
-    windowsReleaseAsset(
-      { assets: [asset, { name: `${asset.name}.sha256` }] },
-      'arm64',
-    ).asset,
-    asset,
-  );
-  const marathon = { name: 'marathon-aarch64-pc-windows-msvc.zip' };
-  const assets = [
-    asset,
-    { name: `${asset.name}.sha256` },
-    marathon,
-    { name: `${marathon.name}.sha256` },
-  ];
-  assert.equal(windowsReleaseAsset({ assets }, 'arm64').asset, marathon);
-  assert.throws(
-    () => windowsReleaseAsset({ assets: assets.slice(0, -1) }, 'arm64'),
-    /missing.*sha256/,
-  );
-});
-
-test('Subconscious Code verifies downloads and preserves an existing binary on failure', async (t) => {
-  const home = await temporary(t);
-  const bin = path.join(home, 'bin');
-  const releaseUrl =
-    'https://github.com/subconscious-systems/subconscious-code/releases/download/v1/';
-  const name = 'sc-x86_64-pc-windows-msvc.exe';
-  const binary = Buffer.from('MZ-test-executable');
-  let checksum = createHash('sha256').update(binary).digest('hex');
-  const fetchImpl = async (url) => {
-    if (url.startsWith('https://api.github.com/'))
-      return {
-        ok: true,
-        json: async () => ({
-          tag_name: 'v1',
-          assets: [name, `${name}.sha256`].map((name) => ({
-            name,
-            browser_download_url: releaseUrl + name,
-          })),
-        }),
-      };
-    const bytes = url.endsWith('.sha256') ? Buffer.from(checksum) : binary;
-    return { ok: true, arrayBuffer: async () => bytes };
-  };
-  await installWindowsSC(
-    { SC_INSTALL_DIR: bin },
-    { home, arch: 'x64', fetchImpl, log: quiet },
-  );
-  assert.deepEqual(await fs.readFile(path.join(bin, 'marathon.exe')), binary);
-  checksum = '0'.repeat(64);
-  await assert.rejects(
-    installWindowsSC(
-      { SC_INSTALL_DIR: bin },
-      { home, arch: 'x64', fetchImpl, log: quiet },
-    ),
-    /checksum/,
-  );
-  assert.deepEqual(await fs.readFile(path.join(bin, 'marathon.exe')), binary);
-  assert.deepEqual(await fs.readdir(bin), ['marathon.exe']);
 });
 
 test('Windows upgrades retain the global npm prefix and the TUI chooses .exe', () => {
@@ -1062,96 +965,6 @@ test('Windows host: real npm/npx shims and PowerShell hook argv run natively', {
   });
 });
 
-test('Windows host: ZIP extraction updates Marathon, preserves sc.exe, and rejects a missing root', {
-  skip: !isWindows,
-}, async (t) => {
-  const home = await temporary(t);
-  const bin = path.join(home, 'install with spaces & %PATH%');
-  await fs.mkdir(bin);
-  const target = path.join(bin, 'marathon.exe');
-  await fs.writeFile(target, 'previous executable');
-  await fs.writeFile(path.join(bin, 'sc.exe'), 'do not touch service control');
-  const archive = path.join(home, 'release.zip');
-  const source = path.join(home, 'source.exe');
-  const binary = Buffer.from('MZ-verified-zip-fixture');
-  await fs.writeFile(source, binary);
-  let name = 'marathon-x86_64-pc-windows-msvc.zip';
-  const releaseUrl =
-    'https://github.com/subconscious-systems/subconscious-code/releases/download/v1/';
-  const makeArchive = async (rootName) => {
-    await fs.rm(archive, { force: true });
-    const spec = powershellCommand(
-      "$ErrorActionPreference = 'Stop'; Add-Type -AssemblyName System.IO.Compression.FileSystem; $z = [IO.Compression.ZipFile]::Open($env:SUBC_TEST_ARCHIVE, 'Create'); try { [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $env:SUBC_TEST_SOURCE, $env:SUBC_TEST_ENTRY) | Out-Null; [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($z, $env:SUBC_TEST_SOURCE, '../outside.exe') | Out-Null } finally { $z.Dispose() }",
-      {
-        ...process.env,
-        SUBC_TEST_ARCHIVE: archive,
-        SUBC_TEST_SOURCE: source,
-        SUBC_TEST_ENTRY: rootName,
-      },
-    );
-    assert.equal(
-      await runWindows(spec.command, spec.args, {
-        env: spec.env,
-        stdio: 'ignore',
-      }),
-      0,
-    );
-    const bytes = await fs.readFile(archive);
-    return async (url) => {
-      if (url.startsWith('https://api.github.com/'))
-        return {
-          ok: true,
-          json: async () => ({
-            tag_name: 'v1',
-            assets: [name, `${name}.sha256`].map((name) => ({
-              name,
-              browser_download_url: releaseUrl + name,
-            })),
-          }),
-        };
-      return {
-        ok: true,
-        arrayBuffer: async () =>
-          url.endsWith('.sha256')
-            ? Buffer.from(createHash('sha256').update(bytes).digest('hex'))
-            : bytes,
-      };
-    };
-  };
-  const environment = { ...process.env, SC_INSTALL_DIR: bin };
-  await installWindowsSC(environment, {
-    home,
-    arch: 'x64',
-    fetchImpl: await makeArchive('marathon.exe'),
-    log: quiet,
-  });
-  assert.deepEqual(await fs.readFile(target), binary);
-  await assert.rejects(fs.access(path.join(home, 'outside.exe')));
-  await assert.rejects(
-    installWindowsSC(environment, {
-      home,
-      arch: 'x64',
-      fetchImpl: await makeArchive('nested/marathon.exe'),
-      log: quiet,
-    }),
-    /extract/,
-  );
-  assert.deepEqual(await fs.readFile(target), binary);
-  name = 'sc-x86_64-pc-windows-msvc.zip';
-  await installWindowsSC(environment, {
-    home,
-    arch: 'x64',
-    fetchImpl: await makeArchive('sc.exe'),
-    log: quiet,
-  });
-  assert.deepEqual(await fs.readFile(target), binary);
-  assert.equal(
-    await fs.readFile(path.join(bin, 'sc.exe'), 'utf8'),
-    'do not touch service control',
-  );
-  assert.deepEqual((await fs.readdir(bin)).sort(), ['marathon.exe', 'sc.exe']);
-});
-
 test('Windows host: CLI routes every agent with a Bash-free PATH and preserves exit codes', {
   skip: !isWindows,
 }, async (t) => {
@@ -1164,7 +977,7 @@ test('Windows host: CLI routes every agent with a Bash-free PATH and preserves e
     script,
     `require('node:fs').writeFileSync(process.env.SUBC_TEST_RECORD, JSON.stringify({ args: process.argv.slice(2), model: process.env.MODEL, key: process.env.SUBCONSCIOUS_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN })); process.exit(17);`,
   );
-  for (const name of ['claude', 'codex', 'opencode', 'pi', 'dsh', 'marathon'])
+  for (const name of ['claude', 'codex', 'opencode', 'pi', 'dsh'])
     await fs.writeFile(
       path.join(bin, `${name}.cmd`),
       '@ECHO off\nSET dp0=%~dp0\n"%dp0%\\node.exe" "%dp0%\\agent.cjs" %*\n',
@@ -1183,7 +996,6 @@ test('Windows host: CLI routes every agent with a Bash-free PATH and preserves e
     APPDATA: path.join(home, 'Roaming'),
     LOCALAPPDATA: path.join(home, 'Local'),
     SUBC_CONFIG_DIR: path.join(home, '.subconscious'),
-    SC_INSTALL_DIR: bin,
     CODEX_DIR: path.join(home, '.codex'),
     PATH: `${bin};${path.dirname(process.execPath)}`,
     SUBC_DISABLE_UPDATE_CHECK: '1',
@@ -1194,16 +1006,7 @@ test('Windows host: CLI routes every agent with a Bash-free PATH and preserves e
     CODEX_HOME: path.join(home, '.codex'),
     PI_CODING_AGENT_DIR: path.join(home, '.pi', 'agent'),
   });
-  for (const name of [
-    'claude',
-    'codex',
-    'opencode',
-    'pi',
-    'dsh',
-    'marathon',
-    'sc',
-    'subconscious-code',
-  ]) {
+  for (const name of ['claude', 'codex', 'opencode', 'pi', 'dsh']) {
     const prompt = 'say "hello" & %PATH%\nnext line';
     const result = await child(process.execPath, [cli, name, '--', prompt], {
       env: environment,
@@ -1218,18 +1021,6 @@ test('Windows host: CLI routes every agent with a Bash-free PATH and preserves e
     assert.equal(captured.model, env.MODEL);
     assert.equal(captured.key, 'sk-test');
     assert.doesNotMatch(result.stderr, /require.*bash/i);
-    assert.doesNotMatch(result.stdout, /SERVICE_CONTROL_MUST_NOT_RUN/);
-  }
-  await fs.rm(path.join(bin, 'marathon.cmd'));
-  for (const name of ['marathon', 'sc']) {
-    const result = await child(process.execPath, [cli, name, '--version'], {
-      env: environment,
-    });
-    assert.equal(
-      result.code,
-      127,
-      `${name}: ${result.stderr}\n${result.stdout}`,
-    );
     assert.doesNotMatch(result.stdout, /SERVICE_CONTROL_MUST_NOT_RUN/);
   }
   for (const name of ['cursor', 'copilot', 'pi', 'codex']) {
@@ -1282,16 +1073,10 @@ test('runWindows writes input to the child stdin and mirrors its exit code', asy
   assert.equal(await fs.readFile(out, 'utf8'), '- hi\n"there"');
 });
 
-test('pi and marathon drop one -- separator, like the unix runbooks', async () => {
+test('pi drops one -- separator, like the unix runbooks', async () => {
   const pi = await windowsLaunch('pi', ['--', '--thinking', 'high'], env);
   assert.deepEqual(pi.args.slice(-2), ['--thinking', 'high']);
   assert.ok(!pi.args.includes('--'), pi.args.join(' '));
-  const sc = await windowsLaunch(
-    'subconscious-code',
-    ['--', '--model', 'x'],
-    env,
-  );
-  assert.deepEqual(sc.args, ['--model', 'x']);
 });
 
 test('Windows Codex reads its settings and flags from the agent file', async (t) => {
@@ -1343,7 +1128,7 @@ test('Windows Codex reads its settings and flags from the agent file', async (t)
 });
 
 test('Windows agents other than Claude get the gateway and key as SUBCONSCIOUS_*', async () => {
-  for (const id of ['pi', 'subconscious-code', 'opencode']) {
+  for (const id of ['pi', 'opencode']) {
     const spec = await windowsLaunch(id, [], { ...env, PI_API_KEY: 'sk-pi' });
     assert.equal(
       spec.env.SUBCONSCIOUS_GATEWAY_URL,

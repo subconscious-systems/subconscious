@@ -54,10 +54,6 @@ export async function runWindowsAgent(agent, argv, dependencies) {
     ...(environment.PATH || '').split(';'),
     ...windowsBinDirs(environment),
   ]);
-  if (agent.id === 'subconscious-code' && parsed.action === 'install') {
-    if (args.length) throw new Error('Usage: subc marathon install');
-    return finish(await installWindowsAgent(agent.id, environment));
-  }
   if (['status', 'uninstall'].includes(parsed.action)) {
     return finish(
       await windowsSetup(agent.id, parsed.action, args, environment),
