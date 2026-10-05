@@ -1293,3 +1293,69 @@ test('pi and marathon drop one -- separator, like the unix runbooks', async () =
   );
   assert.deepEqual(sc.args, ['--model', 'x']);
 });
+
+test('Windows Codex reads its settings and flags from the agent file', async (t) => {
+  const root = await temporary(t);
+  const launch = async (args, extra = {}) => {
+    const spec = await windowsLaunch(
+      'codex',
+      args,
+      { ...env, ...extra },
+      {
+        tempRoot: root,
+      },
+    );
+    t.after(spec.cleanup);
+    return spec;
+  };
+  const plain = await launch([
+    '--subagent-effort',
+    'low',
+    '--max-subagents',
+    '3',
+  ]);
+  assert.ok(
+    plain.args.includes(
+      'model_providers.subconscious.stream_idle_timeout_ms=900000',
+    ),
+  );
+  assert.deepEqual(plain.args.slice(-4), [
+    '--subagent-effort',
+    'low',
+    '--max-subagents',
+    '3',
+  ]);
+  const tuned = await launch([
+    '--stream-idle-timeout',
+    '1200',
+    '--subagents',
+    '--max-subagents',
+    '6',
+  ]);
+  assert.ok(
+    tuned.args.includes(
+      'model_providers.subconscious.stream_idle_timeout_ms=1200',
+    ),
+  );
+  assert.ok(tuned.args.includes('agents.max_threads=6'));
+  assert.equal(tuned.command, 'npx');
+  assert.equal(plain.env.SUBCONSCIOUS_GATEWAY_URL, 'https://gateway.example');
+});
+
+test('Windows agents other than Claude get the gateway and key as SUBCONSCIOUS_*', async () => {
+  for (const id of ['pi', 'subconscious-code', 'opencode']) {
+    const spec = await windowsLaunch(id, [], { ...env, PI_API_KEY: 'sk-pi' });
+    assert.equal(
+      spec.env.SUBCONSCIOUS_GATEWAY_URL,
+      'https://gateway.example',
+      id,
+    );
+    assert.equal(
+      spec.env.SUBCONSCIOUS_API_KEY,
+      id === 'pi' ? 'sk-pi' : 'sk-test',
+      id,
+    );
+  }
+  const claude = await windowsLaunch('claude-code', [], env);
+  assert.equal(claude.env.SUBCONSCIOUS_GATEWAY_URL, undefined);
+});

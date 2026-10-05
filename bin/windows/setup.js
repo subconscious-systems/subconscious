@@ -128,7 +128,7 @@ export async function windowsSetup(
       ...(options['--model'] ? { MODEL: options['--model'] } : {}),
     },
     {},
-    { strict: action === 'install' },
+    { strict: false },
   );
   const gatewayUrl = origin(
     options['--gateway-url'] || value(env, 'GATEWAY_URL', defaults.baseUrl),

@@ -82,8 +82,8 @@ const BASH_MISSING = () =>
 
 /**
  * What a runbook script reads beyond the launch env. With `strict: false`
- * an invalid model leaves SUBC_MODEL_IDS unset instead of failing, for
- * status and uninstall, which never use it.
+ * an invalid model leaves SUBC_MODEL_IDS unset instead of failing, so a
+ * script that needs it sees an empty list.
  */
 export function scriptEnv(env, { strict = true } = {}) {
   let ids;

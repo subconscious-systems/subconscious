@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { AGENTS } from '../bin/agent-data.js';
 import { launchCommand, runSync } from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-codex-test-'));
@@ -250,21 +251,32 @@ test('Codex launch no longer pins a legacy Codex for subagents', async () => {
 
 test('status and uninstall still run when a saved setting is invalid', () => {
   const home = path.join(testDir, 'bad-settings-home');
-  for (const action of ['status', 'uninstall']) {
-    const result = spawnSync(
-      process.execPath,
-      [new URL('../bin/cli.js', import.meta.url).pathname, 'codex', action],
-      {
+  const cli = new URL('../bin/cli.js', import.meta.url).pathname;
+  const agents = AGENTS.filter((agent) =>
+    agent.runbook.setup_actions?.some((action) => action !== 'install'),
+  );
+  assert.ok(agents.length >= 6);
+  for (const agent of agents)
+    for (const action of agent.runbook.setup_actions) {
+      if (action === 'install') continue;
+      const result = spawnSync(process.execPath, [cli, agent.command, action], {
         encoding: 'utf8',
         env: {
           ...process.env,
           HOME: home,
           SUBC_CONFIG_DIR: path.join(home, 'subc'),
           CODEX_REASONING_EFFORT: 'bogus',
-          MODEL: 'not a model',
+          MODEL: 'not a model!',
         },
-      },
-    );
-    assert.equal(result.status, 0, `${action}: ${result.stderr}`);
-  }
+      });
+      // Copilot's status needs a VS Code install to inspect.
+      if (agent.id === 'copilot')
+        assert.doesNotMatch(result.stderr, /model|must be one of/);
+      else
+        assert.equal(
+          result.status,
+          0,
+          `${agent.id} ${action}: ${result.stderr}`,
+        );
+    }
 });

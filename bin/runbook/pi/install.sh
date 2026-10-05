@@ -118,7 +118,7 @@ while IFS= read -r model_id; do
   else
     MODEL_ENTRIES_JSON="$model_json"
   fi
-done <<< "$SUBC_MODEL_IDS"
+done <<< "${SUBC_MODEL_IDS:-}"
 
 PI_DIR="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
 MODELS_JSON="${PI_DIR}/models.json"

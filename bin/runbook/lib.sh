@@ -25,7 +25,7 @@ subc_exec() {
   done
   shift
   local limit="${SUBC_TEMPLATE_WORDS:-0}"
-  unset SUBC_TEMPLATE_WORDS
+  unset SUBC_TEMPLATE_WORDS SUBC_MODEL_IDS SUBC_VISION_MODELS
   for word in "$@"; do
     if [[ "$index" -lt "$limit" ]]; then
       for ((i = 0; i < ${#names[@]}; i++)); do

@@ -390,11 +390,12 @@ export function selectLaunchModel(requestedModel, modelSource, catalog) {
 async function runRunbookSetup(agent, argv, profile) {
   const script = agent.runbook.setup_script;
   if (isSetupWithoutAuth(argv) || agent.runbook.setup_needs_auth === false) {
-    // Status and uninstall must work even when a saved setting is invalid.
-    const options = { strict: !isSetupWithoutAuth(argv) };
+    // Status, uninstall, and Marathon's binary install read no model or
+    // agent setting, so an invalid saved one must not block them.
+    const lenient = { strict: false };
     const base = { ...(profile?.values || {}), ...process.env };
-    const env = resolveInputs(agent, base, {}, options);
-    return runCommand(scriptCommand(agent, script, argv, env, options));
+    const env = resolveInputs(agent, base, {}, lenient);
+    return runCommand(scriptCommand(agent, script, argv, env, lenient));
   }
 
   const {
@@ -420,9 +421,12 @@ async function runRunbookSetup(agent, argv, profile) {
   console.log(
     `  ${c.dim}Configuring ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}for Subconscious (${model})${c.reset}\n`,
   );
+  // Setup scripts read no strict-choice setting; only the model list matters.
   const env = resolveInputs(
     agent,
     runbookEnv(apiKey, model, undefined, profile, agent, catalog.models),
+    {},
+    { strict: false },
   );
   const code = await runCommand(scriptCommand(agent, script, rest, env));
   const installed = !['status', 'uninstall'].includes(rest[0]);

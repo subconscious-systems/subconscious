@@ -143,10 +143,13 @@ function codexConfig(env, file) {
 
 async function codexLaunch(agent, argv, env, tempRoot) {
   const { subagents, words } = splitSubagents(argv);
-  // Windows Codex sets no subagent effort, so that flag still reaches Codex
-  // unchanged.
+  // Windows Codex sets no subagent effort, and uses the subagent cap only
+  // with --subagents; otherwise those flags still reach Codex unchanged.
   const { values, rest } = takeFlags(agent, words, {
-    skip: ['CODEX_SUBAGENT_REASONING_EFFORT'],
+    skip: [
+      'CODEX_SUBAGENT_REASONING_EFFORT',
+      ...(subagents ? [] : ['MAX_CONCURRENT_SUBAGENTS']),
+    ],
   });
   const resolved = resolveAgentEnv(agent, resolveInputs(agent, env, values));
   const context = positiveInteger(
