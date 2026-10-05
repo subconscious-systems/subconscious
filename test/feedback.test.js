@@ -45,6 +45,53 @@ test('parseFeedbackArgs rejects unknown options', () => {
   assert.throws(() => parseFeedbackArgs(['--nope']), /Unknown option: --nope/);
 });
 
+test('parseFeedbackArgs rejects missing option values and subsequent flags', () => {
+  for (const flag of ['-s', '--subject', '-m', '--message', '--image']) {
+    for (const next of [
+      undefined,
+      '-m',
+      '--subject=Bug',
+      '--image',
+      '--unknown',
+    ]) {
+      const argv = next === undefined ? [flag] : [flag, next];
+      assert.throws(() => parseFeedbackArgs(argv), {
+        message: `${flag} requires a value`,
+      });
+    }
+  }
+});
+
+test('parseFeedbackArgs preserves text values and explicit option-like values', () => {
+  assert.deepEqual(
+    parseFeedbackArgs([
+      '-s',
+      '',
+      '-m',
+      '- Fix this\nUnicode: \u00e9',
+      '--image',
+      '-shot.png',
+    ]),
+    {
+      subject: '',
+      message: '- Fix this\nUnicode: \u00e9',
+      images: ['-shot.png'],
+    },
+  );
+  assert.deepEqual(
+    parseFeedbackArgs([
+      '--subject=--message',
+      '--message=--image=shot.png',
+      '--image=--shot.png',
+    ]),
+    {
+      subject: '--message',
+      message: '--image=shot.png',
+      images: ['--shot.png'],
+    },
+  );
+});
+
 test('buildFeedbackPayload defaults the subject and drops empty context', () => {
   assert.deepEqual(
     buildFeedbackPayload({

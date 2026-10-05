@@ -106,26 +106,26 @@ export async function fetchGatewayModels({
       };
       controller.signal.addEventListener('abort', fail, { once: true });
     });
-    const response = await Promise.race([
-      fetchImpl(endpoint, {
+    const discover = async () => {
+      const response = await fetchImpl(endpoint, {
         method: 'GET',
         headers,
         cache: 'no-store',
         signal: controller.signal,
-      }),
-      aborted,
-    ]);
+      });
 
-    if (!response.ok) {
-      throw new Error(`Model discovery returned HTTP ${response.status}`);
-    }
+      if (!response.ok) {
+        throw new Error(`Model discovery returned HTTP ${response.status}`);
+      }
 
-    const payload = await response.json();
-    if (!Array.isArray(payload?.data)) {
-      throw new Error('Model discovery returned an invalid response');
-    }
+      const payload = await response.json();
+      if (!Array.isArray(payload?.data)) {
+        throw new Error('Model discovery returned an invalid response');
+      }
 
-    return normalizeModelIds(payload.data.map((model) => model?.id));
+      return normalizeModelIds(payload.data.map((model) => model?.id));
+    };
+    return await Promise.race([discover(), aborted]);
   } catch (error) {
     if (signal?.aborted) throw abortError('Model discovery was cancelled');
     if (controller.signal.aborted) {

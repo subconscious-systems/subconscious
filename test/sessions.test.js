@@ -225,3 +225,79 @@ test('maps native resumes and portable launches to each harness CLI', () => {
     'context',
   ]);
 });
+
+test('session discovery ignores non-object JSONL records in history indexes', async () => {
+  const indexes = {
+    claude: path.join(root, 'claude-history.jsonl'),
+    codex: path.join(root, 'codex-index.jsonl'),
+  };
+  const junk = [null, false, 123, 'unexpected record', []];
+  await fs.writeFile(
+    indexes.claude,
+    [
+      ...junk,
+      { sessionId: 'claude-id', display: 'Indexed Claude', timestamp: 1 },
+    ]
+      .map(JSON.stringify)
+      .join('\n'),
+  );
+  await fs.writeFile(
+    indexes.codex,
+    [
+      ...junk,
+      {
+        id: 'codex-id',
+        thread_name: 'Indexed Codex',
+        updated_at: '2026-01-01',
+      },
+    ]
+      .map(JSON.stringify)
+      .join('\n'),
+  );
+  const sessions = await discoverSessions({
+    roots,
+    indexes,
+    execute: () => ({ status: 1 }),
+  });
+  assert.equal(
+    sessions.find((session) => session.key === 'claude:claude-id')?.title,
+    'Indexed Claude',
+  );
+  assert.equal(
+    sessions.find((session) => session.key === 'codex:codex-id')?.title,
+    'Indexed Codex',
+  );
+});
+
+test('transcript readers ignore non-object JSONL records without losing messages', async () => {
+  const records = [
+    null,
+    false,
+    123,
+    'unexpected record',
+    [],
+    { type: 'user', content: 'Keep this message' },
+  ];
+  for (const harness of ['claude', 'codex', 'pi', 'sc']) {
+    const sourcePath = path.join(root, `mixed-${harness}.jsonl`);
+    const message =
+      harness === 'codex'
+        ? {
+            type: 'event_msg',
+            payload: { type: 'user_message', message: 'Keep this message' },
+          }
+        : harness === 'pi'
+          ? {
+              type: 'message',
+              message: { role: 'user', content: 'Keep this message' },
+            }
+          : records.at(-1);
+    await fs.writeFile(
+      sourcePath,
+      [...records.slice(0, -1), message].map(JSON.stringify).join('\n'),
+    );
+    assert.deepEqual(await readSessionMessages({ harness, sourcePath }), [
+      { role: 'user', text: 'Keep this message' },
+    ]);
+  }
+});

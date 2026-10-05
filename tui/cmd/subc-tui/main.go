@@ -175,8 +175,8 @@ type model struct {
 	urlCursor       int
 	apiKeyInput     string
 	inputError      string
-	notice         string
-	sessionBaseURL string
+	notice          string
+	sessionBaseURL  string
 	width           int
 	height          int
 	result          outputResult
@@ -538,18 +538,10 @@ func (m model) updateProfiles(key string) (tea.Model, tea.Cmd) {
 		m.profileCursor = wrapIndex(m.profileCursor+1, len(m.state.Profiles))
 	case "enter":
 		selected := m.state.Profiles[m.profileCursor]
-		m.state.ActiveProfile = selected.Name
-		m.state.SelectedModel = selected.Model
-		if selected.Model != "" && indexString(m.state.Models, selected.Model) < 0 {
-			m.state.Models = append([]string{selected.Model}, m.state.Models...)
-		}
-		m.modelCursor = defaultModelIndex(m.state)
-		m.state.SubagentModel = selected.SubagentModel
-		if selected.SubagentModel != "" && indexString(m.state.Models, selected.SubagentModel) < 0 {
-			m.state.Models = append(m.state.Models, selected.SubagentModel)
-		}
-		m.subagentCursor = subagentModelIndex(m.state)
-		m.screen = screenMain
+		// Node owns profile loading and authenticated catalog discovery. Reload
+		// the complete state before allowing edits to the selected profile.
+		m.result.Args = []string{"-p", selected.Name}
+		return m, tea.Quit
 	}
 	return m, nil
 }

@@ -246,3 +246,43 @@ test('resolveModelCatalog does not fall back when the caller aborts', async () =
   controller.abort();
   await assert.rejects(pending, (error) => isAbortError(error));
 });
+
+test('fetchGatewayModels times out while reading a stalled response body', async () => {
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    await assert.rejects(
+      fetchGatewayModels({
+        baseUrl: 'https://gateway.example',
+        timeoutMs: 25,
+        fetchImpl: async () => ({
+          ok: true,
+          json: () => new Promise(() => {}),
+        }),
+      }),
+      /Model discovery timed out after 25ms/,
+    );
+  } finally {
+    clearInterval(keepAlive);
+  }
+});
+
+test('fetchGatewayModels cancels while reading a stalled response body', async () => {
+  const controller = new AbortController();
+  const keepAlive = setInterval(() => {}, 1000);
+  try {
+    const pending = fetchGatewayModels({
+      baseUrl: 'https://gateway.example',
+      signal: controller.signal,
+      fetchImpl: async () => ({
+        ok: true,
+        json: () => {
+          controller.abort();
+          return new Promise(() => {});
+        },
+      }),
+    });
+    await assert.rejects(pending, (error) => isAbortError(error));
+  } finally {
+    clearInterval(keepAlive);
+  }
+});

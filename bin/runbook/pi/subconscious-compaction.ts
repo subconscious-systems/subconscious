@@ -51,7 +51,9 @@ function loadSubconsciousEnvFile(): void {
     return;
   }
   try {
-    const path = join(homedir(), '.pi', 'agent', 'subconscious.env');
+    const directory =
+      process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent');
+    const path = join(directory, 'subconscious.env');
     const text = readFileSync(path, 'utf8');
     for (const line of text.split('\n')) {
       const trimmed = line.trim();

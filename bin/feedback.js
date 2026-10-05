@@ -17,6 +17,17 @@ import { DEFAULT_PROFILE } from './profiles.js';
 export const FEEDBACK_API_PATH = '/api/cli/feedback';
 export const SUPPORT_EMAIL = 'support@subconscious.dev';
 
+function feedbackOptionValue(argv, index) {
+  const value = argv[index + 1];
+  if (
+    value === undefined ||
+    /^(?:--[A-Za-z][\w-]*|-[A-Za-z])(?:=|$)/.test(value)
+  ) {
+    throw new Error(`${argv[index]} requires a value`);
+  }
+  return value;
+}
+
 /**
  * Parses feedback command arguments. Shared with tests.
  *
@@ -31,15 +42,15 @@ export function parseFeedbackArgs(argv = []) {
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '-s' || arg === '--subject') {
-      subject = argv[++i] ?? '';
+      subject = feedbackOptionValue(argv, i++);
     } else if (arg.startsWith('--subject=')) {
       subject = arg.slice('--subject='.length);
     } else if (arg === '-m' || arg === '--message') {
-      message = argv[++i] ?? '';
+      message = feedbackOptionValue(argv, i++);
     } else if (arg.startsWith('--message=')) {
       message = arg.slice('--message='.length);
     } else if (arg === '--image') {
-      images.push(argv[++i] ?? '');
+      images.push(feedbackOptionValue(argv, i++));
     } else if (arg.startsWith('--image=')) {
       images.push(arg.slice('--image='.length));
     } else if (arg !== '') {

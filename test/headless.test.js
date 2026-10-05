@@ -273,8 +273,9 @@ test('subc headless keeps stdout clean, skips npm, and leaves args after -- alon
     argv.includes('model=subconscious/deepseek-v4.1-flash-marathon'),
     argv.join(' '),
   );
-  assert.deepEqual(argv.slice(-5), [
+  assert.deepEqual(argv.slice(-6), [
     'exec',
+    '--skip-git-repo-check',
     '--model',
     'agent-side-model',
     '--',
@@ -297,7 +298,12 @@ test('subc flags before headless still get headless behaviour', async () => {
     argv.includes('model=subconscious/deepseek-v4.1-flash-marathon'),
     argv.join(' '),
   );
-  assert.deepEqual(argv.slice(-3), ['exec', '--', 'do it']);
+  assert.deepEqual(argv.slice(-4), [
+    'exec',
+    '--skip-git-repo-check',
+    '--',
+    'do it',
+  ]);
 });
 
 test('a prompt that looks like a subc flag reaches the agent unchanged', async () => {
@@ -306,7 +312,12 @@ test('a prompt that looks like a subc flag reaches the agent unchanged', async (
     assertHeadlessLaunch(result);
     const argv = await recordedArgv();
     assert.ok(argv.includes(`model=${MODEL}`), `${prompt}: ${argv.join(' ')}`);
-    assert.deepEqual(argv.slice(-3), ['exec', '--', prompt]);
+    assert.deepEqual(argv.slice(-4), [
+      'exec',
+      '--skip-git-repo-check',
+      '--',
+      prompt,
+    ]);
   }
 });
 
@@ -353,7 +364,12 @@ test('a prompt of exactly -- reaches the agent', async () => {
     argv.includes('model=subconscious/deepseek-v4.1-flash-marathon'),
     argv.join(' '),
   );
-  assert.deepEqual(argv.slice(-3), ['exec', '--', '--']);
+  assert.deepEqual(argv.slice(-4), [
+    'exec',
+    '--skip-git-repo-check',
+    '--',
+    '--',
+  ]);
 });
 
 test('the word headless later in a normal launch changes nothing', async () => {

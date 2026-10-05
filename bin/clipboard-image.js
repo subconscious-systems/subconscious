@@ -58,7 +58,9 @@ async function readDarwinClipboard() {
 async function readLinuxClipboard() {
   const commands = [
     ['wl-paste', ['--type', 'image/png']],
+    ['wl-paste', ['--type', 'image/jpeg']],
     ['xclip', ['-selection', 'clipboard', '-t', 'image/png', '-o']],
+    ['xclip', ['-selection', 'clipboard', '-t', 'image/jpeg', '-o']],
   ];
   for (const [command, args] of commands) {
     try {

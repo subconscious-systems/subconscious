@@ -222,7 +222,15 @@ test('every headless agent runs exactly this argv and stdin', () => {
       stdin: 'ignore',
     },
     codex: {
-      argv: ['codex', ...codexConfig, 'exec', '--x', '--', 'P'],
+      argv: [
+        'codex',
+        ...codexConfig,
+        'exec',
+        '--skip-git-repo-check',
+        '--x',
+        '--',
+        'P',
+      ],
       stdin: 'ignore',
     },
     opencode: { argv: ['opencode', 'run', '--x'], stdin: 'pipe' },

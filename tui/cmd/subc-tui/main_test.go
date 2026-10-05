@@ -134,6 +134,27 @@ func TestWrapIndex(t *testing.T) {
 	}
 }
 
+func TestProfileSelectionRequestsFullStateReload(t *testing.T) {
+	m := newModel(inputState{
+		ActiveProfile: "first",
+		ProfilePath:   "/profiles/first.env",
+		Profiles: []profileState{
+			{Name: "first"},
+			{Name: "second", Model: "subconscious/second"},
+		},
+	})
+	m.screen = screenProfiles
+	m.profileCursor = 1
+	next, cmd := m.updateProfiles("enter")
+	if cmd == nil {
+		t.Fatal("selecting a profile must exit so Node can reload its complete state")
+	}
+	want := []string{"-p", "second"}
+	if got := next.(model).result.Args; !reflect.DeepEqual(got, want) {
+		t.Fatalf("profile selection = %#v, want %#v", got, want)
+	}
+}
+
 func TestAccountStatusLivesOnlyInHeader(t *testing.T) {
 	m := newModel(inputState{
 		ActiveProfile: "default",

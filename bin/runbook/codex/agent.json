@@ -61,7 +61,15 @@
   ],
   "launch": {
     "argv": ["codex", "{config}", "{args}"],
-    "headless_argv": ["codex", "{config}", "exec", "{args}", "--", "{prompt}"],
+    "headless_argv": [
+      "codex",
+      "{config}",
+      "exec",
+      "--skip-git-repo-check",
+      "{args}",
+      "--",
+      "{prompt}"
+    ],
     "headless_platforms": ["darwin", "linux"],
     "resume": ["resume", "{sessionId}"],
     "handoff": ["{prompt}"],

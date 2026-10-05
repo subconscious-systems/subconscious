@@ -422,6 +422,19 @@ function spawnAndWait(command, args, options = {}) {
 }
 
 export async function runTui(options = {}) {
+  for (;;) {
+    const result = await runTuiOnce(options);
+    if (result?.args?.length !== 2 || result.args[0] !== '-p') return result;
+    options = {
+      ...options,
+      profileName: result.args[1],
+      profile: undefined,
+      state: undefined,
+    };
+  }
+}
+
+async function runTuiOnce(options) {
   const executable = await resolveTuiExecutable(options);
   if (!executable) return null;
 

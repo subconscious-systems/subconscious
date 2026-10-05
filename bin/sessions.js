@@ -67,7 +67,10 @@ function parseLines(text) {
   for (const line of text.split('\n')) {
     if (!line.trim()) continue;
     try {
-      records.push(JSON.parse(line));
+      const record = JSON.parse(line);
+      if (record && typeof record === 'object' && !Array.isArray(record)) {
+        records.push(record);
+      }
     } catch {
       // Session writers can leave a partial final line after an interrupted run.
     }
