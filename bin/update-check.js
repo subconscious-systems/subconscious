@@ -86,6 +86,10 @@ function parseVersion(version) {
   };
 }
 
+export function isVersion(version) {
+  return parseVersion(version) !== null;
+}
+
 function comparePrerelease(a, b) {
   if (!a.length && !b.length) return 0;
   if (!a.length) return 1;
@@ -102,7 +106,7 @@ function comparePrerelease(a, b) {
       return Math.sign(aNumber - bNumber);
     if (aNumber !== null) return -1;
     if (bNumber !== null) return 1;
-    return a[index].localeCompare(b[index]);
+    return a[index] < b[index] ? -1 : 1;
   }
   return 0;
 }

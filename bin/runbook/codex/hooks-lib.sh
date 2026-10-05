@@ -28,7 +28,10 @@ codex_strip_hook_entries() {
       | map(select((.hooks | length) > 0));
     .hooks = (.hooks // {})
     | .hooks |= with_entries(.value |= strip)
-  ' "$HOOKS_JSON" >"$tmp"
+  ' "$HOOKS_JSON" >"$tmp" || {
+    rm -f "$tmp"
+    return 1
+  }
   mv "$tmp" "$HOOKS_JSON"
 }
 
@@ -41,7 +44,10 @@ codex_append_hook_groups() {
     .hooks = (.hooks // {})
     | .hooks.PreCompact = ((.hooks.PreCompact // []) + group("Reporting compaction start"))
     | .hooks.PostCompact = ((.hooks.PostCompact // []) + group("Reporting compaction end"))
-  ' "$HOOKS_JSON" >"$tmp"
+  ' "$HOOKS_JSON" >"$tmp" || {
+    rm -f "$tmp"
+    return 1
+  }
   mv "$tmp" "$HOOKS_JSON"
 }
 
@@ -123,8 +129,15 @@ codex_ensure_hooks() {
   fi
   codex_write_hook_script
   codex_write_hooks_env
-  codex_strip_hook_entries
-  codex_append_hook_groups
+  # run.sh calls this behind `|| true`, which turns off `set -e` in here, so a
+  # failed merge has to be caught by hand or it reports success.
+  if ! codex_strip_hook_entries || ! codex_append_hook_groups; then
+    echo "warning: could not merge Subconscious hooks into ${HOOKS_JSON}; leaving your hooks unchanged" >&2
+    if [[ "$mode" == "strict" ]]; then
+      return 1
+    fi
+    return 0
+  fi
   echo "Installed Subconscious compaction hooks in $HOOKS_JSON"
   echo "These do not run until you trust them: type /hooks inside Codex once."
 }
