@@ -390,11 +390,11 @@ export function selectLaunchModel(requestedModel, modelSource, catalog) {
 async function runRunbookSetup(agent, argv, profile) {
   const script = agent.runbook.setup_script;
   if (isSetupWithoutAuth(argv) || agent.runbook.setup_needs_auth === false) {
-    const env = resolveInputs(agent, {
-      ...(profile?.values || {}),
-      ...process.env,
-    });
-    return runCommand(scriptCommand(agent, script, argv, env));
+    // Status and uninstall must work even when a saved setting is invalid.
+    const options = { strict: !isSetupWithoutAuth(argv) };
+    const base = { ...(profile?.values || {}), ...process.env };
+    const env = resolveInputs(agent, base, {}, options);
+    return runCommand(scriptCommand(agent, script, argv, env, options));
   }
 
   const {
@@ -502,6 +502,10 @@ export async function runAgent(agent, argv, options = {}) {
     return runSetupAction(agent, parsed, profile);
   }
 
+  return launchAgent(agent, argv, profile, headless);
+}
+
+async function launchAgent(agent, argv, profile, headless) {
   // Arguments after -- belong to the agent, including its own --model.
   const boundary = separatorIndex(argv);
   const {

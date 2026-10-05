@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { agentById } from '../agent-data.js';
+import { agentById, agentKeyName } from '../agent-data.js';
 import {
   launchPlan,
   resolveAgentEnv,
@@ -16,15 +16,21 @@ import { defaults, origin, value, writeJson } from './common.js';
 
 const PLANNED = new Set(['claude-code', 'subconscious-code', 'pi', 'opencode']);
 
-// Windows trims a configured gateway to its origin. Claude has always been
-// given the gateway as configured.
+// Windows trims a configured gateway to its origin and gives every agent but
+// Claude the gateway and key as SUBCONSCIOUS_*. Claude has always been given
+// the gateway as configured.
 function windowsEnv(id, env) {
   const model = value(env, 'MODEL', defaults.model);
   const gateway = value(env, 'GATEWAY_URL', defaults.baseUrl);
+  if (id === 'claude-code')
+    return { ...env, MODEL: model, GATEWAY_URL: gateway };
+  const keyName = agentKeyName(agentById(id));
   return {
     ...env,
     MODEL: model,
-    GATEWAY_URL: id === 'claude-code' ? gateway : origin(gateway),
+    GATEWAY_URL: origin(gateway),
+    SUBCONSCIOUS_API_KEY: value(env, keyName, value(env, 'API_KEY')),
+    SUBCONSCIOUS_GATEWAY_URL: origin(gateway),
   };
 }
 
@@ -121,7 +127,9 @@ function codexConfig(env, file) {
     'model_providers.subconscious.base_url': `${env.GATEWAY_URL}/v1`,
     'model_providers.subconscious.wire_api': 'responses',
     'model_providers.subconscious.env_key': 'SUBCONSCIOUS_API_KEY',
-    'model_providers.subconscious.stream_idle_timeout_ms': 300000,
+    'model_providers.subconscious.stream_idle_timeout_ms': Number(
+      env.CODEX_STREAM_IDLE_TIMEOUT_MS,
+    ),
   };
   if (env.CODEX_EXTERNAL_TOOLS !== 'true') {
     Object.assign(config, {
@@ -135,7 +143,11 @@ function codexConfig(env, file) {
 
 async function codexLaunch(agent, argv, env, tempRoot) {
   const { subagents, words } = splitSubagents(argv);
-  const { values, rest } = takeFlags(agent, words);
+  // Windows Codex sets no subagent effort, so that flag still reaches Codex
+  // unchanged.
+  const { values, rest } = takeFlags(agent, words, {
+    skip: ['CODEX_SUBAGENT_REASONING_EFFORT'],
+  });
   const resolved = resolveAgentEnv(agent, resolveInputs(agent, env, values));
   const context = positiveInteger(
     resolved.CODEX_CONTEXT_WINDOW,
@@ -151,6 +163,7 @@ async function codexLaunch(agent, argv, env, tempRoot) {
   );
   const catalog = codexCatalog(resolved, context, maxContext, compact);
   // Validate all flags before creating a temporary directory.
+  positiveInteger(resolved.CODEX_STREAM_IDLE_TIMEOUT_MS, 'stream-idle-timeout');
   const threads = positiveInteger(
     resolved.MAX_CONCURRENT_SUBAGENTS,
     'MAX_CONCURRENT_SUBAGENTS',

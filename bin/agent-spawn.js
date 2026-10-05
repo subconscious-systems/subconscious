@@ -80,21 +80,31 @@ const BASH_MISSING = () =>
     'These coding-agent integrations require `bash`, but it was not found on PATH.',
   );
 
-/** What a runbook script reads beyond the launch env. */
-export function scriptEnv(env) {
+/**
+ * What a runbook script reads beyond the launch env. With `strict: false`
+ * an invalid model leaves SUBC_MODEL_IDS unset instead of failing, for
+ * status and uninstall, which never use it.
+ */
+export function scriptEnv(env, { strict = true } = {}) {
+  let ids;
+  try {
+    ids = modelIds(env).join('\n');
+  } catch (error) {
+    if (strict) throw error;
+  }
   return {
     ...env,
-    SUBC_MODEL_IDS: modelIds(env).join('\n'),
+    ...(ids === undefined ? {} : { SUBC_MODEL_IDS: ids }),
     SUBC_VISION_MODELS: visionModelList(),
   };
 }
 
 /** The command for one of the agent's runbook scripts, given its env. */
-export function scriptCommand(agent, relativeScript, args, env) {
+export function scriptCommand(agent, relativeScript, args, env, options) {
   return {
     file: 'bash',
     args: [runbookScriptPath(agent, relativeScript), ...args],
-    env: scriptEnv(env),
+    env: scriptEnv(env, options),
     notFound: BASH_MISSING,
   };
 }

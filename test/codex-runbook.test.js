@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -245,4 +246,25 @@ test('Codex launch no longer pins a legacy Codex for subagents', async () => {
     !args.some((arg) => arg === 'features.multi_agent=true'),
     args.join(' '),
   );
+});
+
+test('status and uninstall still run when a saved setting is invalid', () => {
+  const home = path.join(testDir, 'bad-settings-home');
+  for (const action of ['status', 'uninstall']) {
+    const result = spawnSync(
+      process.execPath,
+      [new URL('../bin/cli.js', import.meta.url).pathname, 'codex', action],
+      {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          HOME: home,
+          SUBC_CONFIG_DIR: path.join(home, 'subc'),
+          CODEX_REASONING_EFFORT: 'bogus',
+          MODEL: 'not a model',
+        },
+      },
+    );
+    assert.equal(result.status, 0, `${action}: ${result.stderr}`);
+  }
 });

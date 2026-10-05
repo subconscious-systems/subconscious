@@ -77,7 +77,10 @@ function openCodeConfigDocument(lookup) {
     output: lookup('OPENCODE_OUTPUT_LIMIT'),
   });
   return JSON.parse(
-    JSON.stringify(document).replaceAll(RUNBOOK_DIR, '<runbook>/'),
+    JSON.stringify(document).replaceAll(
+      JSON.stringify(RUNBOOK_DIR).slice(1, -1),
+      '<runbook>/',
+    ),
   );
 }
 

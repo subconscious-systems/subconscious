@@ -15,7 +15,11 @@ const MAX_INDEX_BYTES = 4 * 1024 * 1024;
 const MAX_HANDOFF_MESSAGES = 24;
 const MAX_HANDOFF_CHARS = 24_000;
 const MAX_MESSAGE_CHARS = 4_000;
-const SESSION_KEY_PATTERN = /^(claude|codex|opencode|pi|sc):[-A-Za-z0-9._]+$/;
+const SESSION_KEY_PATTERN = new RegExp(
+  `^(${AGENTS.filter((agent) => agent.sessions)
+    .map((agent) => agent.sessions.key)
+    .join('|')}):[-A-Za-z0-9._]+$`,
+);
 
 export const SESSION_HARNESSES = Object.freeze(
   Object.fromEntries(

@@ -64,6 +64,9 @@ function validateLaunch(launch, where) {
     );
   }
   check(launch.argv !== undefined, where, 'launch.argv is required');
+  for (const key of ['mode_word', 'headless_stdin', 'config_flag'])
+    if (launch[key] !== undefined)
+      check(typeof launch[key] === 'string', where, `launch.${key}`);
   if (launch.headless_argv) {
     const platforms = launch.headless_platforms;
     check(
@@ -106,6 +109,12 @@ export function validateAgent(agent, id) {
   for (const key of ['prerequisites', 'inputs', 'env', 'config'])
     check(Array.isArray(agent[key]), where, `${key} must be a list`);
   for (const input of agent.inputs) validateEntry(input, `${where} inputs`);
+  check(
+    !agent.config.some((entry) => entry.kind === 'cli-config') ||
+      typeof agent.launch?.config_flag === 'string',
+    where,
+    'cli-config entries need launch.config_flag',
+  );
   for (const entry of agent.env)
     validateEntry(entry, `${where} env`, { needsValue: true });
   const caps = agent.capabilities;

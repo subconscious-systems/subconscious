@@ -5,7 +5,8 @@ import path from 'node:path';
 import { agentById, installCommands } from '../agent-data.js';
 import { powershellCommand, runWindows } from './process.js';
 
-const repository = 'subconscious-systems/subconscious-code';
+const marathon = agentById('subconscious-code').install;
+const repository = marathon.repository;
 
 function npmInstall(command) {
   const match = /^npm (?:i|install) -g ([@a-zA-Z0-9/._-]+)$/.exec(
@@ -37,22 +38,18 @@ export function windowsInstallSpec(id, env = process.env) {
 }
 
 export function windowsReleaseAsset(release, arch = process.arch) {
-  const target = {
-    x64: 'x86_64-pc-windows-msvc',
-    arm64: 'aarch64-pc-windows-msvc',
-  }[arch];
+  const target = marathon.windows_targets.find((triple) =>
+    triple.startsWith({ x64: 'x86_64-', arm64: 'aarch64-' }[arch] ?? '-'),
+  );
   if (!target)
     throw new Error(
       `Subconscious Code does not support Windows architecture ${arch}`,
     );
   // Pinned older releases are installed under the new executable name too.
   // Never resolve or overwrite Windows' own sc.exe.
-  const names = [
-    `marathon-${target}.zip`,
-    `marathon-${target}.exe`,
-    `sc-${target}.zip`,
-    `sc-${target}.exe`,
-  ];
+  const names = marathon.windows_assets.map((name) =>
+    name.replaceAll('{target}', target),
+  );
   const asset = names
     .map((name) => release.assets?.find((asset) => asset.name === name))
     .find(Boolean);

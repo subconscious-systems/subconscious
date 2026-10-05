@@ -57,8 +57,10 @@ function profileDefault(input, lookup) {
 
 function agentDefaults(agent) {
   const lookup = staticLookup(agent);
+  // A profile pins every default it holds, so inputs kept out of the
+  // template stay out of new and existing profiles.
   return agentInputs(agent)
-    .filter((input) => input.label)
+    .filter((input) => input.label && input.template !== false)
     .map((input) => [input.name, profileDefault(input, lookup)]);
 }
 

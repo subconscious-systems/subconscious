@@ -208,7 +208,7 @@ subc harness-manifest --json   # full manifest
 subc harness-manifest          # summary table in a terminal, JSON when piped
 ```
 
-The manifest is built when the command runs, from the agent files subc ships (`bin/runbook/<id>/agent.json`). Those files are what the launcher itself executes: launch and headless argv, flags, input defaults, env, and Codex `-c` overrides come from them, so the manifest describes exactly what runs. The command adds `cli_version` from `package.json`.
+The manifest is built when the command runs, from the agent files subc ships (`bin/runbook/<id>/agent.json`). Those files are what the launcher itself executes: launch and headless argv, flags, input defaults, env, and Codex `-c` overrides come from them, so the manifest describes what runs on macOS and Linux. Windows builds its own Codex catalog and `-c` list. The command adds `cli_version` from `package.json`.
 
 | Field | Meaning |
 | --- | --- |

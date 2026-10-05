@@ -45,10 +45,10 @@ export function render(template, agent, env, extra = {}) {
  * Pull the agent's declared flags out of `args`, up to the first `--`, which
  * is dropped. Everything else passes through in order.
  */
-export function takeFlags(agent, args) {
+export function takeFlags(agent, args, { skip = [] } = {}) {
   const flags = new Map(
     agentInputs(agent)
-      .filter((input) => input.flag)
+      .filter((input) => input.flag && !skip.includes(input.name))
       .map((input) => [input.flag, input]),
   );
   const values = {};
@@ -90,8 +90,17 @@ function inputValue(input, env, agent) {
   return render(input.default, agent, env);
 }
 
-/** Apply flags, then each input's aliases and default, in file order. */
-export function resolveInputs(agent, env, flagged = {}) {
+/**
+ * Apply flags, then each input's aliases and default, in file order. A
+ * launch rejects a strict input outside its choices; status and uninstall
+ * pass `{ strict: false }` so a bad setting cannot block the way out.
+ */
+export function resolveInputs(
+  agent,
+  env,
+  flagged = {},
+  { strict = true } = {},
+) {
   const resolved = { ...env, ...flagged };
   for (const input of agentInputs(agent)) {
     if (input.name in flagged) continue;
@@ -99,10 +108,10 @@ export function resolveInputs(agent, env, flagged = {}) {
     if (value !== undefined) resolved[input.name] = String(value);
   }
   for (const input of agentInputs(agent)) {
-    if (!input.strict || input.choices.includes(resolved[input.name])) continue;
-    throw new Error(
-      `${input.flag || input.name} must be one of: ${input.choices.join(', ')}`,
-    );
+    if (!strict || !input.strict) continue;
+    if (input.choices.includes(resolved[input.name])) continue;
+    const source = input.name in flagged ? input.flag : input.name;
+    throw new Error(`${source} must be one of: ${input.choices.join(', ')}`);
   }
   return resolved;
 }

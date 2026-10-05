@@ -78,7 +78,7 @@ test('flags are unique per agent and never shadow subc flags', () => {
   }
 });
 
-test('every ${NAME} reference points at an input, env entry, or launcher value', () => {
+test('every env reference points at an input, env entry, or launcher value', () => {
   for (const agent of AGENTS) {
     const known = new Set([
       ...agentInputs(agent).map((input) => input.name),

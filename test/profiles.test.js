@@ -670,3 +670,14 @@ test('config accepts --platform-url updates', async () => {
   const profile = await profiles.loadProfile('platform-config');
   assert.equal(profile.values.PLATFORM_URL, 'https://platform-staging.example');
 });
+
+test('saving a profile again adds no settings the template leaves out', async () => {
+  const first = await profiles.ensureProfile('stable', 'sk-stable');
+  const before = await fs.readFile(first.path, 'utf-8');
+  await profiles.ensureProfile('stable');
+  assert.equal(await fs.readFile(first.path, 'utf-8'), before);
+  assert.doesNotMatch(
+    before,
+    /CODEX_STREAM_IDLE_TIMEOUT_MS|CODEX_MULTI_AGENT_VERSION/,
+  );
+});

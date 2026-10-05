@@ -121,10 +121,15 @@ export async function windowsSetup(
     Object.assign(schema, { '--context-window': 1, '--max-tokens': 1 });
   const { options } = parseOptions(argv, schema, { strict: true });
   const agent = agentById(id);
-  const env = resolveInputs(agent, {
-    ...environment,
-    ...(options['--model'] ? { MODEL: options['--model'] } : {}),
-  });
+  const env = resolveInputs(
+    agent,
+    {
+      ...environment,
+      ...(options['--model'] ? { MODEL: options['--model'] } : {}),
+    },
+    {},
+    { strict: action === 'install' },
+  );
   const gatewayUrl = origin(
     options['--gateway-url'] || value(env, 'GATEWAY_URL', defaults.baseUrl),
   );

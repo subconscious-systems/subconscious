@@ -85,11 +85,23 @@ test('aliases and UNSET words resolve before the default', () => {
   assert.equal(env.CLAUDE_CODE_SUBAGENT_MODEL, base.MODEL);
 });
 
-test('a strict input rejects a value outside its choices', () => {
+test('a strict input rejects a value outside its choices, naming its source', () => {
+  const choices = 'none, low, medium, high, max';
   assert.throws(
     () => resolveInputs(codex, { ...base, CODEX_REASONING_EFFORT: 'huge' }),
-    /--reasoning-effort must be one of: none, low, medium, high, max/,
+    new RegExp(`^Error: CODEX_REASONING_EFFORT must be one of: ${choices}$`),
   );
+  assert.throws(
+    () => resolveInputs(codex, base, { CODEX_REASONING_EFFORT: 'huge' }),
+    /--reasoning-effort must be one of/,
+  );
+  const lenient = resolveInputs(
+    codex,
+    { ...base, CODEX_REASONING_EFFORT: 'huge' },
+    {},
+    { strict: false },
+  );
+  assert.equal(lenient.CODEX_REASONING_EFFORT, 'huge');
 });
 
 test('env entries take the first set override, else their value', () => {
@@ -130,6 +142,7 @@ test('config overrides follow their conditions', () => {
 });
 
 test('a placeholder in a prompt or argument is passed through untouched', () => {
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a literal placeholder
   const prompt = 'use {model} and ${API_KEY} and {tempFile}';
   const plan = launchPlan(claude, {
     env: base,
@@ -171,5 +184,109 @@ test('an unknown placeholder is an error, not silent text', () => {
   assert.equal(
     render('{baseUrlV1}', codex, base),
     'https://gateway.example/v1',
+  );
+});
+
+// Pinned by hand, so a template edit in an agent file has to be deliberate.
+test('every headless agent runs exactly this argv and stdin', () => {
+  const model = base.MODEL;
+  const codexConfig = [
+    `model=${model}`,
+    'model_provider=subconscious',
+    'model_catalog_json={tempFile}',
+    'model_reasoning_effort=max',
+    'web_search=disabled',
+    'features.apps=false',
+    'features.plugins=false',
+    'apps._default.enabled=false',
+    'agents.max_concurrent_threads_per_session=4',
+    'agents.interrupt_message=true',
+    'agents.default_subagent_reasoning_effort=low',
+    'model_providers.subconscious.name=Subconscious',
+    'model_providers.subconscious.base_url=https://gateway.example/v1',
+    'model_providers.subconscious.wire_api=responses',
+    'model_providers.subconscious.env_key=SUBCONSCIOUS_API_KEY',
+    'model_providers.subconscious.stream_idle_timeout_ms=900000',
+  ].flatMap((pair) => ['-c', pair]);
+  const expected = {
+    'claude-code': {
+      argv: [
+        'claude',
+        '--settings',
+        base.SUBC_CLAUDE_SETTINGS,
+        '--x',
+        '-p',
+        '--',
+        'P',
+      ],
+      stdin: 'ignore',
+    },
+    codex: {
+      argv: ['codex', ...codexConfig, 'exec', '--x', '--', 'P'],
+      stdin: 'ignore',
+    },
+    opencode: { argv: ['opencode', 'run', '--x'], stdin: 'pipe' },
+    pi: {
+      argv: [
+        'pi',
+        '--provider',
+        'subconscious',
+        '--model',
+        model,
+        '--print',
+        '--x',
+      ],
+      stdin: 'pipe',
+    },
+    'subconscious-code': {
+      argv: ['marathon', '--print=P', '--x'],
+      stdin: 'ignore',
+    },
+    'deepseek-harness': {
+      argv: ['dsh', '--profile', 'headless', '--patch', '{tempFile}', '--x'],
+      stdin: 'pipe',
+    },
+  };
+  for (const [id, want] of Object.entries(expected)) {
+    const plan = launchPlan(agentById(id), {
+      env: base,
+      args: ['--', '--x'],
+      prompt: 'P',
+    });
+    assert.deepEqual(plan.argv, want.argv, id);
+    assert.equal(plan.stdin, want.stdin, id);
+    assert.equal(plan.input, want.stdin === 'pipe' ? 'P' : undefined, id);
+  }
+});
+
+test('interactive launches run exactly this argv', () => {
+  const run = (id, args = []) =>
+    launchPlan(agentById(id), { env: base, args }).argv;
+  assert.deepEqual(run('claude-code', ['--continue']), [
+    'claude',
+    '--settings',
+    base.SUBC_CLAUDE_SETTINGS,
+    '--continue',
+  ]);
+  assert.deepEqual(run('opencode', ['--', '--continue']), [
+    'opencode',
+    '--continue',
+  ]);
+  assert.deepEqual(run('subconscious-code', ['--resume', 'x']), [
+    'marathon',
+    '--resume',
+    'x',
+  ]);
+  assert.deepEqual(run('deepseek-harness', ['--port', '1']), [
+    'dsh',
+    'web',
+    '--patch',
+    '{tempFile}',
+    '--port',
+    '1',
+  ]);
+  assert.equal(
+    run('codex').at(-1),
+    'model_providers.subconscious.stream_idle_timeout_ms=900000',
   );
 });

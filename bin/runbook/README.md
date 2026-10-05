@@ -61,4 +61,8 @@ Setup scripts (`install.sh`) get the same inputs and keep their own
    renders each launch template.
 
 To change a default, flag, env value, argv, or help text, edit the agent file.
-The launcher, profiles, help, Windows launcher, and manifest all read it.
+The launcher, profiles, help, Windows launcher, and manifest all read it. The
+contents of files a runbook writes (the Codex catalog, Pi's provider, the
+DeepSeek Harness overlay, Copilot's provider) live in that script, and on
+Windows in `bin/windows/launch.js` and `bin/windows/setup.js`, whose Codex
+`-c` list also differs from the one in `agent.json`.
