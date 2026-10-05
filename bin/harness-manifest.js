@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import {
   AGENTS,
   agentBinary,
@@ -76,12 +77,12 @@ function openCodeConfigDocument(lookup) {
     context: lookup('OPENCODE_CONTEXT_LIMIT'),
     output: lookup('OPENCODE_OUTPUT_LIMIT'),
   });
-  return JSON.parse(
-    JSON.stringify(document).replaceAll(
-      JSON.stringify(RUNBOOK_DIR).slice(1, -1),
-      '<runbook>/',
-    ),
-  );
+  // The manifest is the same on every platform, so a Windows path keeps `/`.
+  const portable = (file) =>
+    file.startsWith(RUNBOOK_DIR)
+      ? `<runbook>/${path.relative(RUNBOOK_DIR, file).split(path.sep).join('/')}`
+      : file;
+  return { ...document, plugin: document.plugin.map(portable) };
 }
 
 function resolver(agent) {
