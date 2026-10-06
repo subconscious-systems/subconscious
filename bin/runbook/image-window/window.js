@@ -135,6 +135,22 @@ export function windowFetch(fetchFn) {
       return fetchFn(input, init);
     }
     if (!windowed) return fetchFn(input, init);
+    const originalHeaders =
+      init.headers ??
+      (typeof Request === 'function' && input instanceof Request
+        ? input.headers
+        : undefined);
+    if (originalHeaders) {
+      const headers = new Headers(originalHeaders);
+      if (headers.has('content-length')) {
+        headers.delete('content-length');
+        return fetchFn(input, {
+          ...init,
+          headers,
+          body: JSON.stringify(windowed),
+        });
+      }
+    }
     return fetchFn(input, { ...init, body: JSON.stringify(windowed) });
   };
 }
