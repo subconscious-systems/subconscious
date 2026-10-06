@@ -13,9 +13,6 @@ All test execution and the TUI build below ran on Windows, not under WSL.
 - Packed and globally installed the candidate `subconscious-cli@4.1.0`.
   Verified version, help, empty profile listing, agent help, and unauthenticated
   `whoami`. Opened the installed native TUI and exited with `q`.
-- Tested native release ZIP extraction, replacement of an existing executable,
-  checksum rejection, and rejection of archives missing a root `sc.exe`.
-  Archive tests use an inert fixture, not a working Subconscious Code binary.
 
 Installed real agent packages and exercised them through `subc`:
 
@@ -42,22 +39,6 @@ were used; temporary mock profiles were removed afterward.
 - These VM results describe the local candidate before publication. The
   Windows-only candidate npm archive is a local test artifact, not the full
   cross-platform release package.
-- A native Windows x64 `sc.exe` candidate was built in the sibling
-  `subconscious-code` repository using Rust 1.98.1 and MSVC, with a static CRT.
-  PE dependency inspection found Windows system DLLs only, not the VC++ runtime.
-  Its ZIP and SHA-256 file were installed using the real Windows installer;
-  only GitHub metadata/download responses were substituted with local artifacts.
-  The installed `subc sc --version` wrapper and native interactive TUI launch/quit
-  passed. A real PowerShell tool call through a local mock streaming gateway
-  passed, including tool-result replay, API-key filtering, and USERPROFILE-based
-  global memory without HOME.
-- The separate shell backend passed its 12 targeted tests on built-in Windows
-  PowerShell 5.1, then on PowerShell 7.6.5 with Git Bash 5.3.15 installed as an
-  explicit alternative. PowerShell is the Windows default; Git Bash is optional.
-- Subconscious Code's full native Windows workspace test run passed: 553 tests,
-  0 failures, 3 pre-existing ignored benchmarks. Formatting and full-workspace
-  Clippy checks passed with warnings denied. The local x64 release candidate is
-  `sc 0.1.3+windows-local-20260908`; its downloaded ZIP checksum was verified.
 
 The Go test's Unix `0600` permission assertion is retained on Unix; Windows runs
 the same profile-content checks without treating ACLs as Unix mode bits. Existing
