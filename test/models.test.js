@@ -286,3 +286,31 @@ test('fetchGatewayModels cancels while reading a stalled response body', async (
     clearInterval(keepAlive);
   }
 });
+
+test('a pinned catalog wins over discovery and is never fetched', async () => {
+  const catalog = await resolveModelCatalog({
+    baseUrl: 'https://gateway.example',
+    apiKey: 'key',
+    selectedModel: 'subconscious/b',
+    pinnedModels: 'subconscious/a\nsubconscious/b\n',
+    fetchImpl: async () => {
+      throw new Error('a pinned catalog must not fetch');
+    },
+  });
+  assert.equal(catalog.source, 'pinned');
+  assert.equal(catalog.error, null);
+  assert.deepEqual(catalog.models, ['subconscious/b', 'subconscious/a']);
+  assert.equal(isLiveModelSource(catalog.source), false);
+});
+
+test('a blank pinned catalog still discovers', async () => {
+  const catalog = await resolveModelCatalog({
+    baseUrl: 'https://gateway.example',
+    apiKey: 'key',
+    pinnedModels: '  \n',
+    fetchImpl: async () =>
+      jsonResponse({ data: [{ id: 'subconscious/live' }] }),
+  });
+  assert.equal(catalog.source, 'available');
+  assert.deepEqual(catalog.models, ['subconscious/live']);
+});
