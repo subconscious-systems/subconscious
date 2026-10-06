@@ -12,6 +12,7 @@
       "linux": "npm i -g {package}",
       "win32": "npm i -g {package}"
     },
+    "url": "https://opencode.ai/docs",
     "method": "npm",
     "package": "opencode-ai",
     "version": null,

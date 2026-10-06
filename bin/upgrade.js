@@ -85,16 +85,16 @@ function askYesNo(question) {
   });
 }
 
-function runInstall(command) {
+function runInstall() {
+  const target = detectInstallTarget();
   if (process.platform === 'win32') {
-    const target = detectInstallTarget();
     return runWindows(target.command, target.args).then(
       (code) => code === 0,
       () => false,
     );
   }
   return new Promise((resolve) => {
-    const child = spawn(command, { shell: true, stdio: 'inherit' });
+    const child = spawn(target.command, target.args, { stdio: 'inherit' });
     child.on('error', () => resolve(false));
     child.on('exit', (code) => resolve(code === 0));
   });

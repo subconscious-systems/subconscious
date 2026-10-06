@@ -1,7 +1,9 @@
 import {
+  agentBinary,
   agentCommandName,
   agentInputs,
   agentSetupActions,
+  installAdvice,
 } from './agent-data.js';
 import { c } from './colors.js';
 import { profileSettingsForAgent, resolvedProfileValues } from './profiles.js';
@@ -72,12 +74,18 @@ function printSetupHints(agent, profile) {
   console.log(
     `\n  Edit the env file with ${c.cyan}subc -p ${profile?.name || 'default'} config edit${c.reset}.`,
   );
+  if (agentBinary(agent)) {
+    const { command: install, url } = installAdvice(agent);
+    const how = install
+      ? `with ${c.cyan}${install}${c.reset}, or see ${c.cyan}${url}${c.reset}`
+      : `from ${c.cyan}${url}${c.reset}`;
+    console.log(`  subc doesn't install ${agent.name}. Install it ${how}.`);
+  }
   const actions = agentSetupActions(agent);
   if (actions.includes('install')) {
-    const what = agent.runbook.binary_install_script
-      ? 'Install the agent binary with'
-      : 'Install the persistent integration with';
-    console.log(`  ${what} ${c.cyan}subc ${command} install${c.reset}.`);
+    console.log(
+      `  Install the persistent integration with ${c.cyan}subc ${command} install${c.reset}.`,
+    );
   }
   if (actions.includes('uninstall')) {
     console.log(

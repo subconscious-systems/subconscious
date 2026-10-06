@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { constants as fsConstants } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -9,25 +9,10 @@ import {
   agentById,
   agentCommandName,
   agentInstallDirs,
-  installCommands,
+  installAdvice,
 } from './agent-data.js';
-import { runbookScriptPath } from './agent-spawn.js';
 import { c } from './colors.js';
 import { compareVersions } from './update-check.js';
-
-/**
- * The install command for this OS, falling back to the Linux one, then any
- * command present; plus the optional fallback command.
- */
-export function resolveInstall(agent) {
-  const commands = installCommands(agent);
-  if (!commands) return { command: undefined, fallback: undefined };
-  const command =
-    commands[process.platform] ||
-    commands.linux ||
-    Object.entries(commands).find(([os]) => os !== 'fallback')?.[1];
-  return { command, fallback: commands.fallback };
-}
 
 /**
  * Common locations a freshly-installed coding-agent binary lands in but which
@@ -139,21 +124,6 @@ export function augmentPath(
   ].join(path.delimiter);
 }
 
-/** Ask a yes/no question on the TTY. Empty answer counts as yes. */
-function askYesNo(question) {
-  return new Promise((resolve) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    rl.question(question, (answer) => {
-      rl.close();
-      const a = answer.trim().toLowerCase();
-      resolve(a === '' || a === 'y' || a === 'yes');
-    });
-  });
-}
-
 function waitForEnter(prompt) {
   return new Promise((resolve) => {
     const rl = readline.createInterface({
@@ -167,113 +137,33 @@ function waitForEnter(prompt) {
   });
 }
 
-/** Run the agent's packaged binary installer, or its shell install command. */
-function runInstaller(
-  agent,
-  install = resolveInstall(agent).command,
-  usePackagedScript = true,
-) {
-  return new Promise((resolve) => {
-    const installScript =
-      usePackagedScript && agent.runbook.binary_install_script;
-    const child = installScript
-      ? spawn('bash', [runbookScriptPath(agent, installScript), 'install'], {
-          stdio: 'inherit',
-        })
-      : spawn(install, { shell: true, stdio: 'inherit' });
-    child.on('error', () => resolve(false));
-    child.on('exit', (code) => resolve(code === 0));
-  });
-}
-
-/** Print the resolved install command (plus any fallback) for an agent. */
-function printInstallCommands(agent) {
-  const { command, fallback } = resolveInstall(agent);
-  console.error(`    ${c.cyan}${command}${c.reset}`);
-  if (fallback) {
-    console.error(`  ${c.dim}or, as a fallback:${c.reset}`);
-    console.error(`    ${c.cyan}${fallback}${c.reset}`);
-  }
-  console.error('');
+/** Print the install command and official install page; subc runs neither. */
+function printInstallAdvice(agent) {
+  const { command, url } = installAdvice(agent);
+  if (command) console.error(`    ${c.cyan}${command}${c.reset}`);
+  console.error(
+    `  ${c.dim}Official install page:${c.reset} ${c.cyan}${url}${c.reset}\n`,
+  );
 }
 
 /**
- * Ensure the agent's binary is resolvable. If missing:
- *   - interactive TTY: offer to run the per-OS installer (with fallback), then
- *     re-resolve against PATH + candidate dirs.
- *   - non-interactive: print the resolved install command (+ fallback) and
- *     exit 127 without running anything.
- *
- * Returns the directory containing the bin (to prepend to the child's PATH) on
- * success. May exit the process on failure or when manual action is needed.
+ * Return the directory that holds the agent's binary. subc never installs a
+ * third-party agent: when the binary is missing it prints how to install it
+ * and exits 127, in every shell.
  */
-export async function ensureInstalled(agent, { mayPrompt = true } = {}) {
+export async function ensureInstalled(agent) {
   const bin = agentBinary(agent);
-  const { command: install, fallback } = resolveInstall(agent);
-  const preferredDirs = preferredBinDirsForAgent(agent);
-  const existing = await resolveBinPath(bin, preferredDirs);
+  const existing = await resolveBinPath(bin, preferredBinDirsForAgent(agent));
   if (existing) return existing;
 
-  // Agents without an installer are launch-only. Their setup integration may
-  // configure the provider, but `subc <agent>` must never install the binary.
-  if (!install) {
-    console.error(
-      `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${bin}\` not found on PATH).${c.reset}`,
-    );
-    console.error(
-      `  Install ${agent.name} separately, then re-run ${c.cyan}subc ${agentCommandName(agent)}${c.reset}.\n`,
-    );
-    process.exit(127);
-  }
-
-  const interactive = mayPrompt && process.stdin.isTTY && process.stdout.isTTY;
-
-  if (!interactive) {
-    console.error(
-      `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${bin}\` not found on PATH).${c.reset}`,
-    );
-    console.error(`  Install it with:\n`);
-    printInstallCommands(agent);
-    process.exit(127);
-  }
-
-  console.error(`\n  ${c.bold}${agent.name}${c.reset} isn't installed.`);
-  const ok = await askYesNo(`  Install it now? ${c.dim}[Y/n]${c.reset} `);
-  if (!ok) {
-    console.error(`\n  No problem. Install it yourself with:\n`);
-    printInstallCommands(agent);
-    process.exit(127);
-  }
-
   console.error(
-    `\n  ${c.dim}Running ${c.reset}${c.cyan}${install}${c.reset}\n`,
+    `\n  ${c.red}${agent.name} isn't installed${c.reset} ${c.dim}(\`${bin}\` not found on PATH).${c.reset}`,
   );
-  let installed = await runInstaller(agent);
-
-  // Primary failed and a fallback exists — try it once.
-  if (!installed && fallback) {
-    console.error(
-      `\n  ${c.dim}That didn't work. Trying the fallback: ${c.reset}${c.cyan}${fallback}${c.reset}\n`,
-    );
-    installed = await runInstaller(agent, fallback, false);
-  }
-
-  if (!installed) {
-    console.error(`\n  ${c.red}Install failed.${c.reset} Try it manually:\n`);
-    printInstallCommands(agent);
-    process.exit(127);
-  }
-
-  // PATH hardening: the freshly-installed binary is often not on the current
-  // process's PATH. Re-resolve against PATH + candidate dirs.
-  const found = await resolveBinPath(bin, preferredDirs);
-  if (found) return found;
-
   console.error(
-    `\n  ${c.dim}Installed ${agent.name}, but it isn't on this shell's PATH yet. ` +
-      `Open a new terminal (or add a bin dir to PATH) and re-run \`subc ${agentCommandName(agent)}\`.${c.reset}\n`,
+    `  subc doesn't install ${agent.name}. Install it yourself, then re-run ${c.cyan}subc ${agentCommandName(agent)}${c.reset}.\n`,
   );
-  process.exit(0);
+  printInstallAdvice(agent);
+  process.exit(127);
 }
 
 export function parseClaudeVersion(text) {
@@ -335,14 +225,8 @@ export async function ensureMinimumVersion(
   console.error(
     `\n  Minimum supported ${agent.name} version is ${minimum}. Your version is ${version}. Upgrade to get the best experience.\n`,
   );
-  const { command, fallback } = resolveInstall(agent);
   console.error(`  Upgrade it with:`);
-  console.error(`    ${c.cyan}${command}${c.reset}`);
-  if (fallback) {
-    console.error(`  or`);
-    console.error(`    ${c.cyan}${fallback}${c.reset}`);
-  }
-  console.error('');
+  printInstallAdvice(agent);
   if (
     mayPrompt &&
     process.stdin.isTTY === true &&

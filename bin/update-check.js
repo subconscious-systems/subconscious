@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
+import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { LOGO_ART_SMALL_LINES } from './branding.js';
@@ -8,6 +10,9 @@ import { spawnWindows } from './windows/process.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
 export const UPDATE_CHECK_TIMEOUT_MS = 1500;
+export const INSTALL_SCRIPT_URL =
+  'https://raw.githubusercontent.com/subconscious-systems/subconscious/main/scripts/install.sh';
+
 const UPDATE_ACTIONS = ['Update now', 'Skip for now'];
 const UPDATE_LOGO = LOGO_ART_SMALL_LINES;
 
@@ -18,10 +23,35 @@ function shellQuote(value) {
     : `'${text.replaceAll("'", `'"'"'`)}'`;
 }
 
+/** The record scripts/install.sh leaves in the package it installed. */
+function readCurlInstall(packageDir) {
+  try {
+    const record = JSON.parse(
+      readFileSync(path.join(packageDir, '.subc-install.json'), 'utf-8'),
+    );
+    return record?.method === 'curl' && typeof record.bin_dir === 'string'
+      ? record
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function detectInstallTarget(
   here = fileURLToPath(import.meta.url),
   platform = process.platform,
 ) {
+  const packageDir = path.resolve(path.dirname(here), '..');
+  const curl = platform !== 'win32' && readCurlInstall(packageDir);
+  if (curl) {
+    // Rerun the installer into the same directories it used before.
+    const display = `curl -fsSL ${INSTALL_SCRIPT_URL} | SUBC_INSTALL_DIR=${shellQuote(packageDir)} SUBC_BIN_DIR=${shellQuote(curl.bin_dir)} bash`;
+    return {
+      command: 'bash',
+      args: ['-c', `set -o pipefail; ${display}`],
+      display,
+    };
+  }
   const normalized = here.replace(/\\/g, '/');
   if (normalized.includes('/.pnpm/') || normalized.includes('/pnpm/global/')) {
     return {

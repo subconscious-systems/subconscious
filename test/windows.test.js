@@ -9,7 +9,6 @@ import { fileURLToPath } from 'node:url';
 import { nativeTargetName } from '../bin/tui.js';
 import { detectInstallTarget } from '../bin/update-check.js';
 import { parseOptions, writeJson } from '../bin/windows/common.js';
-import { windowsInstallSpec } from '../bin/windows/install.js';
 import { executeWindowsLaunch, windowsLaunch } from '../bin/windows/launch.js';
 import {
   powershellCommand,
@@ -917,15 +916,6 @@ test('hook gateway timeouts are bounded and permissive', async (t) => {
   assert.equal(result.code, 0);
   assert.deepEqual(JSON.parse(result.stdout), {});
   assert.ok(Date.now() - started < 5000);
-});
-
-test('Windows installers never select Unix commands and check upstream asset support', () => {
-  for (const id of ['claude-code', 'codex', 'opencode', 'deepseek-harness']) {
-    const spec = windowsInstallSpec(id, {});
-    assert.doesNotMatch(spec.command, /bash|curl/);
-    if (id === 'claude-code') assert.equal(spec.fallback.command, 'npm');
-  }
-  assert.equal(windowsInstallSpec('pi'), null);
 });
 
 test('Windows upgrades retain the global npm prefix and the TUI chooses .exe', () => {

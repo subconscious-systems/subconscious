@@ -8,6 +8,7 @@
   "homepage": "https://code.visualstudio.com/docs/copilot/overview",
   "install": {
     "commands": null,
+    "url": "https://code.visualstudio.com/docs/setup/copilot",
     "method": "user",
     "package": null,
     "version": null,

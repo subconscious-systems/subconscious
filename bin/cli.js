@@ -159,7 +159,8 @@ Usage:
   subc upgrade --latest
   subc upgrade help
 
-Upgrade subconscious-cli to the latest published version.
+Upgrade subconscious-cli to the latest published version, the same way it
+was installed: npm (or pnpm, yarn, bun), or the curl installer.
 
   subc upgrade           Prompt "Do you want to upgrade?" then install @latest
   subc upgrade --latest  Skip the prompt and install @latest

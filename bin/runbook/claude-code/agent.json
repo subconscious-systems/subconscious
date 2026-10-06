@@ -8,15 +8,15 @@
   "homepage": "https://docs.anthropic.com/en/docs/claude-code",
   "install": {
     "commands": {
-      "darwin": "curl -fsSL https://claude.ai/install.sh | bash",
-      "linux": "curl -fsSL https://claude.ai/install.sh | bash",
-      "win32": "powershell -ExecutionPolicy Bypass -Command \"irm https://claude.ai/install.ps1 | iex\"",
-      "fallback": "npm i -g {package}"
+      "darwin": "npm i -g {package}",
+      "linux": "npm i -g {package}",
+      "win32": "npm i -g {package}"
     },
-    "method": "script",
+    "url": "https://code.claude.com/docs/en/setup",
+    "method": "npm",
     "package": "@anthropic-ai/claude-code",
     "version": null,
-    "channel": "installer default (unpinned)",
+    "channel": "latest (unpinned)",
     "minimum_version": "2.1.242",
     "verified": true,
     "note": "subc warns, and does not block, below minimum_version."

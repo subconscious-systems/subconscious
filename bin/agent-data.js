@@ -77,6 +77,30 @@ function validateLaunch(launch, where) {
   }
 }
 
+function validateInstall(install, where) {
+  check(isObject(install), where, 'install block is required');
+  check(
+    typeof install.url === 'string' && install.url.startsWith('https://'),
+    where,
+    'install.url must be an https:// link to the official install page',
+  );
+  const { commands } = install;
+  if (commands === null) return;
+  check(
+    isObject(commands),
+    where,
+    'install.commands must be an object or null',
+  );
+  for (const [os, command] of Object.entries(commands)) {
+    check(PLATFORMS.has(os), where, `install.commands.${os} is not an OS`);
+    check(
+      typeof command === 'string' && command,
+      where,
+      `install.commands.${os}`,
+    );
+  }
+}
+
 function validateRunbook(runbook, where) {
   check(isObject(runbook), where, 'runbook block is required');
   check(MODES.has(runbook.mode), where, `bad runbook.mode ${runbook.mode}`);
@@ -101,7 +125,7 @@ export function validateAgent(agent, id) {
   for (const key of ['command', 'name', 'description', 'protocol'])
     check(typeof agent[key] === 'string' && agent[key], where, `${key}`);
   check(isStringList(agent.aliases), where, 'aliases must be a list');
-  check(isObject(agent.install), where, 'install block is required');
+  validateInstall(agent.install, where);
   check(isObject(agent.help), where, 'help block is required');
   check(Array.isArray(agent.help.options), where, 'help.options');
   validateRunbook(agent.runbook, where);
@@ -174,6 +198,18 @@ export function installCommands(agent) {
       name ? command.replaceAll('{package}', name) : command,
     ]),
   );
+}
+
+/**
+ * The install command and official install page to show when the agent's
+ * binary is missing. subc prints these and never runs them. Windows never
+ * borrows the Linux command.
+ */
+export function installAdvice(agent, platform = process.platform) {
+  const commands = installCommands(agent);
+  const command =
+    commands?.[platform] ?? (platform === 'win32' ? null : commands?.linux);
+  return { command: command ?? null, url: agent.install.url };
 }
 
 /** The API key input that overrides API_KEY for this agent, if any. */

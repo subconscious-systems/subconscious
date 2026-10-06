@@ -8,6 +8,7 @@
   "homepage": "https://cursor.com",
   "install": {
     "commands": null,
+    "url": "https://cursor.com/download",
     "method": "user",
     "package": null,
     "version": null,
