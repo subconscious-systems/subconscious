@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.2.1](https://github.com/subconscious-systems/subconscious/compare/v6.2.0...v6.2.1) (2026-10-06)
+
+
+### Bug fixes
+
+* **tui:** draw the TUI before session discovery can block startup ([#144](https://github.com/subconscious-systems/subconscious/issues/144)) ([187e39b](https://github.com/subconscious-systems/subconscious/commit/187e39b2f15b1f879f8d9dc0f3c9648c03205734))
+
 ## [6.2.0](https://github.com/subconscious-systems/subconscious/compare/v6.1.0...v6.2.0) (2026-10-06)
 
 
