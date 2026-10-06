@@ -146,8 +146,11 @@ async function walkJsonl(root, maxDepth = 8) {
   return files;
 }
 
-async function newestFiles(root, limit) {
-  const files = await walkJsonl(root);
+async function newestFiles(root, limit, excludedFile) {
+  const excludedPath = excludedFile && path.resolve(excludedFile);
+  const files = (await walkJsonl(root)).filter(
+    (file) => !excludedPath || path.resolve(file) !== excludedPath,
+  );
   const entries = await Promise.all(
     files.map(async (file) => {
       try {
@@ -299,8 +302,8 @@ async function parseFileSession(entry, harness) {
   return null;
 }
 
-async function discoverFileSessions(root, harness, limit) {
-  const files = await newestFiles(root, limit);
+async function discoverFileSessions(root, harness, limit, excludedFile) {
+  const files = await newestFiles(root, limit, excludedFile);
   const sessions = await Promise.all(
     files.map((entry) => parseFileSession(entry, harness).catch(() => null)),
   );
@@ -356,6 +359,7 @@ async function discoverClaudeIndex(root, indexFile, max) {
       });
     }
   }
+  if (!byID.size) return null;
   return [...byID.values()]
     .sort((a, b) => b.updated - a.updated)
     .slice(0, max)
@@ -388,6 +392,7 @@ async function discoverCodexIndex(root, indexFile, max) {
       });
     }
   }
+  if (!byID.size) return null;
   const selected = [...byID.values()]
     .sort((a, b) => b.updated - a.updated)
     .slice(0, max);
@@ -474,8 +479,8 @@ export async function discoverSessions(options = {}) {
   const claude = await discoverClaudeIndex(roots.claude, indexes.claude, max);
   const codex = await discoverCodexIndex(roots.codex, indexes.codex, max);
   const groups = await Promise.all([
-    claude || discoverFileSessions(roots.claude, 'claude', max),
-    codex || discoverFileSessions(roots.codex, 'codex', max),
+    claude || discoverFileSessions(roots.claude, 'claude', max, indexes.claude),
+    codex || discoverFileSessions(roots.codex, 'codex', max, indexes.codex),
     Promise.resolve(discoverOpenCodeSessions(execute, max)),
     discoverFileSessions(roots.pi, 'pi', max),
   ]);
