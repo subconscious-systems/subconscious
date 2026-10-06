@@ -37,7 +37,6 @@ test('agent actions support per-agent install, status, and leftover uninstall', 
   const pi = agents.resolveAgent('pi');
   const claude = agents.resolveAgent('claude');
   const codex = agents.resolveAgent('codex');
-  const sc = agents.resolveAgent('sc');
 
   const cursorInstall = agents.parseAgentAction(cursor, ['install']);
   assert.equal(cursorInstall.action, 'install');
@@ -53,10 +52,6 @@ test('agent actions support per-agent install, status, and leftover uninstall', 
 
   const claudeUninstall = agents.parseAgentAction(claude, ['uninstall']);
   assert.equal(claudeUninstall.action, 'uninstall');
-
-  assert.equal(sc.id, 'subconscious-code');
-  assert.equal(agents.parseAgentAction(sc, []).action, 'launch');
-  assert.equal(agents.parseAgentAction(sc, ['install']).action, 'install');
 
   assert.throws(
     () => agents.parseAgentAction(claude, ['install']),
@@ -659,21 +654,9 @@ test('agent-specific credentials work without a shared profile key', async () =>
 });
 
 test('managed agent binaries take precedence over older PATH installations', () => {
-  const sc = agents.resolveAgent('sc');
   const managed = path.join(path.sep, 'managed', 'sc-bin');
   const cargo = path.join(path.sep, 'legacy', 'cargo-bin');
 
-  assert.deepEqual(
-    agents.preferredBinDirsForAgent(
-      sc,
-      { SC_INSTALL_DIR: managed },
-      '/home/test',
-    ),
-    [managed],
-  );
-  assert.deepEqual(agents.preferredBinDirsForAgent(sc, {}, '/home/test'), [
-    path.join('/home/test', '.local', 'bin'),
-  ]);
   assert.deepEqual(
     agents.preferredBinDirsForAgent(agents.resolveAgent('codex')),
     [],

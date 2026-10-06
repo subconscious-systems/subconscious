@@ -27,7 +27,6 @@ const HEADLESS_AGENTS = [
   'codex',
   'opencode',
   'pi',
-  'subconscious-code',
   'deepseek-harness',
 ];
 
@@ -37,7 +36,7 @@ const argsFile = path.join(testDir, 'argv');
 const stdinFile = path.join(testDir, 'stdin');
 const CALLER_STDIN = 'caller input that a headless run must not read';
 await fs.mkdir(binDir, { recursive: true });
-for (const bin of ['claude', 'codex', 'opencode', 'pi', 'marathon', 'dsh']) {
+for (const bin of ['claude', 'codex', 'opencode', 'pi', 'dsh']) {
   await fs.writeFile(
     path.join(binDir, bin),
     `#!/usr/bin/env bash\nprintf '%s\\0' "$(basename "$0")" "$@" >"$HEADLESS_ARGV_FILE"\ncat >"$HEADLESS_STDIN_FILE"\n[ -n "$HEADLESS_ENV_FILE" ] && env >"$HEADLESS_ENV_FILE"\nexit 0\n`,

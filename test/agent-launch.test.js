@@ -246,10 +246,6 @@ test('every headless agent runs exactly this argv and stdin', () => {
       ],
       stdin: 'pipe',
     },
-    'subconscious-code': {
-      argv: ['marathon', '--print=P', '--x'],
-      stdin: 'ignore',
-    },
     'deepseek-harness': {
       argv: ['dsh', '--profile', 'headless', '--patch', '{tempFile}', '--x'],
       stdin: 'pipe',
@@ -279,11 +275,6 @@ test('interactive launches run exactly this argv', () => {
   assert.deepEqual(run('opencode', ['--', '--continue']), [
     'opencode',
     '--continue',
-  ]);
-  assert.deepEqual(run('subconscious-code', ['--resume', 'x']), [
-    'marathon',
-    '--resume',
-    'x',
   ]);
   assert.deepEqual(run('deepseek-harness', ['--port', '1']), [
     'dsh',

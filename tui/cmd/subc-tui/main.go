@@ -1110,7 +1110,7 @@ func (m model) renderSessions() string {
 		rows = append(rows, row)
 	}
 	if len(rows) == 0 {
-		empty := "No Claude Code, Codex, OpenCode, Pi, or Subconscious Code sessions found."
+		empty := "No Claude Code, Codex, OpenCode, or Pi sessions found."
 		if m.state.SessionsLoading {
 			empty = m.spinner() + " Scanning local sessions..."
 		}

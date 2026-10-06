@@ -231,14 +231,6 @@ function piMessages(records) {
   });
 }
 
-function scMessages(records) {
-  return records.flatMap((record) => {
-    if (!['user', 'assistant'].includes(record.type)) return [];
-    const text = cleanText(record.text ?? record.content);
-    return text ? [{ role: record.type, text }] : [];
-  });
-}
-
 async function parseFileSession(entry, harness) {
   const records = parseLines(await readBounded(entry.file, MAX_METADATA_BYTES));
   if (!records.length) return null;
@@ -299,19 +291,6 @@ async function parseFileSession(entry, harness) {
       title: messages.find((message) => message.role === 'user')?.text,
       cwd: meta.cwd,
       model: assistant?.message?.model,
-      updated: entry.updated,
-      sourcePath: entry.file,
-    });
-  }
-
-  if (harness === 'sc') {
-    const meta = records[0] || {};
-    const messages = scMessages(records);
-    const id = String(meta.id || filename).replace(/^session-/, '');
-    return sessionRecord(harness, id, {
-      title: messages.find((message) => message.role === 'user')?.text,
-      cwd: meta.cwd,
-      model: meta.model,
       updated: entry.updated,
       sourcePath: entry.file,
     });
@@ -480,7 +459,6 @@ export async function discoverSessions(options = {}) {
     claude: path.join(home, '.claude', 'projects'),
     codex: path.join(home, '.codex', 'sessions'),
     pi: path.join(home, '.pi', 'agent', 'sessions'),
-    sc: path.join(home, '.sc', 'sessions'),
   };
   const indexes =
     options.indexes ||
@@ -500,7 +478,6 @@ export async function discoverSessions(options = {}) {
     codex || discoverFileSessions(roots.codex, 'codex', max),
     Promise.resolve(discoverOpenCodeSessions(execute, max)),
     discoverFileSessions(roots.pi, 'pi', max),
-    discoverFileSessions(roots.sc, 'sc', max),
   ]);
   const seen = new Set();
   return groups
@@ -555,7 +532,6 @@ export async function readSessionMessages(session, options = {}) {
   if (session.harness === 'claude') return claudeMessages(records);
   if (session.harness === 'codex') return codexMessages(records);
   if (session.harness === 'pi') return piMessages(records);
-  if (session.harness === 'sc') return scMessages(records);
   return [];
 }
 
@@ -695,8 +671,7 @@ export async function sessionsCommand(argv, options = {}) {
   const harnessIndex = argv.indexOf('--harness');
   const requestedHarness =
     harnessIndex >= 0 ? argv[harnessIndex + 1] : session.harness;
-  const targetHarness =
-    requestedHarness === 'marathon' ? 'sc' : requestedHarness;
+  const targetHarness = requestedHarness;
   const target = SESSION_HARNESSES[targetHarness];
   if (!target) throw new Error(`Unknown destination harness: ${targetHarness}`);
 

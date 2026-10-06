@@ -1,9 +1,8 @@
 {
   "agents": [
-    "subconscious-code",
+    "opencode",
     "claude-code",
     "codex",
-    "opencode",
     "cursor",
     "copilot",
     "pi",
