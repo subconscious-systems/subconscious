@@ -810,6 +810,8 @@ func normalizeBaseURL(raw string) (string, error) {
 	return strings.TrimRight(value, "/"), nil
 }
 
+var profileAssignmentPattern = regexp.MustCompile(`^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=`)
+
 func updateProfileValue(path, key, value string) error {
 	if path == "" {
 		return errors.New("profile path is unavailable")
@@ -825,11 +827,10 @@ func updateProfileValue(path, key, value string) error {
 	prefix := key + "="
 	found := false
 	for index, line := range lines {
-		trimmed := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
-		if strings.HasPrefix(trimmed, prefix) {
+		assignment := profileAssignmentPattern.FindStringSubmatch(line)
+		if len(assignment) > 1 && assignment[1] == key {
 			lines[index] = prefix + value
 			found = true
-			break
 		}
 	}
 	if !found {
