@@ -340,10 +340,21 @@ export async function windowsSetup(
       );
       if (document.provider !== undefined)
         object(document.provider, 'OpenCode providers');
-      present ||= Boolean(document.provider?.subconscious);
+      present ||= Boolean(
+        document.provider?.subconscious ||
+          document.provider?.['subconscious-cli'],
+      );
       if (removing && (await exists(file))) {
-        if (document.provider) delete document.provider.subconscious;
-        if (document.model?.startsWith('subconscious/')) delete document.model;
+        if (document.provider) {
+          delete document.provider.subconscious;
+          delete document.provider['subconscious-cli'];
+        }
+        if (
+          ['subconscious/', 'subconscious-cli/'].some((prefix) =>
+            document.model?.startsWith(prefix),
+          )
+        )
+          delete document.model;
         await writeJson(file, document);
       }
       if (removing)
