@@ -1,5 +1,18 @@
 # Changelog
 
+## [6.2.0](https://github.com/subconscious-systems/subconscious/compare/v6.1.0...v6.2.0) (2026-10-06)
+
+
+### Features
+
+* install the CLI with curl and stop installing agents ([#142](https://github.com/subconscious-systems/subconscious/issues/142)) ([ab194a8](https://github.com/subconscious-systems/subconscious/commit/ab194a8ecb21b52681793c58f17d8f0667a7ebb7))
+* remove Marathon and make OpenCode the default coding agent ([#130](https://github.com/subconscious-systems/subconscious/issues/130)) ([4f51d8f](https://github.com/subconscious-systems/subconscious/commit/4f51d8f6861c13e5a220606d95acd0350b32334a))
+
+
+### Bug fixes
+
+* **models:** let an explicit SUBCONSCIOUS_MODELS pin the launch catalog ([#136](https://github.com/subconscious-systems/subconscious/issues/136)) ([6c46935](https://github.com/subconscious-systems/subconscious/commit/6c469355ad90ca2965b6f4c233c5a88bc7d614b5))
+
 ## [6.1.0](https://github.com/subconscious-systems/subconscious/compare/v6.0.1...v6.1.0) (2026-10-05)
 
 
