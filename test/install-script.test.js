@@ -17,7 +17,10 @@ async function fakeRegistry(root) {
   const registry = path.join(root, 'registry');
   const versions = path.join(registry, 'subconscious-cli');
   await fs.mkdir(versions, { recursive: true });
-  const publish = async (version, { tags = [], integrity } = {}) => {
+  const publish = async (
+    version,
+    { tags = [], integrity, failAfterSwap = false } = {},
+  ) => {
     const src = path.join(root, `src-${version}`);
     await fs.mkdir(path.join(src, 'package/bin/native'), { recursive: true });
     await fs.writeFile(
@@ -26,7 +29,7 @@ async function fakeRegistry(root) {
     );
     await fs.writeFile(
       path.join(src, 'package/bin/cli.js'),
-      `#!/usr/bin/env node\nconsole.log(${JSON.stringify(version)});\n`,
+      `#!/usr/bin/env node\n${failAfterSwap ? "if (!__filename.includes('/extract/')) process.exit(3);\n" : ''}console.log(${JSON.stringify(version)});\n`,
     );
     await fs.writeFile(path.join(src, 'package/bin/native/subc-tui'), 'x', {
       mode: 0o644,
@@ -148,4 +151,59 @@ test('install.sh explains a bad version, a missing release, and a taken link', {
   const taken = install(root, registry.url, { SUBC_BIN_DIR: binDir });
   assert.equal(taken.status, 1);
   assert.match(taken.stderr, /exists and is not a link/);
+});
+
+test('install.sh refuses to replace a directory that is not a subc install', {
+  skip,
+}, async () => {
+  const root = realpathSync(
+    await fs.mkdtemp(path.join(os.tmpdir(), 'subc-install-')),
+  );
+  const registry = await fakeRegistry(root);
+  await registry.publish('1.0.0', { tags: ['latest'] });
+  const foreign = path.join(root, 'projects');
+  await fs.mkdir(foreign);
+  await fs.writeFile(path.join(foreign, 'notes.txt'), 'keep me');
+  await fs.writeFile(
+    path.join(foreign, 'package.json'),
+    JSON.stringify({ name: 'something-else' }),
+  );
+
+  const result = install(root, registry.url, { SUBC_INSTALL_DIR: foreign });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /holds no subconscious-cli install/);
+  assert.deepEqual((await fs.readdir(foreign)).sort(), [
+    'notes.txt',
+    'package.json',
+  ]);
+  assert.equal(existsSync(path.join(root, 'home/.local/bin/subc')), false);
+});
+
+test('install.sh restores the old install when the new one fails after the swap', {
+  skip,
+}, async () => {
+  const root = realpathSync(
+    await fs.mkdtemp(path.join(os.tmpdir(), 'subc-install-')),
+  );
+  const registry = await fakeRegistry(root);
+  await registry.publish('1.0.0', { tags: ['latest'] });
+  assert.equal(install(root, registry.url).status, 0);
+  await registry.publish('2.0.0', { tags: ['latest'], failAfterSwap: true });
+
+  const result = install(root, registry.url);
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /previous install is back/);
+  const link = path.join(root, 'home/.local/bin/subc');
+  assert.equal(execFileSync(link, { encoding: 'utf8' }).trim(), '1.0.0');
+  const share = await fs.readdir(path.join(root, 'home/.local/share'));
+  assert.deepEqual(share, ['subconscious-cli']);
+});
+
+test('install.sh refuses a registry that is not https', { skip }, async () => {
+  const root = realpathSync(
+    await fs.mkdtemp(path.join(os.tmpdir(), 'subc-install-')),
+  );
+  const result = install(root, 'http://registry.npmjs.org');
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /must be an https:\/\/ URL/);
 });
