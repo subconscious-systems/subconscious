@@ -316,3 +316,40 @@ test('runTui aborts leftover remote work when the TUI exits first', async () => 
   assert.equal(catalogCalls, 1);
   assert.ok(Date.now() - started < 2000);
 });
+
+test('runTui starts the TUI before any remote work', async () => {
+  await profiles.ensureProfile('order-tui', 'secret-key');
+  const fake = await writeFakeTui(`
+    import fs from 'node:fs';
+    const result = process.argv[process.argv.indexOf('--result') + 1];
+    fs.writeFileSync(result, JSON.stringify({ args: ['whoami'] }) + '\\n');
+  `);
+  const { spawn } = await import('node:child_process');
+  const events = [];
+  const result = await runTui({
+    profileName: 'order-tui',
+    binary: process.execPath,
+    binaryArgs: [fake],
+    stdio: 'ignore',
+    disableUpdateCheck: true,
+    spawn: (...args) => {
+      events.push('tui');
+      return spawn(...args);
+    },
+    resolveCatalog: async () => {
+      events.push('catalog');
+      return {
+        models: ['subconscious/live'],
+        source: 'available',
+        error: null,
+      };
+    },
+    discoverSessions: async () => {
+      events.push('sessions');
+      return [];
+    },
+  });
+
+  assert.equal(result.args[0], 'whoami');
+  assert.equal(events[0], 'tui');
+});

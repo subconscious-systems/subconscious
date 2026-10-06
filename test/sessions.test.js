@@ -276,3 +276,38 @@ test('transcript readers ignore non-object JSONL records without losing messages
     ]);
   }
 });
+
+test('a stuck opencode cannot block session discovery or the event loop', {
+  skip: process.platform === 'win32',
+}, async () => {
+  const binDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-opencode-'));
+  const fake = path.join(binDir, 'opencode');
+  await fs.writeFile(fake, "#!/bin/sh\ntrap '' TERM\nexec sleep 20\n", {
+    mode: 0o755,
+  });
+  const originalPath = process.env.PATH;
+  process.env.PATH = `${binDir}${path.delimiter}${originalPath}`;
+  const events = [];
+  const timer = setTimeout(() => events.push('timer'), 50);
+  const started = Date.now();
+  try {
+    const sessions = await discoverSessions({
+      roots,
+      commandTimeoutMs: 300,
+    });
+    events.push('discovered');
+    assert.ok(
+      Date.now() - started < 3000,
+      `discovery took ${Date.now() - started}ms`,
+    );
+    assert.deepEqual(events, ['timer', 'discovered']);
+    assert.equal(
+      sessions.some((session) => session.harness === 'opencode'),
+      false,
+    );
+  } finally {
+    clearTimeout(timer);
+    process.env.PATH = originalPath;
+    await fs.rm(binDir, { recursive: true, force: true });
+  }
+});

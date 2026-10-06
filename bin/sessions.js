@@ -1,4 +1,3 @@
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -6,7 +5,7 @@ import { AGENTS, agentById, agentCommandName } from './agent-data.js';
 import { resolveAgent, runAgent } from './agents.js';
 
 import { c } from './colors.js';
-import { spawnWindowsSync } from './windows/process.js';
+import { runCommand } from './command-output.js';
 
 const MAX_CANDIDATE_FILES = 160;
 const MAX_READ_BYTES = 2 * 1024 * 1024;
@@ -399,12 +398,11 @@ async function discoverCodexIndex(root, indexFile, max) {
   );
 }
 
-function commandResult(execute, command, args, options = {}) {
-  const result = execute(command, args, {
-    encoding: 'utf8',
-    timeout: options.timeout ?? 5_000,
+async function commandResult(execute, command, args, options = {}) {
+  const result = await execute(command, args, {
+    timeout: options.timeout,
+    signal: options.signal,
     env: { ...process.env, NO_COLOR: '1' },
-    maxBuffer: 4 * 1024 * 1024,
   });
   if (result.error || result.status !== 0) return '';
   return String(result.stdout || '').trim();
@@ -422,18 +420,18 @@ function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
 }
 
-function discoverOpenCodeSessions(execute, max) {
+async function discoverOpenCodeSessions(execute, max, options = {}) {
   const query = [
     'select id, title, directory, time_created, time_updated, model',
     'from session where time_archived is null',
     `order by time_updated desc limit ${Math.max(1, Math.min(500, max))}`,
   ].join(' ');
-  const output = commandResult(execute, 'opencode', [
-    'db',
-    '--format',
-    'json',
-    query,
-  ]);
+  const output = await commandResult(
+    execute,
+    'opencode',
+    ['db', '--format', 'json', query],
+    options,
+  );
   if (!output) return [];
   try {
     return JSON.parse(output).map((record) =>
@@ -452,9 +450,7 @@ function discoverOpenCodeSessions(execute, max) {
 export async function discoverSessions(options = {}) {
   const home = options.home || os.homedir();
   const max = options.max || 500;
-  const execute =
-    options.execute ||
-    (process.platform === 'win32' ? spawnWindowsSync : spawnSync);
+  const execute = options.execute || runCommand;
   const roots = options.roots || {
     claude: path.join(home, '.claude', 'projects'),
     codex: path.join(home, '.codex', 'sessions'),
@@ -476,7 +472,10 @@ export async function discoverSessions(options = {}) {
   const groups = await Promise.all([
     claude || discoverFileSessions(roots.claude, 'claude', max),
     codex || discoverFileSessions(roots.codex, 'codex', max),
-    Promise.resolve(discoverOpenCodeSessions(execute, max)),
+    discoverOpenCodeSessions(execute, max, {
+      timeout: options.commandTimeoutMs,
+      signal: options.signal,
+    }),
     discoverFileSessions(roots.pi, 'pi', max),
   ]);
   const seen = new Set();
@@ -500,7 +499,7 @@ async function openCodeMessages(session, execute) {
     "and json_extract(part.data, '$.type') = 'text'",
     'order by message.time_created asc, part.time_created asc',
   ].join(' ');
-  const output = commandResult(execute, 'opencode', [
+  const output = await commandResult(execute, 'opencode', [
     'db',
     '--format',
     'json',
@@ -521,11 +520,7 @@ async function openCodeMessages(session, execute) {
 
 export async function readSessionMessages(session, options = {}) {
   if (session.harness === 'opencode') {
-    return openCodeMessages(
-      session,
-      options.execute ||
-        (process.platform === 'win32' ? spawnWindowsSync : spawnSync),
-    );
+    return openCodeMessages(session, options.execute || runCommand);
   }
   if (!session.sourcePath) return [];
   const records = parseLines(await readBounded(session.sourcePath));

@@ -1,6 +1,6 @@
 // Windows process handling. Unix callers keep using their existing launch paths.
 
-import { execFileSync, spawn, spawnSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -187,23 +187,6 @@ export function spawnWindows(command, args, options = {}) {
     env: invocation.env,
     shell: false,
   });
-}
-
-export function spawnWindowsSync(command, args, options = {}) {
-  try {
-    const invocation = windowsInvocation(
-      command,
-      args,
-      options.env || process.env,
-    );
-    return spawnSync(invocation.command, invocation.args, {
-      ...options,
-      env: invocation.env,
-      shell: false,
-    });
-  } catch (error) {
-    return { error, status: null, stdout: '', stderr: '' };
-  }
 }
 
 export function runWindows(command, args, options = {}) {
