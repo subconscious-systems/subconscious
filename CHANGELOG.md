@@ -1,15 +1,5 @@
 # Changelog
 
-## Unreleased
-
-### Harness manifest `install` changes
-
-`schema_version` stays 1. In `subc harness-manifest --json`:
-
-* Every harness gains `install.url`, the vendor's official install page.
-* `claude-code`: `install.method` is now `npm`, not `script`, and `install.commands` holds `npm i -g @anthropic-ai/claude-code` for each OS. The `fallback` key is gone.
-* subc shows `install.commands` and never runs them.
-
 ## [6.1.0](https://github.com/subconscious-systems/subconscious/compare/v6.0.1...v6.1.0) (2026-10-05)
 
 
