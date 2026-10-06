@@ -1,10 +1,13 @@
 import os from 'node:os';
 import path from 'node:path';
-import readline from 'node:readline';
-import { agentBinary, agentInstallDirs } from '../agent-data.js';
+import {
+  agentBinary,
+  agentCommandName,
+  agentInstallDirs,
+  installAdvice,
+} from '../agent-data.js';
 import { separatorIndex } from '../headless-args.js';
 import { parseOptions } from './common.js';
-import { installWindowsAgent, windowsInstallSpec } from './install.js';
 import { executeWindowsLaunch, windowsLaunch } from './launch.js';
 import {
   readWindowsVersion,
@@ -15,21 +18,6 @@ import {
   windowsPath,
 } from './process.js';
 import { windowsSetup } from './setup.js';
-
-const askInstall = (name) =>
-  new Promise((resolve) => {
-    const rl = readline.createInterface({
-      input: process.stdin,
-      output: process.stdout,
-    });
-    rl.question(
-      `  ${name} isn't installed. Install it now? [Y/n] `,
-      (answer) => {
-        rl.close();
-        resolve(['', 'y', 'yes'].includes(answer.trim().toLowerCase()));
-      },
-    );
-  });
 
 export async function runWindowsAgent(agent, argv, dependencies) {
   const {
@@ -106,31 +94,14 @@ export async function runWindowsAgent(agent, argv, dependencies) {
       preferredDirs,
     });
     if (!executable) {
-      const installer = windowsInstallSpec(agent.id, environment);
-      if (
-        !installer ||
-        headless ||
-        !process.stdin.isTTY ||
-        !process.stdout.isTTY ||
-        !(await askInstall(agent.name))
-      ) {
-        console.error(
-          `${agent.name} isn't installed. ${installer ? `Install it with: ${installer.display}` : 'Install it separately, then rerun subc.'}`,
-        );
-        return finish(127);
-      }
-      const installed = await installWindowsAgent(agent.id, environment);
-      if (installed) return finish(installed);
-      executable = resolveWindowsExecutable(bin, {
-        env: environment,
-        preferredDirs,
-      });
-      if (!executable) {
-        console.error(
-          `Installed ${agent.name}, but ${bin} was not found. Add its installation directory to PATH or restart your terminal.`,
-        );
-        return finish(127);
-      }
+      // subc never installs a third-party agent; it only says how.
+      const { command, url } = installAdvice(agent, 'win32');
+      console.error(
+        `${agent.name} isn't installed. subc doesn't install it. Install it yourself, then rerun subc ${agentCommandName(agent)}.`,
+      );
+      if (command) console.error(`  Install it with: ${command}`);
+      console.error(`  Official install page: ${url}`);
+      return finish(127);
     }
     if (agent.id === 'claude-code') {
       const version = dependencies.parseClaudeVersion(

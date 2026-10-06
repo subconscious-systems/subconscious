@@ -21,7 +21,7 @@ the default gateway, model capabilities, and the settings every agent uses
 | Field | Read by |
 | --- | --- |
 | `id`, `command`, `aliases`, `name`, `description` | routing, `subc help`, the TUI menu |
-| `install` | the installer prompt, `--version` warning (`minimum_version`), Windows installs; `{package}` fills in the commands |
+| `install` | the missing-agent message, agent help, and the upgrade warning (`minimum_version`); `{package}` fills in `commands` |
 | `runbook` | which script launches the agent (none means the binary is run directly) and which setup actions exist |
 | `help` | `subc <agent> help`; flags with a `help` text are added from `inputs` |
 | `sessions`, `launch.resume`, `launch.handoff` | `subc sessions resume` |
@@ -30,6 +30,18 @@ the default gateway, model capabilities, and the settings every agent uses
 | `env` | the env subc gives the agent: the first set `override`, otherwise `value` |
 | `config` | `cli-config` entries become `config_flag NAME=VALUE` (Codex `-c`) when `when` holds; other entries describe files the runbooks write |
 | `capabilities`, `prerequisites` | the harness manifest only |
+
+## Install data is display-only
+
+subc never installs an agent. When an agent's binary is missing, subc prints
+`install.commands` for the current OS and `install.url`, then exits with
+status 127. Windows never shows the Linux command. Rules for `install`, checked
+by `bin/agent-data.js` and `test/agent-install-policy.test.js`:
+
+- `url` is required: an `https://` link to the vendor's official install page.
+- `commands` is `null`, or an object keyed by `darwin`, `linux`, and `win32`.
+- A command is one the user can paste, such as `npm i -g {package}`. It never
+  pipes a downloaded script into a shell.
 
 Values may use `{baseUrl}`, `{baseUrlV1}`, `{apiKey}`, `{model}`, `{prompt}`,
 `{args}`, `{config}`, and `${NAME}` for another input or env entry.

@@ -8,6 +8,7 @@
   "homepage": "https://pi.dev",
   "install": {
     "commands": null,
+    "url": "https://pi.dev",
     "method": null,
     "package": null,
     "version": null,

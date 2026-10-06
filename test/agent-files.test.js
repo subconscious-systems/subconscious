@@ -45,8 +45,8 @@ test('every agent file is listed once in shared.json, and nothing else is', () =
 test('every agent file passes validation and names scripts that exist', () => {
   for (const agent of AGENTS) {
     validateAgent(readAgentFile(agent.id), agent.id);
-    const { script, setup_script, binary_install_script } = agent.runbook;
-    for (const file of [script, setup_script, binary_install_script]) {
+    const { script, setup_script } = agent.runbook;
+    for (const file of [script, setup_script]) {
       if (!file) continue;
       accessSync(path.join(RUNBOOK_DIR, agent.id, file), constants.R_OK);
     }

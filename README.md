@@ -4,19 +4,53 @@ Log in to Subconscious, then run coding agents against the Subconscious gateway.
 
 ## Quick start
 
+Install with npm:
+
 ```bash
 npm install -g subconscious-cli
+```
+
+Or install on macOS or Linux without npm:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/subconscious-systems/subconscious/main/scripts/install.sh | bash
+```
+
+Then log in and launch an agent:
+
+```bash
 subc login
 subc opencode
 subc claude
 ```
 
+The curl installer downloads the `subconscious-cli` tarball from the npm
+registry, checks it against the registry's integrity hash, and installs it in
+`~/.local/share/subconscious-cli` with a `subc` link in `~/.local/bin`. It does
+not need npm, so a registry policy that blocks `npm install -g` does not stop
+it. Node.js 18 or newer must already be installed, because `subc` runs on it.
+If `~/.local/bin` is not on your `PATH`, the installer prints the line to add.
+Run it again to reinstall or update. These variables change its defaults:
+
+| Variable | Default |
+| --- | --- |
+| `SUBC_VERSION` | `latest` (a version such as `6.1.0`, or a dist-tag) |
+| `SUBC_INSTALL_DIR` | `~/.local/share/subconscious-cli` |
+| `SUBC_BIN_DIR` | `~/.local/bin` |
+| `SUBC_REGISTRY` | `https://registry.npmjs.org` |
+
+On Windows, use npm (see [Native Windows support](#native-windows-support)).
+
+subc does not install the coding agents. Install each agent you use from its
+vendor. If an agent is missing, `subc <agent>` prints its install command and
+official install page, then exits with status 127.
+
 Every interactive `subc` command checks npm for a newer CLI release. When an
 update is available, a notice shows the installed and latest versions and lets
 you select **Update now** or **Skip for now** with the arrow keys and Enter.
 Each option describes what it will do, and the active option is highlighted.
-Update runs `npm install -g subconscious-cli@latest`; Skip continues the
-requested command.
+Update runs `npm install -g subconscious-cli@latest`, or the curl installer
+again if that is how subc was installed; Skip continues the requested command.
 Non-interactive commands automatically skip, and registry errors and timeouts
 never block the requested command. Set `SUBC_DISABLE_UPDATE_CHECK=1` to suppress
 the check in offline automation.
@@ -104,8 +138,9 @@ Update with `npm.cmd install -g subconscious-cli@latest` or `subc.cmd upgrade --
 
 If PowerShell's execution policy blocks npm-generated `.ps1` entry points, use
 `npm.cmd` and `subc.cmd` or run the same commands in Command Prompt. No policy
-change is required. Pi must already be installed; other terminal agents offer
-their Windows installer when missing in an interactive terminal.
+change is required. subc does not install the agents on Windows either. If an
+agent is missing, subc prints its install command and official install page,
+then exits with status 127.
 
 Native executables and standard npm `.cmd` shims are supported. The launcher
 invokes the underlying executable or Node entry point directly, preserving
@@ -206,7 +241,7 @@ Each `harnesses.<id>` entry has:
 
 | Field | Meaning |
 | --- | --- |
-| `install` | `method`, `package` or `repository`, `version` or `channel`, `minimum_version`, release `targets`, and the per-OS `commands`. |
+| `install` | `method`, `package` or `repository`, `version` or `channel`, `minimum_version`, release `targets`, the per-OS `commands`, and `url`, the vendor's official install page. subc shows `commands` and `url` and never runs them. |
 | `prerequisites` | Commands the runbook needs, such as `jq`, with what needs them and whether they are required. `a\|b` means either one. |
 | `binary` | Executable name, or `null` for IDE integrations. |
 | `launch` | `argv` template, `headless_argv` for `subc <agent> headless` (absent when unsupported), `headless_stdin` when the prompt is passed on stdin instead, `headless_platforms` (`darwin`, `linux`, `win32`) where it works, `resume` and `handoff` argv for `subc sessions`, Codex's `config_flag`, and whether a launch also writes persistent files. |
@@ -224,7 +259,7 @@ Enumerated values:
 
 | Field | Values |
 | --- | --- |
-| `install.method` | `npm`, `script`, `github-release`, `user`, `null` |
+| `install.method` | `npm`, `user`, `null` |
 | `compaction.default` | `on`, `unknown` |
 | knob `kind` | `env`, `cli-config`, `config-field`, `model-catalog-field`, `null` |
 | `threshold.semantics` | `window`, `trigger` |
@@ -293,8 +328,9 @@ conversation stores do not expose a stable local resume interface. A session
 whose local transcript is missing remains available for native resume but does
 not offer cross-harness destinations.
 
-If OpenCode, Claude Code, Codex, or DeepSeek Harness is missing, an interactive terminal offers
-to install it before launching. Pi refreshes its Subconscious provider on every
+subc never installs OpenCode, Claude Code, Codex, DeepSeek Harness, or Pi. If
+one is missing, subc prints its install command and official install page, then
+exits with status 127, in interactive and headless runs alike. Pi refreshes its Subconscious provider on every
 `subc pi` launch while preserving all other providers in `models.json`; its
 executable must already be installed.
 

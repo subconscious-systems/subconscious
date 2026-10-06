@@ -523,9 +523,8 @@ async function launchAgent(agent, argv, profile, headless) {
   const apiKey = await requireApiKey(profile, agent);
   if (!apiKey) return 1;
 
-  const mayPrompt = !headless;
-  const binDir = await ensureInstalled(agent, { mayPrompt });
-  await ensureMinimumVersion(agent, binDir, { mayPrompt });
+  const binDir = await ensureInstalled(agent);
+  await ensureMinimumVersion(agent, binDir, { mayPrompt: !headless });
   const catalog = await resolvedModelsForLaunch(
     profile,
     apiKey,
