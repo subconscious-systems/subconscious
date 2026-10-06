@@ -283,7 +283,8 @@ export const RUNBOOK_ENV_DESCRIPTION = Object.freeze({
     {
       name: 'SUBCONSCIOUS_MODELS',
       value: '{catalog}',
-      description: 'Newline-separated live model catalog.',
+      description:
+        'Newline-separated model catalog. Set by the caller, it pins the catalog and skips live discovery; otherwise it is the live catalog.',
     },
     {
       name: 'PATH',
@@ -362,6 +363,7 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
     apiKey,
     selectedModel,
     fallbackModels: PACKAGED_MODELS,
+    pinnedModels: process.env.SUBCONSCIOUS_MODELS,
   });
   if (catalog.source === 'public' && apiKey) {
     console.error(`  ${c.dim}${PUBLIC_CATALOG_FALLBACK_MESSAGE}${c.reset}\n`);

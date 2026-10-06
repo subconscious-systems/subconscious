@@ -175,10 +175,22 @@ export async function resolveModelCatalog({
   apiKey,
   selectedModel,
   fallbackModels = [],
+  pinnedModels,
   fetchImpl = globalThis.fetch,
   timeoutMs = DEFAULT_MODEL_FETCH_TIMEOUT_MS,
   signal,
 }) {
+  // A caller that names its catalog (a benchmark run, a CI job) needs the same
+  // models on every launch, whatever the gateway lists that day.
+  const pinned = pinnedModels?.split(/\r?\n/).filter((id) => id.trim());
+  if (pinned?.length) {
+    return {
+      models: normalizeModelIds(pinned, selectedModel),
+      source: 'pinned',
+      error: null,
+    };
+  }
+
   const key = apiKey?.trim() || '';
 
   if (key) {
