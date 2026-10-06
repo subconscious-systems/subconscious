@@ -411,6 +411,7 @@ function spawnAndWait(command, args, options = {}) {
       stdio: options.stdio ?? 'inherit',
     });
     child.once('error', reject);
+    options.onSpawn?.();
     child.once('exit', (code, signal) => {
       if (signal) {
         reject(new Error(`Subconscious TUI exited with signal ${signal}`));
@@ -458,13 +459,17 @@ async function runTuiOnce(options) {
     }
   };
 
-  const remote = providedState
-    ? Promise.resolve()
-    : loadRemoteTuiUpdates(state, {
-        ...options,
-        signal: controller.signal,
-        writePatch,
-      });
+  // Remote work starts only once the TUI process exists, so nothing it does
+  // (a slow gateway, a stuck session probe) can delay the first frame.
+  let remote = Promise.resolve();
+  const startRemote = () => {
+    if (providedState) return;
+    remote = loadRemoteTuiUpdates(state, {
+      ...options,
+      signal: controller.signal,
+      writePatch,
+    });
+  };
 
   try {
     // This state intentionally contains only display data. API keys are used
@@ -483,7 +488,12 @@ async function runTuiOnce(options) {
         '--updates',
         updatesPath,
       ],
-      { cwd: executable.cwd, spawn: options.spawn, stdio: options.stdio },
+      {
+        cwd: executable.cwd,
+        spawn: options.spawn,
+        stdio: options.stdio,
+        onSpawn: startRemote,
+      },
     );
     controller.abort();
     await remote.catch(() => {});
