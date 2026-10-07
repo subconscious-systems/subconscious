@@ -1,12 +1,16 @@
+import path from 'node:path';
 import { agentInputs, agentKeyName } from './agent-data.js';
 import { openCodeConfigFromEnv } from './opencode-provider.js';
-import { isUnsetSetting } from './profiles.js';
+import { configDir, isUnsetSetting } from './profiles.js';
 
 // One pass, so a substituted value (a prompt, a settings document) is never
 // scanned again for placeholders.
 const PLACEHOLDER = /\$\{([A-Z_][A-Z0-9_]*)\}(\/)?|\{([A-Za-z][A-Za-z0-9]*)\}/g;
 const present = (value) =>
   value !== undefined && value !== null && value !== '';
+
+// CLAUDE_CODE_ISOLATE values that stop Claude Code config isolation.
+const ISOLATE_OFF = new Set(['off', '0', 'false', 'no']);
 
 function tokensFor(agent, env, extra) {
   const baseUrl = String(env.GATEWAY_URL ?? '').replace(/\/+$/, '');
@@ -19,6 +23,18 @@ function tokensFor(agent, env, extra) {
     // Left for the runbook, which writes the file and substitutes its path.
     tempFile: '{tempFile}',
     opencodeConfig: () => JSON.stringify(openCodeConfigFromEnv(env)),
+    // Claude Code config isolation: subc sessions keep their Claude config
+    // (settings, sessions, plugins, credentials) under the subc config dir
+    // instead of ~/.claude, so session state cannot bleed into a plain
+    // `claude` installation. Empty when CLAUDE_CODE_ISOLATE opts out.
+    claudeConfigDir: () => {
+      const setting = String(env.CLAUDE_CODE_ISOLATE ?? '')
+        .trim()
+        .toLowerCase();
+      if (ISOLATE_OFF.has(setting)) return '';
+      const base = String(env.SUBC_CONFIG_DIR ?? '').trim() || configDir();
+      return path.join(base, 'claude-code');
+    },
     ...extra,
   };
 }
@@ -116,15 +132,24 @@ export function resolveInputs(
   return resolved;
 }
 
-/** Set each env entry: the first non-empty override, otherwise its value. */
+/**
+ * Set each env entry: the first non-empty override, otherwise its value.
+ * An entry marked `optional` is unset when its value renders empty, so a
+ * template can drop a variable instead of exporting an empty string.
+ */
 export function resolveAgentEnv(agent, env) {
   const resolved = { ...env };
   for (const entry of agent.env) {
     const override = (entry.override || [])
       .map((name) => resolved[name])
       .find(present);
-    resolved[entry.name] =
-      override !== undefined ? override : render(entry.value, agent, resolved);
+    if (override !== undefined) {
+      resolved[entry.name] = override;
+      continue;
+    }
+    const value = render(entry.value, agent, resolved);
+    if (entry.optional && !present(value)) delete resolved[entry.name];
+    else resolved[entry.name] = value;
   }
   return resolved;
 }
