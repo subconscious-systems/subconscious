@@ -24,15 +24,21 @@
   "runbook": {
     "mode": "launch",
     "setup_script": "install.sh",
-    "setup_actions": ["status", "uninstall"]
+    "setup_actions": ["status", "uninstall", "vscode"]
   },
   "help": {
-    "usage": "subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]",
-    "behavior": "Launches Claude Code with the active Subconscious profile and model picker. Sessions keep their Claude config in an isolated dir (~/.subconscious/claude-code), so subc and a plain Claude installation do not share settings. Persistent files are leftover-only: subc claude uninstall.",
+    "usage": "subc [-p NAME] claude [help|status|uninstall|vscode COMMAND] [Claude arguments...]",
+    "behavior": "Launches Claude Code with the active Subconscious profile and model picker. Sessions keep their Claude config in an isolated dir (~/.subconscious/claude-code), so subc and a plain Claude installation do not share settings. Persistent files are leftover-only: subc claude uninstall. The VS Code extension gets the same env through subc claude vscode install, snapshotted for exact restore.",
     "options": [
       ["help", "Show this help"],
       ["status", "Inspect leftover ~/.claude/subconscious-gateway.env"],
       ["uninstall", "Remove leftover ~/.claude/subconscious-gateway.env"],
+      [
+        "vscode install",
+        "Configure the Claude Code VS Code extension (all detected editors, or --app APP), snapshotting prior settings"
+      ],
+      ["vscode uninstall", "Restore the snapshotted editor settings exactly"],
+      ["vscode status", "Report install and snapshot state per editor"],
       ["--model MODEL", "Override the profile model for this launch"]
     ],
     "args": ["-- ARGS...", "Pass remaining arguments to Claude Code"]
@@ -124,6 +130,13 @@
       "label": "Isolated Claude config",
       "description": "When on, subc claude sessions keep their Claude config (settings, sessions, plugins, credentials) in ~/.subconscious/claude-code, so subc sessions and a plain `claude` installation cannot write into each other.",
       "comment": "CLAUDE_CODE_ISOLATE=off shares ~/.claude with plain Claude Code."
+    },
+    {
+      "name": "VSCODE_APP",
+      "label": "VS Code application",
+      "description": "Editor for the VS Code extension commands; blank configures every detected editor.",
+      "type": "choice",
+      "choices": ["", "Code", "Code - Insiders", "VSCodium", "Cursor", "all"]
     },
     { "name": "MAX_CONCURRENT_SUBAGENTS" },
     {
@@ -251,6 +264,22 @@
         }
       },
       "description": "Replaces the built-in model picker with the live catalog and allowlists only those models."
+    },
+    {
+      "kind": "file",
+      "path": "<VS Code user dir>/settings.json",
+      "lifetime": "persistent",
+      "value": {
+        "claudeCode.environmentVariables": "[{ name, value }] mirroring the launch env",
+        "claudeCode.disableLoginPrompt": true
+      },
+      "description": "Written by subc claude vscode install for the Claude Code extension (VS Code, Code - Insiders, VSCodium, Cursor). Only the two listed keys are owned; comments and other settings are preserved. Uninstall restores the snapshotted values."
+    },
+    {
+      "kind": "file",
+      "path": "~/.subconscious/claude-vscode-snapshot.json",
+      "lifetime": "persistent",
+      "description": "Prior values of the two owned settings keys, per editor, captured before the first install (mode 0600; honors $SUBC_CONFIG_DIR). subc claude vscode uninstall restores from it, then removes the record."
     },
     {
       "kind": "file",

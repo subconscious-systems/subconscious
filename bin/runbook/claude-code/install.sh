@@ -6,12 +6,18 @@
 #
 #   subc claude status
 #   subc claude uninstall
+#   subc claude vscode install | uninstall | status   (delegates to vscode.sh)
 #
 # Claude Code sends native x-claude-code-session-id headers, so the gateway
 # correlates requests without help from subc.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ "${1:-}" == "vscode" ]]; then
+  exec bash "${SCRIPT_DIR}/vscode.sh" "$@"
+fi
 
 CLAUDE_DIR="${HOME}/.claude"
 ENV_FILE="${CLAUDE_DIR}/subconscious-gateway.env"
@@ -22,10 +28,12 @@ usage() {
 Usage:
   subc claude status
   subc claude uninstall
+  subc claude vscode install | uninstall | status
   subc claude help
 
 Claude Code is launch-only: subc claude. Uninstall removes leftover
-~/.claude/subconscious-gateway.env from older persistent setup.
+~/.claude/subconscious-gateway.env from older persistent setup. The vscode
+commands configure the Claude Code VS Code extension with snapshot/restore.
 EOF
 }
 

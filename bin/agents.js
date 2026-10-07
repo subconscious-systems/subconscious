@@ -108,6 +108,16 @@ export function parseAgentAction(agent, argv = []) {
     return { action: first, args: argv };
   }
 
+  if (first === 'vscode') {
+    // Scoped per agent: only a `vscode`-declaring runbook claims the word,
+    // so for every other agent it still passes through to the launched CLI.
+    if (!actions.includes('vscode'))
+      throw new Error(
+        `${agent.name} does not support 'vscode'. Try subc ${command} help.`,
+      );
+    return { action: 'vscode', args: argv };
+  }
+
   if (first === 'headless') {
     if (!agent.launch?.headless_argv) {
       throw new Error(`${agent.name} does not support headless mode.`);
@@ -204,7 +214,9 @@ export function extractModel(argv, profile) {
 }
 
 function isSetupWithoutAuth(argv) {
-  return ['status', 'uninstall', '-h', '--help', 'help'].includes(argv[0]);
+  const AUTH_FREE = ['status', 'uninstall', '-h', '--help', 'help'];
+  if (argv[0] === 'vscode') return AUTH_FREE.includes(argv[1]);
+  return AUTH_FREE.includes(argv[0]);
 }
 
 function optionValue(argv, name) {
@@ -451,11 +463,17 @@ async function runSetupAction(agent, parsed, profile) {
   const code = await runRunbookSetup(agent, setupArgs, profile);
   if (code === 0) {
     const message =
-      parsed.action === 'status'
-        ? `${agent.name} status check complete.`
-        : parsed.action === 'uninstall'
-          ? `${agent.name} integration removed.`
-          : `${agent.name} setup complete.`;
+      parsed.action === 'vscode'
+        ? parsed.args[1] === 'uninstall'
+          ? `${agent.name} VS Code settings restored.`
+          : parsed.args[1] === 'status'
+            ? `${agent.name} VS Code status check complete.`
+            : `${agent.name} VS Code extension configured.`
+        : parsed.action === 'status'
+          ? `${agent.name} status check complete.`
+          : parsed.action === 'uninstall'
+            ? `${agent.name} integration removed.`
+            : `${agent.name} setup complete.`;
     console.log(`\n  ${c.green}${c.bold}✓ ${message}${c.reset}\n`);
   }
   return code;

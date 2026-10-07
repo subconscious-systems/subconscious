@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { agentById } from '../agent-data.js';
 import { resolveInputs } from '../agent-launch.js';
+import { claudeVscodeMain } from '../claude-vscode.js';
 import { modelSupportsVision } from '../model-capabilities.js';
 import {
   defaults,
@@ -110,6 +111,21 @@ export async function windowsSetup(
   environment,
   { home = os.homedir(), log = console.log } = {},
 ) {
+  // The vscode commands keep their positional subcommand in argv, so they run
+  // before the strict option parsing; claude-vscode.js parses its own flags.
+  if (id === 'claude-code' && action === 'vscode') {
+    const environment_ = resolveInputs(
+      agentById('claude-code'),
+      { ...environment },
+      {},
+      { strict: false },
+    );
+    return claudeVscodeMain(['vscode', ...argv], {
+      env: environment_,
+      log,
+      home,
+    });
+  }
   const schema = { '--gateway-url': 1, '--api-key': 1, '--model': 1 };
   if (id === 'copilot')
     Object.assign(schema, {
