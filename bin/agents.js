@@ -215,7 +215,8 @@ export function extractModel(argv, profile) {
 
 function isSetupWithoutAuth(argv) {
   const AUTH_FREE = ['status', 'uninstall', '-h', '--help', 'help'];
-  if (argv[0] === 'vscode') return AUTH_FREE.includes(argv[1]);
+  // A bare `claude vscode` prints usage; only `vscode install` needs the key.
+  if (argv[0] === 'vscode') return argv[1] !== 'install';
   return AUTH_FREE.includes(argv[0]);
 }
 

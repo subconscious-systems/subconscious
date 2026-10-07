@@ -543,8 +543,7 @@ async function main() {
       const authFree =
         action.action === 'status' ||
         action.action === 'uninstall' ||
-        (action.action === 'vscode' &&
-          ['status', 'uninstall'].includes(action.args[1]));
+        (action.action === 'vscode' && action.args[1] !== 'install');
       if (!authFree) {
         requireNamedProfile(profile);
       }

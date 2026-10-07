@@ -48,7 +48,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
     );
   if (
     parsed.action === 'vscode' &&
-    ['status', 'uninstall', 'help', '-h', '--help'].includes(args[0] ?? 'help')
+    (args.find((word) => !word.startsWith('--')) ?? 'help') !== 'install'
   )
     return finish(await windowsSetup(agent.id, 'vscode', args, environment));
 
