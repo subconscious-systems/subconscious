@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { appUserDir } from '../bin/claude-vscode.js';
 import { nativeTargetName } from '../bin/tui.js';
 import { detectInstallTarget } from '../bin/update-check.js';
 import { parseOptions, writeJson } from '../bin/windows/common.js';
@@ -342,11 +343,12 @@ test('Windows Claude launch retains model, subagent, telemetry and picker settin
 
 test('Windows vscode setup snapshots settings and restores them on uninstall', async (t) => {
   const home = await temporary(t);
-  const suffix =
-    process.platform === 'darwin'
-      ? ['Library', 'Application Support', 'Code', 'User']
-      : ['.config', 'Code', 'User'];
-  const userDir = path.join(home, ...suffix);
+  // The same dir claude-vscode.js resolves, so this works on real Windows.
+  const userDir = appUserDir('Code', {
+    home,
+    platform: process.platform,
+    appData: path.join(home, 'AppData', 'Roaming'),
+  });
   await fs.mkdir(userDir, { recursive: true });
   const original = '{\n  "mine": 1\n}';
   await fs.writeFile(path.join(userDir, 'settings.json'), original);

@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { agentById } from '../bin/agent-data.js';
 import { resolveAgentEnv, resolveInputs } from '../bin/agent-launch.js';
 import {
+  appUserDir,
   claudeVscodeEnvironment,
   claudeVscodeMain,
   parseTopMembers,
@@ -216,13 +217,13 @@ test('VSCODE_APPS lists the supported editors in a stable order', () => {
 
 // ── End to end through the runbook script ───────────────────────────────────
 
+// The same dir claude-vscode.js resolves, so tests work on every platform.
 function appDir(home, app = 'Code') {
-  return path.join(
+  return appUserDir(app, {
     home,
-    ...(process.platform === 'darwin'
-      ? ['Library', 'Application Support', app, 'User']
-      : ['.config', app, 'User']),
-  );
+    platform: process.platform,
+    appData: path.join(home, 'AppData', 'Roaming'),
+  });
 }
 
 function runVscode(home, action, overrides = {}) {
@@ -231,6 +232,7 @@ function runVscode(home, action, overrides = {}) {
       ...process.env,
       HOME: home,
       SUBC_CONFIG_DIR: path.join(home, 'subc'),
+      APPDATA: path.join(home, 'AppData', 'Roaming'),
       GATEWAY_URL: 'https://gateway.example',
       API_KEY: 'sk-test',
       MODEL: 'subconscious/glm-5.3-marathon',
@@ -474,6 +476,7 @@ test('claudeVscodeMain installs and restores through the same entry Windows uses
       ...process.env,
       HOME: home,
       SUBC_CONFIG_DIR: path.join(home, 'subc'),
+      APPDATA: path.join(home, 'AppData', 'Roaming'),
       GATEWAY_URL: 'https://gateway.example',
       API_KEY: 'sk-test',
       MODEL: 'subconscious/glm-5.3-marathon',
