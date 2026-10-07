@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { agentById } from '../bin/agent-data.js';
-import { runbookEnv } from '../bin/agents.js';
+import { parseAgentAction, runbookEnv } from '../bin/agents.js';
 import { launchCommand, runSync } from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-claude-test-'));
@@ -180,4 +180,26 @@ test('Claude launch picker stays inside the live catalog', async () => {
   assert.equal(settings.modelPicker.replaceBuiltInOptions, true);
   assert.equal(settingsJson.includes('glm-5.2'), false);
   assert.equal(settingsJson.includes('deepseek-v4-flash-marathon'), false);
+});
+
+test('parseAgentAction routes vscode setup actions only where declared', () => {
+  const claude = agentById('claude-code');
+  assert.deepEqual(
+    parseAgentAction(claude, ['vscode', 'install', '--app', 'Cursor']),
+    { action: 'vscode', args: ['vscode', 'install', '--app', 'Cursor'] },
+  );
+  assert.deepEqual(parseAgentAction(claude, ['vscode']), {
+    action: 'vscode',
+    args: ['vscode'],
+  });
+  const opencode = agentById('opencode');
+  assert.throws(
+    () => parseAgentAction(opencode, ['vscode', 'install']),
+    /does not support 'vscode'/,
+  );
+  // Claude still launches when 'vscode' is not the first word.
+  assert.deepEqual(
+    parseAgentAction(claude, ['--model', 'subconscious/x', 'vscode']),
+    { action: 'launch', args: ['--model', 'subconscious/x', 'vscode'] },
+  );
 });

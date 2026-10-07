@@ -540,7 +540,11 @@ async function main() {
     const profile = await loadProfile(profileName);
     if (!isAgentHelpRequest(agentArgs)) {
       const action = parseAgentAction(agent, agentArgs);
-      if (action.action !== 'status' && action.action !== 'uninstall') {
+      const authFree =
+        action.action === 'status' ||
+        action.action === 'uninstall' ||
+        (action.action === 'vscode' && action.args[1] !== 'install');
+      if (!authFree) {
         requireNamedProfile(profile);
       }
     }

@@ -8,7 +8,7 @@ the default gateway, model capabilities, and the settings every agent uses
 
 | Agent | Launch | Setup |
 | --- | --- | --- |
-| `claude-code` | binary | `install.sh` (leftover status/uninstall) |
+| `claude-code` | binary | `install.sh` (leftover status/uninstall; `vscode` dispatches to `vscode.sh`, which runs `../claude-vscode.js`) |
 | `codex` | `run.sh` | `install.sh` (hooks) |
 | `opencode` | binary | `install.sh` (leftover status/uninstall) |
 | `cursor` | none | `install.sh` (hooks) |

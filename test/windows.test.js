@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { appUserDir } from '../bin/claude-vscode.js';
 import { nativeTargetName } from '../bin/tui.js';
 import { detectInstallTarget } from '../bin/update-check.js';
 import { parseOptions, writeJson } from '../bin/windows/common.js';
@@ -338,6 +339,90 @@ test('Windows Claude launch retains model, subagent, telemetry and picker settin
   assert.equal(equals.env.ANTHROPIC_AUTH_TOKEN, 'override');
   assert.equal(equals.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '123456');
   assert.deepEqual(equals.args.slice(-2), ['--model', 'agent-model']);
+});
+
+test('Windows vscode setup snapshots settings and restores them on uninstall', async (t) => {
+  const home = await temporary(t);
+  // The same dir claude-vscode.js resolves, so this works on real Windows.
+  const userDir = appUserDir('Code', {
+    home,
+    platform: process.platform,
+    appData: path.join(home, 'AppData', 'Roaming'),
+  });
+  await fs.mkdir(userDir, { recursive: true });
+  const original = '{\n  "mine": 1\n}';
+  await fs.writeFile(path.join(userDir, 'settings.json'), original);
+
+  const environment = {
+    ...env,
+    HOME: home,
+    SUBC_CONFIG_DIR: path.join(home, 'subc'),
+    APPDATA: path.join(home, 'AppData', 'Roaming'),
+  };
+  const install = await windowsSetup(
+    'claude-code',
+    'vscode',
+    ['install', '--app', 'Code'],
+    environment,
+    { home, log: quiet },
+  );
+  assert.equal(install, 0);
+  const written = await fs.readFile(
+    path.join(userDir, 'settings.json'),
+    'utf8',
+  );
+  assert.ok(written.includes('claudeCode.environmentVariables'));
+  assert.ok(written.includes('claudeCode.disableLoginPrompt'));
+  assert.ok(written.includes('"mine": 1'));
+  const snapshot = JSON.parse(
+    await fs.readFile(
+      path.join(home, 'subc', 'claude-vscode-snapshot.json'),
+      'utf8',
+    ),
+  );
+  assert.deepEqual(snapshot.apps.Code.keys, {
+    'claudeCode.environmentVariables': null,
+    'claudeCode.disableLoginPrompt': null,
+  });
+
+  const uninstall = await windowsSetup(
+    'claude-code',
+    'vscode',
+    ['uninstall', '--app', 'Code'],
+    environment,
+    { home, log: quiet },
+  );
+  assert.equal(uninstall, 0);
+  assert.equal(
+    await fs.readFile(path.join(userDir, 'settings.json'), 'utf8'),
+    original,
+  );
+});
+
+test('Windows vscode status needs no api key and never prints key values', async (t) => {
+  const home = await temporary(t);
+  const environment = {
+    ...env,
+    HOME: home,
+    SUBC_CONFIG_DIR: path.join(home, 'subc'),
+    APPDATA: path.join(home, 'AppData', 'Roaming'),
+  };
+  delete environment.API_KEY;
+  const lines = [];
+  const code = await windowsSetup(
+    'claude-code',
+    'vscode',
+    ['status'],
+    environment,
+    {
+      home,
+      log: (line) => lines.push(line),
+    },
+  );
+  assert.equal(code, 0);
+  const text = lines.join('\n');
+  assert.ok(/Code:/.test(text));
+  assert.equal(text.includes('sk-test'), false);
 });
 
 test('Codex uses a temporary catalog, native argv and opt-in external tools/subagents', async (t) => {
