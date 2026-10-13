@@ -4,7 +4,11 @@
 
 import { getApiKey, getPlatformUrl } from './auth.js';
 import { c } from './colors.js';
-import { describeFetchError, proxyAwareFetch } from './network.js';
+import {
+  describeFetchError,
+  proxyAwareFetch,
+  tlsTrustHint,
+} from './network.js';
 import { DEFAULT_PROFILE } from './profiles.js';
 import { printLoginUpgradeWarning } from './upgrade.js';
 
@@ -268,7 +272,10 @@ export async function usageCommand(argv = [], options = {}) {
       console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}\n`);
       return;
     }
-    console.error(`\n  ${c.red}${describeFetchError(error)}${c.reset}\n`);
+    console.error(`\n  ${c.red}${describeFetchError(error)}${c.reset}`);
+    const hint = tlsTrustHint(error);
+    if (hint) console.error(`  ${c.yellow}${hint}${c.reset}`);
+    console.error();
     process.exitCode = 1;
   }
 }

@@ -75,6 +75,39 @@ export function describeFetchError(error) {
   return `${base} (${rendered})`;
 }
 
+// TLS failures whose cause is an untrusted issuing CA, typically a corporate
+// middlebox (Zscaler, Netskope, ...) that re-signs traffic with its own root.
+// Node does not trust that root unless it is added to the trust store.
+const TLS_TRUST_ERROR_CODES = new Set([
+  'SELF_SIGNED_CERT_IN_CHAIN',
+  'DEPTH_ZERO_SELF_SIGNED_CERT',
+  'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+  'UNABLE_TO_GET_ISSUER_CERT',
+  'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  'CERT_UNTRUSTED',
+  'CERT_HAS_EXPIRED',
+  'ERR_TLS_CERT_ALTNAME_INVALID',
+]);
+
+export function isTlsTrustError(error) {
+  return collectErrors(error).some((node) =>
+    TLS_TRUST_ERROR_CODES.has(errorCode(node)),
+  );
+}
+
+// Actionable guidance for the TLS-interception case. `NODE_EXTRA_CA_CERTS`
+// *adds* to Node's built-in roots and is honored by both global fetch and this
+// module's tunnel; the OS trust store path needs --use-openssl-ca.
+export function tlsTrustHint(error) {
+  if (!isTlsTrustError(error)) return null;
+  return [
+    'The connection was re-signed by an untrusted CA — a corporate TLS-inspecting proxy (Zscaler, Netskope, ...).',
+    'Trust its root certificate by pointing Node at the .pem file:',
+    '  export NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem',
+    'Or install that root in the OS trust store and run Node with --use-openssl-ca.',
+  ].join('\n  ');
+}
+
 // Parse a proxy URL from an environment variable. Returns null when unset or
 // malformed so a bad value never masks the real connection error.
 function parseProxyUrl(value) {

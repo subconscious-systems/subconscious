@@ -20,6 +20,7 @@ import {
   describeFetchError,
   describeProxy,
   proxyAwareFetch,
+  tlsTrustHint,
 } from './network.js';
 import {
   clearProfileApiKey,
@@ -199,6 +200,11 @@ function printLoginFailure(platformUrl, error) {
   const message = describeFetchError(error);
   console.error(`  ${c.red}✗ ${message}${c.reset}`);
   if (error instanceof Error && error.name === 'TimeoutError') return;
+  const hint = tlsTrustHint(error);
+  if (hint) {
+    console.error(`  ${c.yellow}${hint}${c.reset}`);
+    return;
+  }
   const proxy = describeProxy(platformUrl);
   if (proxy) {
     console.error(

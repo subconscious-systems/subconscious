@@ -248,3 +248,23 @@ test('model discovery routes through the proxy and falls back cleanly', async ()
     process.env = saved;
   }
 });
+
+test('tlsTrustHint recognizes interception cert errors and suggests a fix', async () => {
+  const { isTlsTrustError, tlsTrustHint } = await import('../bin/network.js');
+  const error = new TypeError('fetch failed');
+  error.cause = Object.assign(new Error('self signed cert'), {
+    code: 'SELF_SIGNED_CERT_IN_CHAIN',
+  });
+  assert.equal(isTlsTrustError(error), true);
+  const hint = tlsTrustHint(error);
+  assert.match(hint, /NODE_EXTRA_CA_CERTS/);
+  assert.match(hint, /--use-openssl-ca/);
+});
+
+test('tlsTrustHint is null for non-cert failures', async () => {
+  const { isTlsTrustError, tlsTrustHint } = await import('../bin/network.js');
+  const error = new TypeError('fetch failed');
+  error.cause = Object.assign(new Error('refused'), { code: 'ECONNREFUSED' });
+  assert.equal(isTlsTrustError(error), false);
+  assert.equal(tlsTrustHint(error), null);
+});
