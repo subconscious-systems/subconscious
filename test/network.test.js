@@ -1,0 +1,196 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+import {
+  createProxyFetch,
+  describeFetchError,
+  describeProxy,
+  proxyForUrl,
+} from '../bin/network.js';
+
+const fixtures = fileURLToPath(new URL('./fixtures/', import.meta.url));
+const ca = fs.readFileSync(path.join(fixtures, 'localhost-cert.pem'));
+
+test('describeFetchError surfaces the cause code and host', () => {
+  const error = new TypeError('fetch failed');
+  error.cause = Object.assign(
+    new Error('getaddrinfo ENOTFOUND platform.subconscious.dev'),
+    { code: 'ENOTFOUND' },
+  );
+  const message = describeFetchError(error);
+  assert.match(message, /^fetch failed/);
+  assert.match(message, /ENOTFOUND/);
+  assert.match(message, /platform\.subconscious\.dev/);
+});
+
+test('describeFetchError walks nested cause chains', () => {
+  const inner = Object.assign(new Error('socket hang up'), {
+    code: 'ECONNRESET',
+  });
+  const mid = new TypeError('fetch failed', { cause: inner });
+  const error = new TypeError('aggregate', { cause: mid });
+  const message = describeFetchError(error);
+  assert.match(message, /ECONNRESET/);
+});
+
+test('describeFetchError collects AggregateError sub-errors', () => {
+  const a = Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:443'), {
+    code: 'ECONNREFUSED',
+  });
+  const b = Object.assign(new Error('connect ETIMEDOUT'), {
+    code: 'ETIMEDOUT',
+  });
+  const error = new TypeError('fetch failed', {
+    cause: new AggregateError([a, b]),
+  });
+  const message = describeFetchError(error);
+  assert.match(message, /ECONNREFUSED/);
+  assert.match(message, /ETIMEDOUT/);
+});
+
+test('describeFetchError leaves plain errors unchanged', () => {
+  assert.equal(describeFetchError(new Error('boom')), 'boom');
+  assert.equal(describeFetchError('nope'), 'nope');
+});
+
+test('proxyForUrl honors HTTPS_PROXY and lower-case variants', () => {
+  assert.equal(
+    proxyForUrl('https://platform.subconscious.dev/x', {
+      HTTPS_PROXY: 'http://proxy.corp:8080',
+    })?.href,
+    'http://proxy.corp:8080/',
+  );
+  assert.equal(
+    proxyForUrl('https://platform.subconscious.dev/x', {
+      https_proxy: 'http://proxy.corp:8080',
+    })?.href,
+    'http://proxy.corp:8080/',
+  );
+});
+
+test('proxyForUrl respects NO_PROXY host and suffix matches', () => {
+  const env = {
+    HTTPS_PROXY: 'http://proxy.corp:8080',
+    NO_PROXY: 'localhost,.subconscious.dev,example.com',
+  };
+  assert.equal(proxyForUrl('https://platform.subconscious.dev/x', env), null);
+  assert.equal(proxyForUrl('https://api.subconscious.dev/x', env), null);
+  assert.equal(proxyForUrl('https://example.com/x', env), null);
+  assert.equal(proxyForUrl('https://localhost/x', env), null);
+  assert.notEqual(proxyForUrl('https://other.test/x', env), null);
+});
+
+test('proxyForUrl accepts a wildcard NO_PROXY', () => {
+  const env = { HTTPS_PROXY: 'http://proxy.corp:8080', NO_PROXY: '*' };
+  assert.equal(proxyForUrl('https://platform.subconscious.dev/x', env), null);
+});
+
+test('proxyForUrl ignores malformed and non-http proxy values', () => {
+  assert.equal(
+    proxyForUrl('https://platform.subconscious.dev/x', {
+      HTTPS_PROXY: 'not a url',
+    }),
+    null,
+  );
+  assert.equal(
+    proxyForUrl('https://platform.subconscious.dev/x', {
+      HTTPS_PROXY: 'socks5://proxy.corp:1080',
+    }),
+    null,
+  );
+});
+
+test('describeProxy reports the proxy host without credentials', () => {
+  const env = { HTTPS_PROXY: 'http://user:pass@proxy.corp:8080' };
+  const described = describeProxy('https://platform.subconscious.dev/x', env);
+  assert.equal(described, 'http://proxy.corp:8080');
+  assert.doesNotMatch(described, /user|pass/);
+  assert.equal(
+    describeProxy('https://platform.subconscious.dev/x', { NO_PROXY: '*' }),
+    null,
+  );
+});
+
+test('createProxyFetch falls back to the base fetch without a proxy', async () => {
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    return { ok: true, json: async () => ({ via: 'direct' }) };
+  };
+  const proxyFetch = createProxyFetch({ env: {}, fetchImpl });
+  const res = await proxyFetch('https://platform.example/x', {
+    method: 'POST',
+  });
+  assert.equal(calls.length, 1);
+  assert.equal((await res.json()).via, 'direct');
+});
+
+test('createProxyFetch tunnels HTTPS through an HTTP proxy via CONNECT', async () => {
+  const originSockets = new Set();
+  const proxySockets = new Set();
+  const origin = https.createServer(
+    {
+      key: fs.readFileSync(path.join(fixtures, 'localhost-key.pem')),
+      cert: ca,
+    },
+    (_req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ pong: true }));
+    },
+  );
+  origin.on('connection', (socket) => {
+    originSockets.add(socket);
+    socket.on('close', () => originSockets.delete(socket));
+  });
+  await new Promise((resolve) => origin.listen(0, '127.0.0.1', resolve));
+  const originPort = origin.address().port;
+
+  const connectTargets = [];
+  const proxy = http.createServer();
+  proxy.on('connection', (socket) => {
+    proxySockets.add(socket);
+    socket.on('close', () => proxySockets.delete(socket));
+  });
+  proxy.on('connect', (req, clientSocket, head) => {
+    connectTargets.push(req.url);
+    const [host, port] = req.url.split(':');
+    const upstream = net.connect(Number(port), host, () => {
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head?.length) upstream.write(head);
+      upstream.pipe(clientSocket);
+      clientSocket.pipe(upstream);
+    });
+    upstream.on('error', () => clientSocket.destroy());
+  });
+  await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const proxyPort = proxy.address().port;
+
+  try {
+    const proxyFetch = createProxyFetch({
+      env: { HTTPS_PROXY: `http://127.0.0.1:${proxyPort}` },
+      ca,
+    });
+    const res = await proxyFetch(`https://127.0.0.1:${originPort}/ping`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ hello: 'world' }),
+    });
+    assert.equal(res.ok, true);
+    assert.deepEqual(await res.json(), { pong: true });
+    assert.equal(connectTargets.length, 1);
+    assert.match(
+      connectTargets[0],
+      new RegExp(`^127\\.0\\.0\\.1:${originPort}$`),
+    );
+  } finally {
+    for (const socket of proxySockets) socket.destroy();
+    for (const socket of originSockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
+    await new Promise((resolve) => origin.close(resolve));
+  }
+});
