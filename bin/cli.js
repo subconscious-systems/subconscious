@@ -35,6 +35,7 @@ import {
 } from './harness-manifest.js';
 import { headlessPromptIndex } from './headless-args.js';
 import { resolveModelCatalog } from './models.js';
+import { ensureSystemCa, refuseUnsupportedSystemCa } from './network.js';
 import {
   configCommand,
   DEFAULT_PROFILE,
@@ -44,6 +45,7 @@ import {
   printConfigHelp,
   RUNBOOK_DEFAULTS,
   resolvedModelSetting,
+  systemCaEnabledFor,
   updatePlatformUrlCommand,
   updateUrlCommand,
   validateProfileName,
@@ -348,6 +350,15 @@ async function main() {
   let parsed = extractProfile(process.argv.slice(2));
   let { args, profileName, profileExplicit } = parsed;
   let command = args[0];
+
+  // Trust the OS certificate store before any request when the profile opts in.
+  // Node reads --use-system-ca at startup, so this re-execs once.
+  {
+    const profile = await loadProfile(profileName);
+    const systemCaEnabled = systemCaEnabledFor(profile);
+    if (refuseUnsupportedSystemCa(systemCaEnabled)) return;
+    if (systemCaEnabled) ensureSystemCa();
+  }
 
   // Version output must be fast and reliable even when npm or the gateway is
   // unavailable, so handle it before the automatic update check.

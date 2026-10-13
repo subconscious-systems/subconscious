@@ -18,10 +18,12 @@
 // The CLI ships with zero runtime dependencies, so the proxy tunnel is built on
 // Node's `node:net`/`node:tls`/`node:https` rather than pulling in `undici`.
 
+import { spawnSync } from 'node:child_process';
 import https from 'node:https';
 import net from 'node:net';
 import tls from 'node:tls';
 import zlib from 'node:zlib';
+import { c } from './colors.js';
 
 const PROXY_PROTOCOLS = new Set(['http:', 'https:']);
 
@@ -107,6 +109,61 @@ export function tlsTrustHint(error) {
     'Ask IT for the proxy root certificate, then restart the CLI with it trusted:',
     '  export NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem',
   ].join('\n  ');
+}
+
+/** Whether this Node build can add the OS certificate store to the trust store. */
+function supportsSystemCa() {
+  return process.allowedNodeEnvironmentFlags?.has('--use-system-ca') === true;
+}
+
+/**
+ * Re-exec once with `--use-system-ca` when the OS certificate store is opted
+ * in and this Node build supports the flag. Node 18 and 20 reject the flag
+ * outright, so it is probed rather than assumed. Node reads the option at
+ * startup, which is why this has to happen before any request.
+ *
+ * Never returns when it replaces the process; the child re-enters here with
+ * the flag already present and falls through.
+ */
+export function ensureSystemCa(options = {}) {
+  if (process.execArgv.includes('--use-system-ca')) return false;
+  if (!supportsSystemCa()) return false;
+  const run = options.spawnSyncImpl || spawnSync;
+  const result = run(
+    process.execPath,
+    ['--use-system-ca', ...process.execArgv, ...process.argv.slice(1)],
+    { stdio: 'inherit' },
+  );
+  if (result?.error) {
+    console.error(
+      `${c.red}Could not restart with the OS certificate store: ${result.error.message}${c.reset}`,
+    );
+    return false;
+  }
+  process.exit(result?.status ?? 1);
+}
+
+/** Fail before any request when SYSTEM_CA=on is set on a Node that cannot honor it. */
+export function refuseUnsupportedSystemCa(systemCaEnabled) {
+  if (!systemCaEnabled || supportsSystemCa()) return false;
+  console.error(
+    `${c.red}SYSTEM_CA=on requires Node 22 or newer; this is ${process.version}.${c.reset}`,
+  );
+  console.error(`${c.dim}Turn it off, or upgrade Node, then retry.${c.reset}`);
+  process.exitCode = 1;
+  return true;
+}
+
+// One line for a failure that a command can print and keep going. Adds the
+// real cause for Node's opaque "fetch failed", and the CA fix when the cause is
+// an untrusted issuer (the common corporate-machine failure).
+export function describeFailure(error) {
+  const message = describeFetchError(error);
+  if (error?.name === 'TimeoutError') return message;
+  const hint = tlsTrustHint(error);
+  return hint
+    ? `${message}\n  Ask IT for the proxy root certificate, then restart with NODE_EXTRA_CA_CERTS set, or set SYSTEM_CA=on in your profile.`
+    : message;
 }
 
 // Parse a proxy URL from an environment variable. Returns null when unset or
