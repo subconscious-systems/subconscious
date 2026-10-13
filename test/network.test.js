@@ -376,3 +376,79 @@ test('tlsTrustHint is null for non-cert failures', async () => {
   assert.equal(isTlsTrustError(error), false);
   assert.equal(tlsTrustHint(error), null);
 });
+
+test('describeFailure adds the CA fix for an untrusted issuer', async () => {
+  const { describeFailure } = await import('../bin/network.js');
+  const error = new TypeError('fetch failed');
+  error.cause = Object.assign(new Error('unable to get local issuer'), {
+    code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY',
+  });
+  const text = describeFailure(error);
+  assert.match(text, /UNABLE_TO_GET_ISSUER_CERT_LOCALLY/);
+  assert.match(text, /NODE_EXTRA_CA_CERTS/);
+  // The profile opt-in is the alternative when the root cannot be installed.
+  assert.match(text, /SYSTEM_CA=on/);
+});
+
+test('describeFailure leaves an unrelated cause alone', async () => {
+  const { describeFailure } = await import('../bin/network.js');
+  const error = new TypeError('fetch failed');
+  error.cause = Object.assign(new Error('refused'), { code: 'ECONNREFUSED' });
+  const text = describeFailure(error);
+  assert.match(text, /ECONNREFUSED/);
+  assert.doesNotMatch(text, /NODE_EXTRA_CA_CERTS|SYSTEM_CA/);
+});
+
+test('ensureSystemCa does nothing without the flag or the opt-in', async () => {
+  const { ensureSystemCa } = await import('../bin/network.js');
+  const calls = [];
+  const spawnSyncImpl = (...args) => {
+    calls.push(args);
+    return { status: 0 };
+  };
+  // Already running with the flag: never recurse.
+  const previous = process.execArgv;
+  process.execArgv = ['--use-system-ca'];
+  assert.equal(ensureSystemCa({ spawnSyncImpl }), false);
+  process.execArgv = previous;
+  // No supported flag on this build: report no restart.
+  if (!process.allowedNodeEnvironmentFlags?.has('--use-system-ca')) {
+    assert.equal(ensureSystemCa({ spawnSyncImpl }), false);
+    assert.equal(calls.length, 0);
+  }
+});
+
+test('subc re-execs with --use-system-ca only when the profile opts in', async () => {
+  const os = await import('node:os');
+  const { spawn } = await import('node:child_process');
+  if (!process.allowedNodeEnvironmentFlags?.has('--use-system-ca')) return;
+  const cli = fileURLToPath(new URL('../bin/cli.js', import.meta.url));
+
+  const run = (extraEnv) =>
+    new Promise((resolve) => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'subc-ca-'));
+      fs.mkdirSync(path.join(dir, 'profiles'), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, 'profiles', 'default.env'),
+        `GATEWAY_URL=https://api.example\nAPI_KEY=sk-test\n${extraEnv}`,
+      );
+      const child = spawn(process.execPath, [cli, '--version'], {
+        env: { ...process.env, SUBC_CONFIG_DIR: dir },
+      });
+      let out = '';
+      child.stdout.on('data', (chunk) => (out += chunk));
+      child.on('close', (code) => {
+        fs.rmSync(dir, { recursive: true, force: true });
+        resolve({ code, out: out.trim() });
+      });
+    });
+
+  const off = await run('SYSTEM_CA=off\n');
+  assert.equal(off.code, 0);
+  assert.match(off.out, /^\d+\.\d+\.\d+$/);
+
+  const on = await run('SYSTEM_CA=on\n');
+  assert.equal(on.code, 0);
+  assert.match(on.out, /^\d+\.\d+\.\d+$/);
+  assert.equal(on.out, off.out);
+});
