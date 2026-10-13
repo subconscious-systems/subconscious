@@ -6,6 +6,7 @@ import net from 'node:net';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import {
   createProxyFetch,
   describeFetchError,
@@ -195,6 +196,111 @@ test('createProxyFetch tunnels HTTPS through an HTTP proxy via CONNECT', async (
   }
 });
 
+test('createProxyFetch rejects when the proxy drops the CONNECT', async () => {
+  // Some policy appliances accept the TCP connection, read CONNECT, then close
+  // without answering. The promise must still reject, or the caller's await
+  // never settles and the process exits 0 having printed nothing.
+  const dropping = net.createServer((socket) => {
+    socket.on('data', () => socket.destroy());
+  });
+  await new Promise((resolve) => dropping.listen(0, '127.0.0.1', resolve));
+  const port = dropping.address().port;
+  try {
+    const proxyFetch = createProxyFetch({
+      env: { HTTPS_PROXY: `http://127.0.0.1:${port}` },
+      ca,
+      timeoutMs: 3000,
+    });
+    await assert.rejects(
+      proxyFetch('https://platform.example/x'),
+      (error) => error.code === 'EPROXY' || error.code === 'ECONNRESET',
+    );
+  } finally {
+    await new Promise((resolve) => dropping.close(resolve));
+  }
+});
+
+test('createProxyFetch is not used for plain http targets', async () => {
+  // Node's global fetch already honors the proxy env vars for http, and a
+  // CONNECT tunnel would speak TLS to a plaintext origin. The SUBCONSCIOUS_URL
+  // local-development flow (http://localhost:3000) must keep working.
+  const calls = [];
+  const baseFetch = async (url) => {
+    calls.push(String(url));
+    return { ok: true, status: 200, json: async () => ({ via: 'base' }) };
+  };
+  const proxyFetch = createProxyFetch({
+    env: { HTTPS_PROXY: 'http://127.0.0.1:1' },
+    fetchImpl: baseFetch,
+  });
+  const res = await proxyFetch('http://localhost:3000/api/cli/whoami');
+  assert.deepEqual(await res.json(), { via: 'base' });
+  assert.deepEqual(calls, ['http://localhost:3000/api/cli/whoami']);
+});
+
+test('createProxyFetch decodes a gzip response body', async () => {
+  // A middlebox that terminates TLS can also re-encode the body. Callers use
+  // res.json() without reading headers, so the shim must decompress.
+  const originSockets = new Set();
+  const proxySockets = new Set();
+  const origin = https.createServer(
+    {
+      key: fs.readFileSync(path.join(fixtures, 'localhost-key.pem')),
+      cert: ca,
+    },
+    (_req, res) => {
+      const body = zlib.gzipSync(
+        Buffer.from(JSON.stringify({ organization: 'Gzip Corp' })),
+      );
+      res.writeHead(200, {
+        'content-type': 'application/json',
+        'content-encoding': 'gzip',
+        'content-length': body.length,
+      });
+      res.end(body);
+    },
+  );
+  origin.on('connection', (socket) => {
+    originSockets.add(socket);
+    socket.on('close', () => originSockets.delete(socket));
+  });
+  await new Promise((resolve) => origin.listen(0, '127.0.0.1', resolve));
+  const originPort = origin.address().port;
+
+  const proxy = http.createServer();
+  proxy.on('connection', (socket) => {
+    proxySockets.add(socket);
+    socket.on('close', () => proxySockets.delete(socket));
+  });
+  proxy.on('connect', (req, clientSocket, head) => {
+    const [host, port] = req.url.split(':');
+    const upstream = net.connect(Number(port), host, () => {
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      if (head?.length) upstream.write(head);
+      upstream.pipe(clientSocket);
+      clientSocket.pipe(upstream);
+    });
+    upstream.on('error', () => clientSocket.destroy());
+  });
+  await new Promise((resolve) => proxy.listen(0, '127.0.0.1', resolve));
+  const proxyPort = proxy.address().port;
+
+  try {
+    const proxyFetch = createProxyFetch({
+      env: { HTTPS_PROXY: `http://127.0.0.1:${proxyPort}` },
+      ca,
+    });
+    const res = await proxyFetch(`https://127.0.0.1:${originPort}/gzip`);
+    assert.deepEqual(await res.json(), { organization: 'Gzip Corp' });
+    assert.equal(res.status, 200);
+  } finally {
+    for (const socket of proxySockets) socket.destroy();
+    for (const socket of originSockets) socket.destroy();
+    await new Promise((resolve) => proxy.close(resolve));
+    await new Promise((resolve) => origin.close(resolve));
+  }
+});
+
 // Every outbound request in the CLI must honor the proxy env vars, not just
 // login. These assert each module's default fetch is proxy-aware by pointing
 // HTTPS_PROXY at a closed port and showing the request fails through it.
@@ -258,7 +364,9 @@ test('tlsTrustHint recognizes interception cert errors and suggests a fix', asyn
   assert.equal(isTlsTrustError(error), true);
   const hint = tlsTrustHint(error);
   assert.match(hint, /NODE_EXTRA_CA_CERTS/);
-  assert.match(hint, /--use-openssl-ca/);
+  // Must not recommend --use-openssl-ca: on a platform without a usable
+  // OpenSSL trust store (macOS) it makes working public TLS fail instead.
+  assert.doesNotMatch(hint, /--use-openssl-ca/);
 });
 
 test('tlsTrustHint is null for non-cert failures', async () => {
