@@ -194,3 +194,57 @@ test('createProxyFetch tunnels HTTPS through an HTTP proxy via CONNECT', async (
     await new Promise((resolve) => origin.close(resolve));
   }
 });
+
+// Every outbound request in the CLI must honor the proxy env vars, not just
+// login. These assert each module's default fetch is proxy-aware by pointing
+// HTTPS_PROXY at a closed port and showing the request fails through it.
+test('subc command modules default to the proxy-aware fetch', async () => {
+  const { fetchUsage } = await import('../bin/usage.js');
+  const { submitFeedback } = await import('../bin/feedback.js');
+  const { fetchLatestVersion } = await import('../bin/upgrade.js');
+
+  const saved = { ...process.env };
+  process.env.HTTPS_PROXY = 'http://127.0.0.1:1';
+  delete process.env.NO_PROXY;
+  delete process.env.no_proxy;
+  try {
+    await assert.rejects(
+      fetchUsage('key', 'https://platform.subconscious.dev'),
+      (error) =>
+        error.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(error.message),
+    );
+    await assert.rejects(
+      submitFeedback('key', 'https://platform.subconscious.dev', {}),
+      (error) =>
+        error.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(error.message),
+    );
+    await assert.rejects(
+      fetchLatestVersion(),
+      (error) =>
+        error.code === 'ECONNREFUSED' || /ECONNREFUSED/.test(error.message),
+    );
+  } finally {
+    process.env = saved;
+  }
+});
+
+test('model discovery routes through the proxy and falls back cleanly', async () => {
+  const { resolveModelCatalog } = await import('../bin/models.js');
+
+  const saved = { ...process.env };
+  process.env.HTTPS_PROXY = 'http://127.0.0.1:1';
+  delete process.env.NO_PROXY;
+  delete process.env.no_proxy;
+  try {
+    const result = await resolveModelCatalog({
+      baseUrl: 'https://api.subconscious.dev',
+      apiKey: 'key',
+      selectedModel: 'subconscious/glm-5.3-marathon',
+      fallbackModels: ['subconscious/glm-5.3-marathon'],
+    });
+    assert.equal(result.source, 'packaged');
+    assert.ok(result.error, 'expected the proxy failure to be recorded');
+  } finally {
+    process.env = saved;
+  }
+});

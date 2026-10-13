@@ -17,9 +17,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { c } from './colors.js';
 import {
-  createProxyFetch,
   describeFetchError,
   describeProxy,
+  proxyAwareFetch,
 } from './network.js';
 import {
   clearProfileApiKey,
@@ -28,13 +28,6 @@ import {
 } from './profiles.js';
 import { printLoginUpgradeWarning } from './upgrade.js';
 import { openWindowsBrowser } from './windows/process.js';
-
-// Node's `fetch` ignores proxy env vars, so route through a proxy-aware fetch
-// that honors HTTPS_PROXY/NO_PROXY. Built lazily per call so tests can inject
-// their own `fetchImpl` and so env changes take effect between calls.
-function defaultFetch() {
-  return createProxyFetch();
-}
 
 function configDir() {
   return (
@@ -142,7 +135,7 @@ function terminalLink(url) {
 
 export async function registerDeviceLogin(
   platformUrl,
-  fetchImpl = defaultFetch(),
+  fetchImpl = proxyAwareFetch,
 ) {
   const res = await fetchImpl(`${platformUrl}/api/cli/device/register`, {
     method: 'POST',
@@ -161,7 +154,7 @@ export async function registerDeviceLogin(
 export async function pollDeviceLogin(
   platformUrl,
   deviceCode,
-  fetchImpl = defaultFetch(),
+  fetchImpl = proxyAwareFetch,
 ) {
   const res = await fetchImpl(`${platformUrl}/api/cli/device/token`, {
     method: 'POST',
@@ -226,7 +219,7 @@ async function saveLoginKey(profileName, token) {
 export async function loginCommand(_argv = [], options = {}) {
   const profileName = options.profileName || DEFAULT_PROFILE;
   const existing = await getApiKey(options.profile);
-  const fetchImpl = options.fetchImpl || defaultFetch();
+  const fetchImpl = options.fetchImpl || proxyAwareFetch;
 
   if (existing) {
     const profile = await ensureProfile(profileName, existing.key);
@@ -410,7 +403,7 @@ export async function whoamiCommand(_argv = [], options = {}) {
 
   // Validate the key against the server; falls back to offline display if unreachable
   try {
-    const res = await defaultFetch()(
+    const res = await proxyAwareFetch(
       `${getPlatformUrl(options.profile)}/api/cli/whoami`,
       {
         headers: { Authorization: `Bearer ${key}` },

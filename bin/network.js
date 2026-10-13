@@ -290,6 +290,13 @@ export function createProxyFetch(options = {}) {
   };
 }
 
+// A process-wide proxy-aware `fetch`. Callers across the CLI use this as the
+// default so every outbound request honors HTTPS_PROXY/NO_PROXY, not just
+// login. Tests inject their own `fetchImpl` where they need to stub the wire.
+export function proxyAwareFetch(url, init) {
+  return createProxyFetch()(url, init);
+}
+
 // A single env var can carry the whole proxy setup for a command; expose the
 // detection so callers can tell the user when their request is being proxied.
 // Credentials are intentionally omitted so they never reach logs or terminals.
