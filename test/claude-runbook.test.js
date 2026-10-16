@@ -61,6 +61,67 @@ test('an UNSET subagent model follows the launch model', () => {
   assert.equal(result.stdout, 'false\nsubconscious/main-model\n0');
 });
 
+test('Claude launch points Claude Code at the isolated subc config dir', async () => {
+  const isolateDir = path.join(testDir, 'isolate-bin');
+  await fs.mkdir(isolateDir, { recursive: true });
+  const subcConfig = path.join(testDir, 'subc-config');
+  await fs.writeFile(
+    path.join(isolateDir, 'claude'),
+    '#!/bin/sh\nprintf \'%s\' "$CLAUDE_CONFIG_DIR"\n',
+    { mode: 0o755 },
+  );
+  const base = {
+    PATH: `${isolateDir}:${process.env.PATH}`,
+    GATEWAY_URL: 'https://gateway.example',
+    API_KEY: 'sk-test',
+    MODEL: 'subconscious/main-model',
+    SUBC_CONFIG_DIR: subcConfig,
+  };
+
+  const launched = runSync(
+    launchCommand('claude-code', { env: { ...process.env, ...base } }),
+  );
+  assert.equal(launched.status, 0, launched.stderr);
+  assert.equal(
+    launched.stdout,
+    path.join(subcConfig, 'claude-code'),
+    'CLAUDE_CONFIG_DIR must be the absolute isolated dir by default',
+  );
+
+  const flagged = runSync(
+    launchCommand('claude-code', {
+      env: { ...process.env, ...base },
+      args: ['--no-isolate'],
+    }),
+  );
+  assert.equal(flagged.status, 0, flagged.stderr);
+  assert.equal(flagged.stdout, '', '--no-isolate must unset CLAUDE_CONFIG_DIR');
+
+  const profileOptOut = runSync(
+    launchCommand('claude-code', {
+      env: { ...process.env, ...base, CLAUDE_CODE_ISOLATE: 'off' },
+    }),
+  );
+  assert.equal(profileOptOut.status, 0, profileOptOut.stderr);
+  assert.equal(
+    profileOptOut.stdout,
+    '',
+    'CLAUDE_CODE_ISOLATE=off must unset CLAUDE_CONFIG_DIR',
+  );
+
+  const own = runSync(
+    launchCommand('claude-code', {
+      env: { ...process.env, ...base, CLAUDE_CONFIG_DIR: '/custom/claude' },
+    }),
+  );
+  assert.equal(own.status, 0, own.stderr);
+  assert.equal(
+    own.stdout,
+    '/custom/claude',
+    'a user-set CLAUDE_CONFIG_DIR must win over the isolated dir',
+  );
+});
+
 test('Claude launch picker stays inside the live catalog', async () => {
   const pickerDir = path.join(testDir, 'picker-bin');
   await fs.mkdir(pickerDir, { recursive: true });

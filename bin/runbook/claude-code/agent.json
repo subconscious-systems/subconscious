@@ -28,7 +28,7 @@
   },
   "help": {
     "usage": "subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]",
-    "behavior": "Launches Claude Code with the active Subconscious profile and model picker. Persistent files are leftover-only: subc claude uninstall.",
+    "behavior": "Launches Claude Code with the active Subconscious profile and model picker. Sessions keep their Claude config in an isolated dir (~/.subconscious/claude-code), so subc and a plain Claude installation do not share settings. Persistent files are leftover-only: subc claude uninstall.",
     "options": [
       ["help", "Show this help"],
       ["status", "Inspect leftover ~/.claude/subconscious-gateway.env"],
@@ -113,6 +113,18 @@
       "type": "integer",
       "min": 1
     },
+    {
+      "name": "CLAUDE_CODE_ISOLATE",
+      "flag": "--no-isolate",
+      "flag_value": "off",
+      "default": "on",
+      "strict": true,
+      "choices": ["on", "off"],
+      "help": "Share ~/.claude with plain Claude Code instead of the isolated subc config dir",
+      "label": "Isolated Claude config",
+      "description": "When on, subc claude sessions keep their Claude config (settings, sessions, plugins, credentials) in ~/.subconscious/claude-code, so subc sessions and a plain `claude` installation cannot write into each other.",
+      "comment": "CLAUDE_CODE_ISOLATE=off shares ~/.claude with plain Claude Code."
+    },
     { "name": "MAX_CONCURRENT_SUBAGENTS" },
     {
       "name": "MAX_SUBAGENT_SPAWN_DEPTH",
@@ -146,6 +158,13 @@
       "value": "{model}",
       "override": ["ANTHROPIC_SMALL_FAST_MODEL"],
       "description": "Small/fast background model."
+    },
+    {
+      "name": "CLAUDE_CONFIG_DIR",
+      "value": "{claudeConfigDir}",
+      "optional": true,
+      "override": ["CLAUDE_CONFIG_DIR"],
+      "description": "Isolated Claude Code config dir (settings, sessions, plugins, credentials). Empty (unset) when CLAUDE_CODE_ISOLATE=off, so sessions share ~/.claude."
     },
     {
       "name": "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
@@ -232,6 +251,12 @@
         }
       },
       "description": "Replaces the built-in model picker with the live catalog and allowlists only those models."
+    },
+    {
+      "kind": "file",
+      "path": "~/.subconscious/claude-code",
+      "lifetime": "persistent",
+      "description": "Claude Code config dir for subc sessions (~/.subconscious/claude-code, honoring $SUBC_CONFIG_DIR), set via CLAUDE_CONFIG_DIR. Holds Claude settings, sessions, plugins, and credentials for subc claude. subc never deletes it. Opt out with CLAUDE_CODE_ISOLATE=off or subc claude --no-isolate."
     },
     {
       "kind": "file",

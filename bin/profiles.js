@@ -36,6 +36,10 @@ const PREVIOUS_DEFAULT_GATEWAYS = new Set([
 const CONFIG_OVERRIDE = process.env.SUBC_CONFIG_DIR?.trim();
 const CONFIG_DIR = CONFIG_OVERRIDE || path.join(os.homedir(), '.subconscious');
 export const PROFILES_DIR = path.join(CONFIG_DIR, 'profiles');
+/** Absolute path of the subc config dir (~/.subconscious or $SUBC_CONFIG_DIR). */
+export function configDir() {
+  return CONFIG_DIR;
+}
 const LEGACY_PROFILES_DIR = CONFIG_OVERRIDE
   ? null
   : path.join(os.homedir(), '.subcon', 'profiles');
