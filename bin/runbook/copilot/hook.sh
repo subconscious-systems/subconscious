@@ -45,11 +45,13 @@ post_hook() {
   if [[ -z "$payload" ]]; then
     return 0
   fi
-  curl -sS -m 2 \
-    -H "Authorization: Bearer ${API_KEY}" \
+  # The key and body stay out of curl's argv, which any local user can read
+  # from ps. printf is a builtin, so neither value reaches an exec'd argv.
+  printf '%s' "$payload" | curl -sS -m 2 \
+    -H @<(printf 'Authorization: Bearer %s\n' "$API_KEY") \
     -H "Content-Type: application/json" \
     -H "x-subconscious-client: copilot" \
-    -d "$payload" \
+    --data-binary @- \
     "${GATEWAY_URL%/}/v1/agent-hooks" >/dev/null 2>&1 || true
 }
 
