@@ -99,8 +99,8 @@ function upsertValues(text, updates) {
   const remaining = new Map(Object.entries(updates));
   const output = lines.map((line) => {
     const match = line.match(/^(\s*(?:export\s+)?)([A-Za-z_][A-Za-z0-9_]*)=/);
-    if (!match || !remaining.has(match[2])) return line;
-    const value = remaining.get(match[2]);
+    if (!match || !Object.hasOwn(updates, match[2])) return line;
+    const value = updates[match[2]];
     remaining.delete(match[2]);
     return `${match[1]}${match[2]}=${encodeValue(value)}`;
   });
