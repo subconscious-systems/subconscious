@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { LOGO_ART_SMALL_LINES } from './branding.js';
 import { c, colorEnabled } from './colors.js';
+import { proxyAwareFetch } from './network.js';
 import { spawnWindows } from './windows/process.js';
 
 export const PACKAGE_NAME = 'subconscious-cli';
@@ -162,7 +163,7 @@ export async function currentVersion() {
 }
 
 export async function fetchLatestVersion(options = {}) {
-  const fetchImpl = options.fetchImpl || globalThis.fetch;
+  const fetchImpl = options.fetchImpl || proxyAwareFetch;
   const timeoutMs = options.timeoutMs ?? UPDATE_CHECK_TIMEOUT_MS;
   const signal = options.signal;
   if (typeof fetchImpl !== 'function') throw new Error('fetch is unavailable');

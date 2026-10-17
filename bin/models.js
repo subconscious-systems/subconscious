@@ -7,6 +7,8 @@
  * when the gateway is offline or returns nothing usable.
  */
 
+import { proxyAwareFetch } from './network.js';
+
 const MODEL_ID_PATTERN = /^[-A-Za-z0-9._:/+]+$/;
 export const DEFAULT_MODEL_FETCH_TIMEOUT_MS = 3000;
 export const AVAILABLE_MODELS_PATH = '/v1/models/available';
@@ -72,7 +74,7 @@ export async function fetchGatewayModels({
   baseUrl,
   apiKey,
   path = PUBLIC_MODELS_PATH,
-  fetchImpl = globalThis.fetch,
+  fetchImpl = proxyAwareFetch,
   timeoutMs = DEFAULT_MODEL_FETCH_TIMEOUT_MS,
   signal,
 }) {
@@ -176,7 +178,7 @@ export async function resolveModelCatalog({
   selectedModel,
   fallbackModels = [],
   pinnedModels,
-  fetchImpl = globalThis.fetch,
+  fetchImpl = proxyAwareFetch,
   timeoutMs = DEFAULT_MODEL_FETCH_TIMEOUT_MS,
   signal,
 }) {

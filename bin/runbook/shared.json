@@ -52,6 +52,16 @@
       "description": "Maximum concurrent Claude/Codex subagent threads.",
       "type": "integer",
       "min": 1
+    },
+    {
+      "name": "SYSTEM_CA",
+      "label": "Trust the OS certificate store",
+      "description": "Trust certificates from the operating system store, for a TLS-inspecting corporate proxy. Off by default.",
+      "type": "choice",
+      "strict": true,
+      "choices": ["off", "on"],
+      "default": "off",
+      "template": false
     }
   ]
 }
