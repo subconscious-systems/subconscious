@@ -109,6 +109,37 @@ subc pi
 subc dsh
 ```
 
+## Checking your setup
+
+`subc doctor` checks everything a launch depends on and prints how to fix each
+problem it finds:
+
+```bash
+subc doctor
+subc doctor --json
+subc -p staging doctor
+```
+
+| Group | Checks |
+| --- | --- |
+| CLI | the installed version against npm, the Node.js version, and whether `subc` is on `PATH` |
+| Account | the selected profile, and whether its API key is present and accepted by the platform |
+| Gateway | whether the gateway answers and how fast, which catalog it returned, and whether the profile `MODEL` is in it |
+| Agents | each launchable agent: installed or not, and its version against `install.minimum_version` |
+| Tools | the commands the runbooks need (`prerequisites` in each `agent.json`), and which agents need them |
+
+Every check only reads. doctor installs, configures, and launches nothing, and
+never prints the API key, so its output is safe to paste into a bug report or
+`subc feedback`. It skips the update prompt and reports a newer release as a
+check instead. A missing agent is listed but is not a failure. doctor exits 1
+when any check fails, so scripts and CI can gate on it.
+
+`--json` prints `schema_version`, `profile`, `platform`, `ok`, a `summary`
+count per status, and `checks`. Each check has `group`, a stable `id` (such as
+`api-key`, `gateway`, or `agent:codex`), `status` (`ok`, `warn`, `fail`, or
+`info`), `label`, and, when there is one, `detail` and `fix`. On Windows,
+agent versions are not read.
+
 ## Native Windows support
 
 Windows has its own implementation in `bin/windows/`, selected only when

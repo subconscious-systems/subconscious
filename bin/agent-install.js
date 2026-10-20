@@ -76,7 +76,7 @@ function binExts() {
  * containing the executable if found, otherwise null. Searching the candidate
  * dirs lets us find binaries installed this session that aren't on PATH yet.
  */
-async function resolveBinPath(bin, preferredDirs = []) {
+export async function resolveBinPath(bin, preferredDirs = []) {
   const pathDirs = (process.env.PATH || '')
     .split(path.delimiter)
     .filter(Boolean);

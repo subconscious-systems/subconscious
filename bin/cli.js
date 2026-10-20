@@ -28,6 +28,7 @@ import {
 } from './auth.js';
 import { renderBanner } from './branding.js';
 import { c } from './colors.js';
+import { DOCTOR_HELP, doctorCommand } from './doctor.js';
 import { feedbackCommand, printFeedbackHelp } from './feedback.js';
 import {
   harnessManifestCommand,
@@ -79,6 +80,7 @@ function printHelp() {
     ${c.cyan}update-platform-url${c.reset}  Update the active profile's platform URL
     ${c.cyan}logout${c.reset}       Remove saved credentials
     ${c.cyan}whoami${c.reset}       Show current authentication status
+    ${c.cyan}doctor${c.reset}       Check your setup and show how to fix problems
     ${c.cyan}usage${c.reset}        Show billing, quota, and model usage
     ${c.cyan}feedback${c.reset}     Send feedback or get help from support
     ${c.cyan}upgrade${c.reset}      Upgrade this CLI to the latest version
@@ -110,6 +112,7 @@ ${agents}
     ${c.dim}$${c.reset} subc config edit vim
     ${c.dim}$${c.reset} subc sessions
     ${c.dim}$${c.reset} subc sessions resume claude:SESSION_ID --harness codex
+    ${c.dim}$${c.reset} subc doctor
     ${c.dim}$${c.reset} subc usage
     ${c.dim}$${c.reset} subc usage --json
     ${c.dim}$${c.reset} subc feedback --subject "Bug" --message "Playground won't load"
@@ -347,6 +350,18 @@ async function main() {
       return;
     }
     harnessManifestCommand(args.slice(1));
+    return;
+  }
+
+  // doctor reports a newer release itself, so it skips the update prompt and
+  // its --json output stays the only thing on stdout.
+  if (command === 'doctor') {
+    if (isHelpArg(args[1])) {
+      console.log(DOCTOR_HELP);
+      return;
+    }
+    const profile = await loadProfile(profileName);
+    await doctorCommand(args.slice(1), { profile, profileName });
     return;
   }
 
