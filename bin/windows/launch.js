@@ -9,6 +9,7 @@ import {
   resolveInputs,
   takeFlags,
 } from '../agent-launch.js';
+import { prepareClaudeLaunch } from '../claude-config.js';
 import { claudePickerSettings } from '../claude-picker.js';
 import { modelIds, positiveInteger } from '../launch-values.js';
 import { modelSupportsVision } from '../model-capabilities.js';
@@ -56,11 +57,18 @@ function claudeLaunch(agent, argv, env) {
 }
 
 function plannedLaunch(agent, argv, env) {
-  const plan =
-    agent.id === 'claude-code'
-      ? claudeLaunch(agent, argv, env)
-      : launchPlan(agent, { env, args: argv });
-  return { command: plan.argv[0], args: plan.argv.slice(1), env: plan.env };
+  if (agent.id !== 'claude-code') {
+    const plan = launchPlan(agent, { env, args: argv });
+    return { command: plan.argv[0], args: plan.argv.slice(1), env: plan.env };
+  }
+  const plan = claudeLaunch(agent, argv, env);
+  return {
+    command: plan.argv[0],
+    args: plan.argv.slice(1),
+    env: plan.env,
+    // Runs only when the launch executes, so planning never touches disk.
+    prepare: (options) => prepareClaudeLaunch(agent, plan.env, env, options),
+  };
 }
 
 function codexCatalog(env, context, maxContext, compact) {
@@ -266,12 +274,17 @@ export async function windowsLaunch(
   throw new Error(`No native Windows launcher is available for ${id}`);
 }
 
-export async function executeWindowsLaunch(spec, run) {
+export async function executeWindowsLaunch(spec, run, prepareOptions) {
   try {
+    const prepared = spec.prepare?.(prepareOptions);
+    for (const warning of prepared?.warnings ?? []) {
+      console.error(`  ${warning}`);
+    }
+    // Claude Code would write into the user's own config there.
+    if (prepared?.refused) return 1;
+    const env = { ...spec.env, ...prepared?.env };
     const options =
-      spec.input === undefined
-        ? { env: spec.env }
-        : { env: spec.env, input: spec.input };
+      spec.input === undefined ? { env } : { env, input: spec.input };
     return await run(spec.command, spec.args, options);
   } finally {
     await spec.cleanup?.();

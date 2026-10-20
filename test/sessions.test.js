@@ -311,3 +311,45 @@ test('a stuck opencode cannot block session discovery or the event loop', {
     await fs.rm(binDir, { recursive: true, force: true });
   }
 });
+
+async function homeWithClaudeSession(configName, sessionId) {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-sessions-home-'));
+  const project = path.join(home, configName, 'projects', '-work-app');
+  await fs.mkdir(project, { recursive: true });
+  await fs.writeFile(path.join(home, configName, 'settings.json'), '{}');
+  await fs.writeFile(
+    path.join(project, `${sessionId}.jsonl`),
+    JSON.stringify({
+      type: 'user',
+      cwd: '/work/app',
+      sessionId,
+      message: { role: 'user', content: 'Ship it' },
+    }),
+  );
+  return home;
+}
+
+test('Claude sessions come from the folder plain claude uses', async (t) => {
+  const home = await homeWithClaudeSession('.claude-personal', 'personal-id');
+  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  const noOpenCode = () => ({ status: 1, stdout: '' });
+  const keys = async (env) =>
+    (await discoverSessions({ home, env, execute: noOpenCode, max: 20 })).map(
+      (session) => session.key,
+    );
+
+  const personal = path.join(home, '.claude-personal');
+  assert.deepEqual(await keys({ CLAUDE_CONFIG_DIR: personal }), [
+    'claude:personal-id',
+  ]);
+  // Inside a subc session CLAUDE_CONFIG_DIR is the subc dir; the carried
+  // source still names the user's folder.
+  assert.deepEqual(
+    await keys({
+      CLAUDE_CONFIG_DIR: path.join(home, '.subconscious', 'claude-code'),
+      SUBC_CLAUDE_CONFIG_SOURCE: personal,
+    }),
+    ['claude:personal-id'],
+  );
+  assert.deepEqual(await keys({}), [], 'no CLAUDE_CONFIG_DIR reads ~/.claude');
+});

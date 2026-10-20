@@ -28,7 +28,7 @@
   },
   "help": {
     "usage": "subc [-p NAME] claude [help|status|uninstall] [Claude arguments...]",
-    "behavior": "Launches Claude Code with the active Subconscious profile and model picker. Persistent files are leftover-only: subc claude uninstall.",
+    "behavior": "Launches Claude Code with the active Subconscious profile and model picker. Sessions run with CLAUDE_CONFIG_DIR=~/.subconscious/claude-code, which shares the setup your plain claude uses (~/.claude, or your CLAUDE_CONFIG_DIR): CLAUDE.md, skills, plugins, hooks, MCP servers and session history. Only the model pick is kept apart, so a /model choice in subc does not change plain Claude. Persistent files are leftover-only: subc claude uninstall.",
     "options": [
       ["help", "Show this help"],
       ["status", "Inspect leftover ~/.claude/subconscious-gateway.env"],
@@ -113,6 +113,18 @@
       "type": "integer",
       "min": 1
     },
+    {
+      "name": "CLAUDE_CODE_ISOLATE",
+      "flag": "--no-isolate",
+      "flag_value": "off",
+      "default": "on",
+      "strict": true,
+      "choices": ["on", "off"],
+      "help": "Use ~/.claude directly, so a /model pick in subc also changes plain Claude Code",
+      "label": "Isolated Claude config",
+      "description": "When on, subc claude sessions use ~/.subconscious/claude-code as the Claude config dir. It links back to ~/.claude for CLAUDE.md, skills, hooks and session history, copies the plugin index, rebuilds settings.json from ~/.claude/settings.json on each launch, and keeps only the subc model pick apart.",
+      "comment": "CLAUDE_CODE_ISOLATE=off shares ~/.claude with plain Claude Code."
+    },
     { "name": "MAX_CONCURRENT_SUBAGENTS" },
     {
       "name": "MAX_SUBAGENT_SPAWN_DEPTH",
@@ -146,6 +158,12 @@
       "value": "{model}",
       "override": ["ANTHROPIC_SMALL_FAST_MODEL"],
       "description": "Small/fast background model."
+    },
+    {
+      "name": "CLAUDE_CONFIG_DIR",
+      "value": "{claudeConfigDir}",
+      "optional": true,
+      "description": "Claude Code config dir for subc sessions, prepared before each launch to share the user's own Claude config (~/.claude, or a CLAUDE_CONFIG_DIR they set, which becomes the source rather than the launch dir). When CLAUDE_CODE_ISOLATE=off, the user's own CLAUDE_CONFIG_DIR is kept, or none is set, so sessions use it directly."
     },
     {
       "name": "CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY",
@@ -232,6 +250,12 @@
         }
       },
       "description": "Replaces the built-in model picker with the live catalog and allowlists only those models."
+    },
+    {
+      "kind": "file",
+      "path": "~/.subconscious/claude-code",
+      "lifetime": "persistent",
+      "description": "Claude Code config dir for subc sessions (~/.subconscious/claude-code, honoring $SUBC_CONFIG_DIR), set via CLAUDE_CONFIG_DIR. Each launch links CLAUDE.md, history.jsonl and keybindings.json (when present) and the rules, agents, commands, skills, output-styles, hooks, projects, file-history, todos, plans and ide folders (created in ~/.claude when missing) back to ~/.claude, copies the plugin index files (plugin changes made inside subc stay in subc and reset on the next launch), rebuilds settings.json from ~/.claude/settings.json (keeping the subc model pick, dropping apiKeyHelper and env names subc sets), and copies MCP servers, trust and onboarding state from ~/.claude.json (never login state). Settings or MCP servers changed inside a subc session are replaced on the next launch; that launch names them and saves them in settings.discarded.json or mcp.discarded.json in this dir. subc never deletes it and never writes ~/.claude settings; it refuses to launch when this dir resolves to your own config. To remove it, delete the links first: rm -r with a trailing slash, or PowerShell Remove-Item -Recurse, follows them into ~/.claude. Opt out with CLAUDE_CODE_ISOLATE=off or subc claude --no-isolate."
     },
     {
       "kind": "file",

@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { AGENTS, agentById, agentCommandName } from './agent-data.js';
 import { resolveAgent, runAgent } from './agents.js';
-
+import { claudeSourceDir } from './claude-config.js';
 import { c } from './colors.js';
 import { runCommand } from './command-output.js';
 
@@ -451,8 +451,10 @@ export async function discoverSessions(options = {}) {
   const home = options.home || os.homedir();
   const max = options.max || 500;
   const execute = options.execute || runCommand;
+  // Plain claude's folder: ~/.claude, or the user's CLAUDE_CONFIG_DIR.
+  const claudeDir = claudeSourceDir({ env: options.env, home });
   const roots = options.roots || {
-    claude: path.join(home, '.claude', 'projects'),
+    claude: path.join(claudeDir, 'projects'),
     codex: path.join(home, '.codex', 'sessions'),
     pi: path.join(home, '.pi', 'agent', 'sessions'),
   };
@@ -464,7 +466,7 @@ export async function discoverSessions(options = {}) {
           codex: path.join(roots.codex, '.session-index.jsonl'),
         }
       : {
-          claude: path.join(home, '.claude', 'history.jsonl'),
+          claude: path.join(claudeDir, 'history.jsonl'),
           codex: path.join(home, '.codex', 'session_index.jsonl'),
         });
   const claude = await discoverClaudeIndex(roots.claude, indexes.claude, max);
