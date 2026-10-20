@@ -713,6 +713,33 @@ test('config accepts --platform-url updates', async () => {
   assert.equal(profile.values.PLATFORM_URL, 'https://platform-staging.example');
 });
 
+test('config validates and normalizes URL updates', async () => {
+  await assert.rejects(
+    profiles.configCommand(
+      ['--gateway-url', 'gateway-staging.example'],
+      'invalid-gateway-config',
+      { profileExplicit: true },
+    ),
+    /Gateway URL must be a valid http:\/\/ or https:\/\/ URL/,
+  );
+  await assert.rejects(
+    profiles.configCommand(
+      ['--platform-url', 'https://platform-staging.example?invalid=true'],
+      'invalid-platform-config',
+      { profileExplicit: true },
+    ),
+    /Platform URL cannot contain a query string or fragment/,
+  );
+
+  await profiles.configCommand(
+    ['--gateway-url', 'https://gateway-staging.example/'],
+    'normalized-gateway-config',
+    { profileExplicit: true },
+  );
+  const profile = await profiles.loadProfile('normalized-gateway-config');
+  assert.equal(profile.values.GATEWAY_URL, 'https://gateway-staging.example');
+});
+
 test('saving a profile again adds no settings the template leaves out', async () => {
   const first = await profiles.ensureProfile('stable', 'sk-stable');
   const before = await fs.readFile(first.path, 'utf-8');
