@@ -201,6 +201,54 @@ test('maps native resumes and portable launches to each harness CLI', () => {
   ]);
 });
 
+test('empty or unusable indexes fall back to valid session transcripts', async () => {
+  for (const content of ['', 'null\n[]\n', '{"unrecognized":true}\n']) {
+    const indexes = {
+      claude: path.join(roots.claude, '.history-index.jsonl'),
+      codex: path.join(roots.codex, '.session-index.jsonl'),
+    };
+    await fs.writeFile(indexes.claude, content);
+    await fs.writeFile(indexes.codex, content);
+    const sessions = await discoverSessions({
+      roots,
+      indexes,
+      execute: () => ({ status: 1 }),
+      max: 20,
+    });
+    assert.ok(
+      sessions.some((session) => session.key === 'claude:claude-id'),
+      `Claude index: ${content}`,
+    );
+    assert.ok(
+      sessions.some((session) => session.key === 'codex:codex-id'),
+      `Codex index: ${content}`,
+    );
+    assert.ok(
+      sessions.every(
+        (session) => !Object.values(indexes).includes(session.sourcePath),
+      ),
+    );
+    const limited = await discoverSessions({
+      roots: {
+        ...roots,
+        codex: path.join(root, 'missing-codex'),
+        pi: path.join(root, 'missing-pi'),
+        sc: path.join(root, 'missing-sc'),
+      },
+      indexes: {
+        claude: indexes.claude,
+        codex: path.join(root, 'missing-index'),
+      },
+      execute: () => ({ status: 1 }),
+      max: 1,
+    });
+    assert.deepEqual(
+      limited.map((session) => session.key),
+      ['claude:claude-id'],
+    );
+  }
+});
+
 test('session discovery ignores non-object JSONL records in history indexes', async () => {
   const indexes = {
     claude: path.join(root, 'claude-history.jsonl'),
