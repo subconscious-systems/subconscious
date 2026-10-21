@@ -50,10 +50,17 @@ function loadSubconsciousEnvFile(): void {
   ) {
     return;
   }
+  const directory =
+    process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent');
+  applyEnvFile(join(directory, 'subconscious.env'));
+  // An older install names the key inline in that file. A newer one only points
+  // at one shared credentials file. An inline value wins, so both work.
+  const shared = process.env.SUBCONSCIOUS_SECRETS_FILE;
+  if (!process.env.SUBCONSCIOUS_API_KEY && shared) applyEnvFile(shared);
+}
+
+function applyEnvFile(path: string): void {
   try {
-    const directory =
-      process.env.PI_CODING_AGENT_DIR || join(homedir(), '.pi', 'agent');
-    const path = join(directory, 'subconscious.env');
     const text = readFileSync(path, 'utf8');
     for (const line of text.split('\n')) {
       const trimmed = line.trim();

@@ -33,6 +33,13 @@ if [[ -f "$CONFIG" ]]; then
   # shellcheck disable=SC1090
   source "$CONFIG"
 fi
+# An older install names the key inline above. A newer one only points at one
+# shared credentials file. An inline value wins, so both keep working.
+if [[ -z "${SUBCONSCIOUS_API_KEY:-}" && -n "${SUBCONSCIOUS_SECRETS_FILE:-}" ]] &&
+  [[ -f "${SUBCONSCIOUS_SECRETS_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  source "${SUBCONSCIOUS_SECRETS_FILE}"
+fi
 
 GATEWAY_URL="${SUBCONSCIOUS_GATEWAY_URL:-}"
 API_KEY="${SUBCONSCIOUS_API_KEY:-}"

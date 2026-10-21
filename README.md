@@ -501,6 +501,51 @@ Agent-specific runbook tuning variables are also honored, including
 max-context settings. Extra `KEY=value` lines in the profile env file are
 passed through the same way and override Subconscious-injected defaults.
 
+## Where your credentials live
+
+Installing hooks for Codex, Cursor, Copilot, or Pi writes one shared file:
+
+```text
+~/.subconscious/secrets.env          mode 600, in a 700 directory
+```
+
+It holds the gateway origin and the API key, shell-quoted. Each agent's
+directory then holds a small pointer to it instead of a second copy of the key:
+
+```text
+~/.codex/subconscious-hooks.env
+~/.cursor/subconscious-hooks.env
+~/.copilot/subconscious-hooks.env
+~/.pi/agent/subconscious.env
+```
+
+The key used to exist in up to five places, so rotating it meant editing five
+files and missing one left a stale credential behind. Now one edit is enough.
+Set `SUBCONSCIOUS_SECRETS_FILE` to keep the shared file somewhere else, such
+as a mounted secret store or a path your backup already covers:
+
+```bash
+SUBCONSCIOUS_SECRETS_FILE=~/.config/subc/secrets.env subc cursor install
+```
+
+An install from before this change still works: the hook reads a key named
+inline in its own file and ignores the shared file when it finds one, so
+upgrading needs no migration step. Re-running any `install` moves that agent
+onto the shared file. Uninstall removes the agent's pointer but leaves the
+shared file alone, because another agent may still be using it.
+
+Treat `secrets.env` as a secret. `subc` never reads or deletes it except to
+write it during an install.
+
+Pi is the one exception: `~/.pi/agent/models.json` still carries the key inline,
+because Pi's provider format has no way to name a file instead. Two files hold
+the key if you use Pi, one otherwise.
+
+On Windows the same idea is used with `subconscious-windows.json` in each
+agent's user directory, which you should also treat as a secret.
+
+## Authentication
+
 ## Authentication
 
 `subc login` opens a browser to a one-time login link, waits for you to sign in, and saves the API key to the selected runbook profile with mode `600`. For the default profile it also maintains `~/.subconscious/config.json`. The same flow works on a laptop, over SSH, and inside a VM: the browser does not need to be on the machine running the CLI.
