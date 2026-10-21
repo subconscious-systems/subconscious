@@ -476,11 +476,20 @@ export async function configCommand(
         '--model': 'MODEL',
         '--subagent-model': 'CLAUDE_CODE_SUBAGENT_MODEL',
       }[arg];
+      const urlLabel =
+        arg === '--gateway-url'
+          ? 'Gateway URL'
+          : arg === '--platform-url'
+            ? 'Platform URL'
+            : null;
+      const normalizedValue = urlLabel
+        ? validateOriginUrl(value, urlLabel)
+        : value;
       updates[key] =
         (arg === '--model' || arg === '--subagent-model') &&
         isUnsetSetting(value)
           ? ''
-          : value;
+          : normalizedValue;
     } else if (action === 'edit' && ALLOWED_EDITORS.has(arg)) {
       if (editor) throw new Error('Specify only one editor');
       editor = arg;
