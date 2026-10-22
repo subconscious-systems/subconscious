@@ -277,7 +277,7 @@ export async function loginCommand(_argv = [], options = {}) {
         }
         console.log(`  ${c.dim}Runbook profile: ${profile.path}${c.reset}`);
         console.log(
-          `  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or install editor hooks with ${c.reset}${c.cyan}subc cursor install${c.reset}${c.dim}.${c.reset}`,
+          `  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or set up VS Code Copilot with ${c.reset}${c.cyan}subc copilot install${c.reset}${c.dim}.${c.reset}`,
         );
         console.log(
           `  ${c.dim}Pi needs ${c.reset}${c.cyan}subc pi install${c.reset}${c.dim} first. List profiles with ${c.reset}${c.cyan}subc config${c.reset}${c.dim}.${c.reset}`,

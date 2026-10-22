@@ -34,7 +34,7 @@ were used; temporary mock profiles were removed afterward.
 - Browser login was intentionally skipped because it is unavailable on this VM.
 - No paid inference or real gateway credentials were used. Other agents' version
   and help checks do not establish full inference/session compatibility.
-- Cursor/Copilot configuration and hooks are covered by automated tests, not
+- Copilot configuration and hooks are covered by automated tests, not
   interactive IDE testing. ARM64 runtime execution was not tested.
 - These VM results describe the local candidate before publication. The
   Windows-only candidate npm archive is a local test artifact, not the full

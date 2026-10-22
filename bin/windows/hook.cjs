@@ -18,9 +18,7 @@ async function main() {
   });
   try { payload = JSON.parse(input); } catch { /* fail open */ }
   const event = payload?.hook_event_name || '';
-  const response = client === 'cursor'
-    ? (event === 'preCompact' ? {} : { continue: true, permission: 'allow' })
-    : client === 'copilot' ? { continue: true } : {};
+  const response = client === 'copilot' ? { continue: true } : {};
   try {
     const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
     const cid = payload?.conversation_id || payload?.session_id;
@@ -36,7 +34,7 @@ async function main() {
         await res.body?.cancel();
       } catch { /* fail open */ } finally { clearTimeout(timer); }
     };
-    if ((client === 'cursor' && event === 'beforeSubmitPrompt') || (client === 'copilot' && event === 'UserPromptSubmit')) {
+    if (client === 'copilot' && event === 'UserPromptSubmit') {
       if (typeof payload.prompt !== 'string' || !payload.prompt) return;
       const root = payload.workspace_roots?.[0] || payload.cwd;
       await post({ event: 'conversation_ensure', prompt: payload.prompt, workspace: typeof root === 'string' ? path.win32.basename(root) : undefined });
@@ -44,10 +42,6 @@ async function main() {
     if (client === 'codex' && ['PreCompact', 'PostCompact'].includes(event)) {
       const phase = event === 'PreCompact' ? 'start' : 'end';
       await post({ event: 'conversation_compaction', phase, dedupe_key: `${cid}:${phase}:${payload.turn_id || randomUUID()}`, metadata: { trigger: payload.trigger, turn_id: payload.turn_id } });
-    }
-    if (client === 'cursor' && event === 'preCompact') {
-      const metadata = Object.fromEntries(['trigger', 'context_tokens', 'context_window_size', 'context_usage_percent', 'message_count', 'messages_to_compact', 'is_first_compaction'].filter(k => payload[k] != null).map(k => [k, payload[k]]));
-      await post({ event: 'conversation_compaction', phase: 'point', dedupe_key: `${cid}:${payload.generation_id ?? 'gen'}:${payload.is_first_compaction ?? false}`, metadata });
     }
     if (client === 'copilot' && ['PreCompact', 'UserPromptSubmit'].includes(event)) {
       const pendingDir = path.join(path.dirname(configPath), 'subconscious-compact-pending');
