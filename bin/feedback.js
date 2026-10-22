@@ -12,6 +12,7 @@ import { createInterface } from 'node:readline/promises';
 import { getApiKey, getPlatformUrl } from './auth.js';
 import { imageContentType, readClipboardImage } from './clipboard-image.js';
 import { c } from './colors.js';
+import { proxyAwareFetch } from './network.js';
 import { DEFAULT_PROFILE } from './profiles.js';
 
 export const FEEDBACK_API_PATH = '/api/cli/feedback';
@@ -111,7 +112,7 @@ export async function submitFeedback(
   apiKey,
   platformUrl,
   payload,
-  fetchImpl = fetch,
+  fetchImpl = proxyAwareFetch,
 ) {
   const res = await fetchImpl(
     `${platformUrl.replace(/\/$/, '')}${FEEDBACK_API_PATH}`,

@@ -10,6 +10,7 @@ import fs from 'node:fs/promises';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { c } from './colors.js';
+import { proxyAwareFetch } from './network.js';
 import {
   compareVersions,
   detectInstallTarget,
@@ -42,7 +43,7 @@ export async function currentCliVersion() {
   return pkg.version;
 }
 
-export async function fetchLatestVersion(fetchImpl = fetch) {
+export async function fetchLatestVersion(fetchImpl = proxyAwareFetch) {
   const res = await fetchImpl(
     `https://registry.npmjs.org/${PACKAGE_NAME}/latest`,
     {
