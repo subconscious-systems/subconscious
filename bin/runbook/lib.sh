@@ -11,6 +11,24 @@ subc_model_supports_vision() {
   return 1
 }
 
+# Quote a value for a line of shell source: ' becomes '\''.
+#
+# Credentials reach us from --api-key, a profile, or the environment, and the
+# env files that hold them are sourced by hook.sh. Interpolating a raw value
+# into single quotes means a quote in the value is read as shell syntax: a
+# stray one leaves an unmatched quote, so the source fails and the hook sees no
+# credentials; a balanced pair runs what follows as a command. ' is the only
+# character affected — a newline and every metacharacter are already literal
+# between single quotes. This round-trips any byte.
+subc_shell_quote() {
+  printf "'%s'" "${1//\'/\'\\\'\'}"
+}
+
+# One `export NAME=VALUE` line, quoted.
+subc_env_line() {
+  printf 'export %s=%s\n' "$1" "$(subc_shell_quote "$2")"
+}
+
 # Replace this shell with the agent argv subc built:
 #   subc_exec [PLACEHOLDER VALUE]... -- ARGV...
 # Only the first SUBC_TEMPLATE_WORDS words came from the agent's argv
