@@ -476,6 +476,13 @@ export async function configCommand(
         '--model': 'MODEL',
         '--subagent-model': 'CLAUDE_CODE_SUBAGENT_MODEL',
       }[arg];
+      // Both URLs reach a browser opener and an HTTP request, so reject the
+      // same shapes `subc update-url` rejects. Without this, `subc config
+      // --platform-url` stored any string, metacharacters included.
+      if (key === 'GATEWAY_URL' || key === 'PLATFORM_URL') {
+        updates[key] = validateOriginUrl(value, 'URL');
+        continue;
+      }
       updates[key] =
         (arg === '--model' || arg === '--subagent-model') &&
         isUnsetSetting(value)

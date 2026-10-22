@@ -11,7 +11,7 @@
  * (e.g. http://localhost:3000). Production defaults to platform.subconscious.dev.
  */
 
-import { exec } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -104,13 +104,11 @@ function openBrowser(url) {
       .catch(() => console.log(`Please open this URL manually:\n\n  ${url}\n`));
     return;
   }
-  const cmd =
-    process.platform === 'darwin'
-      ? `open "${url}"`
-      : process.platform === 'win32'
-        ? `start "" "${url}"`
-        : `xdg-open "${url}"`;
-  exec(cmd, (err) => {
+  // execFile, not exec: the URL is an argument, not shell source. A value that
+  // never parses as a URL can still reach here from a hand-edited profile, and
+  // handing it to a shell would make the failure mode unpredictable.
+  const command = process.platform === 'darwin' ? 'open' : 'xdg-open';
+  execFile(command, [url], (err) => {
     if (err) {
       console.log(
         `\n${c.yellow}Could not open browser automatically.${c.reset}`,

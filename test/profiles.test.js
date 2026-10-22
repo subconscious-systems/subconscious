@@ -723,3 +723,46 @@ test('saving a profile again adds no settings the template leaves out', async ()
     /CODEX_STREAM_IDLE_TIMEOUT_MS|CODEX_MULTI_AGENT_VERSION/,
   );
 });
+
+// `subc update-url` has always validated these two. `subc config
+// --gateway-url / --platform-url` did not, so a wrong value was stored and the
+// failure surfaced later, somewhere unrelated to the setting that was wrong.
+test('config rejects the URL shapes update-url rejects', async () => {
+  const rejected = [
+    'file:///etc/passwd',
+    'not-a-url',
+    'https://user:pass@p.example',
+    'https://p.example?token=secret',
+    'https://p.example#frag',
+    // Characters that have no meaning in a gateway origin. Worth rejecting
+    // because the value is later interpolated into a URL for a child process.
+    'https://p.example"; not-a-url',
+    'https://p.example with spaces',
+  ];
+  for (const value of rejected) {
+    for (const flag of ['--gateway-url', '--platform-url']) {
+      await assert.rejects(
+        profiles.configCommand([flag, value], 'urlprobe', {
+          profileExplicit: true,
+        }),
+        /valid http|credentials|query string/,
+        `${flag} accepted ${value}`,
+      );
+    }
+  }
+  // Nothing invalid reached the profile.
+  const profile = await profiles.loadProfile('urlprobe');
+  assert.equal(profile.values.PLATFORM_URL, undefined);
+  assert.equal(profile.values.GATEWAY_URL, undefined);
+
+  // A real URL still saves, and trailing slashes are normalized away.
+  await profiles.configCommand(
+    ['--platform-url', 'https://platform.example/'],
+    'urlprobe',
+    { profileExplicit: true },
+  );
+  assert.equal(
+    (await profiles.loadProfile('urlprobe')).values.PLATFORM_URL,
+    'https://platform.example',
+  );
+});
