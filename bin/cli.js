@@ -115,8 +115,8 @@ ${agents}
     ${c.dim}$${c.reset} subc feedback --subject "Bug" --message "Playground won't load"
     ${c.dim}$${c.reset} subc claude
     ${c.dim}$${c.reset} subc claude help
-    ${c.dim}$${c.reset} subc cursor install
-    ${c.dim}$${c.reset} subc cursor uninstall
+    ${c.dim}$${c.reset} subc copilot install
+    ${c.dim}$${c.reset} subc copilot uninstall
     ${c.dim}$${c.reset} subc pi install
     ${c.dim}$${c.reset} subc harness-manifest --json
     ${c.dim}$${c.reset} subc codex headless "fix the failing test"
@@ -227,7 +227,7 @@ session with a bounded, text-only handoff from the source conversation.
 
 function printRetiredSetup(args = []) {
   const maybeAgent = resolveAgent(args[0]);
-  const command = maybeAgent ? agentCommandName(maybeAgent) : 'cursor';
+  const command = maybeAgent ? agentCommandName(maybeAgent) : 'copilot';
   console.error(`
   ${c.red}subc setup is no longer used.${c.reset} Use the agent command instead:
 
@@ -245,6 +245,18 @@ function printRetiredSettings() {
     ${c.cyan}subc -p NAME config${c.reset}         Show a profile
     ${c.cyan}subc -p NAME config edit${c.reset}    Open the profile env file
     ${c.cyan}subc config help${c.reset}
+`);
+}
+
+function printRetiredCursor() {
+  console.error(`
+  ${c.red}subc no longer supports Cursor.${c.reset} Support ended in October 2026.
+
+  To remove hooks that an earlier subc installed, delete the subconscious-hook
+  entries from ~/.cursor/hooks.json, then delete these files:
+
+    ~/.cursor/hooks/subconscious-hook.sh   ${c.dim}(subconscious-hook.cjs on Windows)${c.reset}
+    ~/.cursor/subconscious-hooks.env       ${c.dim}(subconscious-windows.json on Windows)${c.reset}
 `);
 }
 
@@ -423,6 +435,12 @@ async function main() {
 
   if (command === 'settings') {
     printRetiredSettings();
+    process.exitCode = 1;
+    return;
+  }
+
+  if (command === 'cursor') {
+    printRetiredCursor();
     process.exitCode = 1;
     return;
   }

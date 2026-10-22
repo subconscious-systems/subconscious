@@ -14,7 +14,6 @@ the default gateway, model capabilities, and the settings every agent uses
 | `pi` | `run.sh` | `install.sh` (provider and extensions) |
 | `copilot` | none | `install.sh` (provider and hooks) |
 | `deepseek-harness` | `run.sh` | none |
-| `cursor` | none | `install.sh` (hooks) |
 
 ## What `agent.json` holds and who reads it
 

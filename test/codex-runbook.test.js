@@ -255,7 +255,7 @@ test('status and uninstall still run when a saved setting is invalid', () => {
   const agents = AGENTS.filter((agent) =>
     agent.runbook.setup_actions?.some((action) => action !== 'install'),
   );
-  assert.ok(agents.length >= 6);
+  assert.ok(agents.length >= 5);
   for (const agent of agents)
     for (const action of agent.runbook.setup_actions) {
       if (action === 'install') continue;
