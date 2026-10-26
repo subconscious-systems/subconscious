@@ -204,3 +204,42 @@ test('redirect: manual returns the redirect response unchanged', async () => {
     await server.stop();
   }
 });
+
+test('an IP target is checked against its own address, not the proxy host', async () => {
+  // The cert covers localhost and 127.0.0.1 only. The proxy is reached as
+  // localhost but tunnels every CONNECT to the origin, so a request for
+  // 10.0.0.1 gets a cert that does not name it and must be refused.
+  const origin = https.createServer({ key, cert: ca }, (_req, res) =>
+    res.end('ok'),
+  );
+  const destroyOrigin = trackSockets(origin);
+  const originPort = await listen(origin);
+  const proxy = http.createServer();
+  const destroyProxy = trackSockets(proxy);
+  proxy.on('connect', (_req, clientSocket) => {
+    const upstream = net.connect(originPort, '127.0.0.1', () => {
+      clientSocket.write('HTTP/1.1 200 Connection Established\r\n\r\n');
+      upstream.pipe(clientSocket);
+      clientSocket.pipe(upstream);
+    });
+    upstream.on('error', () => clientSocket.destroy());
+  });
+  const proxyPort = await listen(proxy);
+  const proxyFetch = createProxyFetch({
+    env: { HTTPS_PROXY: `http://localhost:${proxyPort}` },
+    ca,
+  });
+  try {
+    await assert.rejects(
+      proxyFetch('https://10.0.0.1/', { signal: AbortSignal.timeout(5000) }),
+      (error) => error.code === 'ERR_TLS_CERT_ALTNAME_INVALID',
+    );
+    const ok = await proxyFetch(`https://127.0.0.1:${originPort}/`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    assert.equal(await ok.text(), 'ok');
+  } finally {
+    await close(proxy, destroyProxy);
+    await close(origin, destroyOrigin);
+  }
+});

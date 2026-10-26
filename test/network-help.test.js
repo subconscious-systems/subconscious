@@ -83,3 +83,10 @@ test('subc --help points to the proxy guidance', () => {
   assert.match(output, /proxy/i);
   assert.match(output, /subc login help/);
 });
+
+test('proxyHint stays quiet for http targets, which never use the proxy', () => {
+  const env = { HTTP_PROXY: 'http://proxy.corp:8080' };
+  const error = networkError('ECONNREFUSED');
+  assert.equal(proxyHint(error, 'http://localhost:3000/api', env), null);
+  assert.equal(proxyHint(error, 'http://localhost:3000/api', {}), null);
+});

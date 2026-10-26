@@ -132,12 +132,14 @@ export async function ensureSystemCa(options = {}) {
   if (!(options.supported ?? supportsSystemCa())) return false;
   const run = options.spawnImpl || spawn;
   try {
-    await runMirrored(() =>
-      run(
-        process.execPath,
-        ['--use-system-ca', ...process.execArgv, ...process.argv.slice(1)],
-        { stdio: 'inherit' },
-      ),
+    await runMirrored(
+      () =>
+        run(
+          process.execPath,
+          ['--use-system-ca', ...process.execArgv, ...process.argv.slice(1)],
+          { stdio: 'inherit' },
+        ),
+      options.interactive,
     );
     return true;
   } catch (error) {
@@ -151,9 +153,10 @@ export async function ensureSystemCa(options = {}) {
 const FORWARDED_SIGNALS = ['SIGTERM', 'SIGHUP'];
 
 // Run the child, pass SIGTERM/SIGHUP on to it, and mirror its exit code or
-// signal. A terminal already delivers SIGINT to the whole process group, so
-// this process ignores it and waits for the child to decide.
-function runMirrored(start) {
+// signal. At a terminal, Ctrl-C already reaches the whole process group, so
+// forwarding SIGINT would deliver it twice. Without a terminal, a script or
+// harness signals this pid alone, so SIGINT is forwarded too.
+function runMirrored(start, interactive = process.stdin.isTTY === true) {
   return new Promise((resolve, reject) => {
     const child = start();
     const forward = (signal) => {
@@ -161,12 +164,12 @@ function runMirrored(start) {
         child.kill(signal);
       }
     };
-    const ignore = () => {};
+    const onSigint = interactive ? () => {} : forward;
     for (const signal of FORWARDED_SIGNALS) process.on(signal, forward);
-    process.on('SIGINT', ignore);
+    process.on('SIGINT', onSigint);
     const stop = () => {
       for (const signal of FORWARDED_SIGNALS) process.off(signal, forward);
-      process.off('SIGINT', ignore);
+      process.off('SIGINT', onSigint);
     };
     child.on('error', (error) => {
       stop();
@@ -407,6 +410,10 @@ export function connectThroughProxy(
       tlsSocket = tls.connect({
         socket,
         servername: net.isIP(targetHost) ? undefined : targetHost,
+        // Without a servername (IP targets) Node checks the cert against the
+        // socket's host, which is the proxy. Check it against the target.
+        checkServerIdentity: (_host, cert) =>
+          tls.checkServerIdentity(targetHost, cert),
         rejectUnauthorized: options.rejectUnauthorized ?? true,
         ca: options.ca,
       });
@@ -677,6 +684,14 @@ function isConnectionError(error) {
   );
 }
 
+function isHttpsUrl(url) {
+  try {
+    return new URL(String(url)).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 // One line about proxies for a request to `url` that failed with `error`.
 // With a proxy configured, name it so the user can check it. Without one,
 // suggest setting it: an agent driving subc sees only this output, so the
@@ -685,6 +700,8 @@ function isConnectionError(error) {
 // tlsTrustHint covers).
 export function proxyHint(error, url, env = process.env) {
   if (isTlsTrustError(error) || !isConnectionError(error)) return null;
+  // Only https requests go through the proxy, so it cannot explain the rest.
+  if (!isHttpsUrl(url)) return null;
   const proxy = describeProxy(url, env);
   if (proxy) {
     return `Tried via proxy ${proxy} (from HTTPS_PROXY/NO_PROXY).`;

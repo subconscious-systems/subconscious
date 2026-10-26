@@ -472,6 +472,38 @@ test('ensureSystemCa forwards SIGTERM to the re-exec child', async () => {
   assert.equal(child.killed, 'SIGTERM');
 });
 
+test('ensureSystemCa forwards SIGINT only without a terminal', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { ensureSystemCa } = await import('../bin/network.js');
+  const run = async (interactive) => {
+    let child;
+    const spawnImpl = () => {
+      child = new EventEmitter();
+      child.exitCode = null;
+      child.signalCode = null;
+      child.kill = (signal) => {
+        child.killed = signal;
+      };
+      setImmediate(() => {
+        process.emit('SIGINT', 'SIGINT');
+        setImmediate(() => child.emit('exit', 0, null));
+      });
+      return child;
+    };
+    const previousArgv = process.execArgv;
+    process.execArgv = [];
+    try {
+      await ensureSystemCa({ spawnImpl, supported: true, interactive });
+    } finally {
+      process.execArgv = previousArgv;
+    }
+    return child.killed;
+  };
+  assert.equal(await run(false), 'SIGINT');
+  assert.equal(await run(true), undefined);
+  assert.equal(process.listenerCount('SIGINT'), 0);
+});
+
 test('offline commands still run with SYSTEM_CA=on', async () => {
   const os = await import('node:os');
   const { spawnSync } = await import('node:child_process');
