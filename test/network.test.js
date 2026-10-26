@@ -402,53 +402,172 @@ test('describeFailure leaves an unrelated cause alone', async () => {
 test('ensureSystemCa does nothing without the flag or the opt-in', async () => {
   const { ensureSystemCa } = await import('../bin/network.js');
   const calls = [];
-  const spawnSyncImpl = (...args) => {
+  const spawnImpl = (...args) => {
     calls.push(args);
-    return { status: 0 };
+    throw new Error('should not spawn');
   };
   // Already running with the flag: never recurse.
   const previous = process.execArgv;
   process.execArgv = ['--use-system-ca'];
-  assert.equal(ensureSystemCa({ spawnSyncImpl }), false);
+  assert.equal(await ensureSystemCa({ spawnImpl, supported: true }), false);
   process.execArgv = previous;
   // No supported flag on this build: report no restart.
-  if (!process.allowedNodeEnvironmentFlags?.has('--use-system-ca')) {
-    assert.equal(ensureSystemCa({ spawnSyncImpl }), false);
-    assert.equal(calls.length, 0);
+  assert.equal(await ensureSystemCa({ spawnImpl, supported: false }), false);
+  assert.equal(calls.length, 0);
+});
+
+test('ensureSystemCa re-execs with the flag and mirrors the exit code', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { ensureSystemCa } = await import('../bin/network.js');
+  const calls = [];
+  const spawnImpl = (file, args) => {
+    calls.push({ file, args });
+    const child = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.kill = (signal) => {
+      child.signalCode = signal;
+    };
+    setImmediate(() => child.emit('exit', 7, null));
+    return child;
+  };
+  // The test runner's own execArgv lists --use-system-ca, so clear it.
+  const previousArgv = process.execArgv;
+  const previous = process.exitCode;
+  process.execArgv = [];
+  try {
+    assert.equal(await ensureSystemCa({ spawnImpl, supported: true }), true);
+    assert.equal(process.exitCode, 7);
+  } finally {
+    process.execArgv = previousArgv;
+    process.exitCode = previous;
+  }
+  assert.equal(calls[0].file, process.execPath);
+  assert.equal(calls[0].args[0], '--use-system-ca');
+  assert.equal(process.listenerCount('SIGTERM'), 0);
+});
+
+test('ensureSystemCa forwards SIGTERM to the re-exec child', async () => {
+  const { EventEmitter } = await import('node:events');
+  const { ensureSystemCa } = await import('../bin/network.js');
+  let child;
+  const spawnImpl = () => {
+    child = new EventEmitter();
+    child.exitCode = null;
+    child.signalCode = null;
+    child.kill = (signal) => {
+      child.killed = signal;
+      setImmediate(() => child.emit('exit', 0, null));
+    };
+    setImmediate(() => process.emit('SIGTERM', 'SIGTERM'));
+    return child;
+  };
+  const previousArgv = process.execArgv;
+  process.execArgv = [];
+  try {
+    assert.equal(await ensureSystemCa({ spawnImpl, supported: true }), true);
+  } finally {
+    process.execArgv = previousArgv;
+  }
+  assert.equal(child.killed, 'SIGTERM');
+});
+
+test('offline commands still run with SYSTEM_CA=on', async () => {
+  const os = await import('node:os');
+  const { spawnSync } = await import('node:child_process');
+  const cli = fileURLToPath(new URL('../bin/cli.js', import.meta.url));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'subc-ca-'));
+  fs.mkdirSync(path.join(dir, 'profiles'), { recursive: true });
+  fs.writeFileSync(
+    path.join(dir, 'profiles', 'default.env'),
+    'GATEWAY_URL=https://api.example\nAPI_KEY=sk-test\nSYSTEM_CA=on\n',
+  );
+  try {
+    for (const args of [
+      ['--version'],
+      ['config', 'help'],
+      ['update-key', 'help'],
+      ['login', 'help'],
+      ['--help'],
+    ]) {
+      const result = spawnSync(process.execPath, [cli, ...args], {
+        env: { ...process.env, SUBC_CONFIG_DIR: dir, NO_COLOR: '1' },
+        encoding: 'utf8',
+      });
+      assert.equal(result.status, 0, `${args.join(' ')}: ${result.stderr}`);
+      assert.doesNotMatch(result.stderr, /needs Node/);
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('subc re-execs with --use-system-ca only when the profile opts in', async () => {
+test('refuseUnsupportedSystemCa names the profile file to edit', async (t) => {
+  if (process.allowedNodeEnvironmentFlags?.has('--use-system-ca')) {
+    t.skip('this Node supports --use-system-ca');
+    return;
+  }
+  const { refuseUnsupportedSystemCa } = await import('../bin/network.js');
+  const lines = [];
+  const original = console.error;
+  console.error = (line) => lines.push(line);
+  const previous = process.exitCode;
+  try {
+    assert.equal(refuseUnsupportedSystemCa(true, '/tmp/p/default.env'), true);
+  } finally {
+    console.error = original;
+    process.exitCode = previous;
+  }
+  assert.match(lines.join('\n'), /Node 22\.15/);
+  assert.match(lines.join('\n'), /\/tmp\/p\/default\.env/);
+});
+
+test('subc re-execs with SYSTEM_CA=on and mirrors the exit status', async (t) => {
   const os = await import('node:os');
   const { spawn } = await import('node:child_process');
-  if (!process.allowedNodeEnvironmentFlags?.has('--use-system-ca')) return;
+  if (!process.allowedNodeEnvironmentFlags?.has('--use-system-ca')) {
+    t.skip('this Node does not support --use-system-ca');
+    return;
+  }
   const cli = fileURLToPath(new URL('../bin/cli.js', import.meta.url));
 
+  // usage makes a request, so it goes through the re-exec. Port 1 is
+  // refused, so both runs fail the same way.
   const run = (extraEnv) =>
     new Promise((resolve) => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'subc-ca-'));
       fs.mkdirSync(path.join(dir, 'profiles'), { recursive: true });
       fs.writeFileSync(
         path.join(dir, 'profiles', 'default.env'),
-        `GATEWAY_URL=https://api.example\nAPI_KEY=sk-test\n${extraEnv}`,
+        `PLATFORM_URL=http://127.0.0.1:1\nAPI_KEY=sk-test\n${extraEnv}`,
       );
-      const child = spawn(process.execPath, [cli, '--version'], {
-        env: { ...process.env, SUBC_CONFIG_DIR: dir },
-      });
-      let out = '';
-      child.stdout.on('data', (chunk) => (out += chunk));
+      const env = {
+        ...process.env,
+        SUBC_CONFIG_DIR: dir,
+        SUBC_DISABLE_UPDATE_CHECK: '1',
+        NO_COLOR: '1',
+      };
+      for (const key of [
+        'HTTPS_PROXY',
+        'https_proxy',
+        'HTTP_PROXY',
+        'http_proxy',
+        'SUBCONSCIOUS_URL',
+      ]) {
+        delete env[key];
+      }
+      const child = spawn(process.execPath, [cli, 'usage'], { env });
+      let err = '';
+      child.stderr.on('data', (chunk) => (err += chunk));
       child.on('close', (code) => {
         fs.rmSync(dir, { recursive: true, force: true });
-        resolve({ code, out: out.trim() });
+        resolve({ code, err });
       });
     });
 
   const off = await run('SYSTEM_CA=off\n');
-  assert.equal(off.code, 0);
-  assert.match(off.out, /^\d+\.\d+\.\d+$/);
-
   const on = await run('SYSTEM_CA=on\n');
-  assert.equal(on.code, 0);
-  assert.match(on.out, /^\d+\.\d+\.\d+$/);
-  assert.equal(on.out, off.out);
+  assert.notEqual(off.code, 0);
+  assert.equal(on.code, off.code);
+  assert.doesNotMatch(on.err, /Could not restart/);
 });

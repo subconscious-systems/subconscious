@@ -18,9 +18,10 @@
 // The CLI ships with zero runtime dependencies, so the proxy tunnel is built on
 // Node's `node:net`/`node:tls`/`node:https` rather than pulling in `undici`.
 
-import { spawnSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import https from 'node:https';
 import net from 'node:net';
+import os from 'node:os';
 import tls from 'node:tls';
 import zlib from 'node:zlib';
 import { c } from './colors.js';
@@ -122,34 +123,82 @@ function supportsSystemCa() {
  * outright, so it is probed rather than assumed. Node reads the option at
  * startup, which is why this has to happen before any request.
  *
- * Never returns when it replaces the process; the child re-enters here with
- * the flag already present and falls through.
+ * Resolves true once the child has exited and its status is mirrored, so the
+ * caller must stop. The child re-enters here with the flag already present and
+ * resolves false.
  */
-export function ensureSystemCa(options = {}) {
+export async function ensureSystemCa(options = {}) {
   if (process.execArgv.includes('--use-system-ca')) return false;
-  if (!supportsSystemCa()) return false;
-  const run = options.spawnSyncImpl || spawnSync;
-  const result = run(
-    process.execPath,
-    ['--use-system-ca', ...process.execArgv, ...process.argv.slice(1)],
-    { stdio: 'inherit' },
-  );
-  if (result?.error) {
+  if (!(options.supported ?? supportsSystemCa())) return false;
+  const run = options.spawnImpl || spawn;
+  try {
+    await runMirrored(() =>
+      run(
+        process.execPath,
+        ['--use-system-ca', ...process.execArgv, ...process.argv.slice(1)],
+        { stdio: 'inherit' },
+      ),
+    );
+    return true;
+  } catch (error) {
     console.error(
-      `${c.red}Could not restart with the OS certificate store: ${result.error.message}${c.reset}`,
+      `${c.red}Could not restart with the OS certificate store: ${error.message}${c.reset}`,
     );
     return false;
   }
-  process.exit(result?.status ?? 1);
 }
 
-/** Fail before any request when SYSTEM_CA=on is set on a Node that cannot honor it. */
-export function refuseUnsupportedSystemCa(systemCaEnabled) {
+const FORWARDED_SIGNALS = ['SIGTERM', 'SIGHUP'];
+
+// Run the child, pass SIGTERM/SIGHUP on to it, and mirror its exit code or
+// signal. A terminal already delivers SIGINT to the whole process group, so
+// this process ignores it and waits for the child to decide.
+function runMirrored(start) {
+  return new Promise((resolve, reject) => {
+    const child = start();
+    const forward = (signal) => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill(signal);
+      }
+    };
+    const ignore = () => {};
+    for (const signal of FORWARDED_SIGNALS) process.on(signal, forward);
+    process.on('SIGINT', ignore);
+    const stop = () => {
+      for (const signal of FORWARDED_SIGNALS) process.off(signal, forward);
+      process.off('SIGINT', ignore);
+    };
+    child.on('error', (error) => {
+      stop();
+      reject(error);
+    });
+    child.on('exit', (code, signal) => {
+      stop();
+      if (signal) {
+        process.exitCode = 128 + (os.constants.signals[signal] ?? 0);
+        process.kill(process.pid, signal);
+      } else if (code) {
+        process.exitCode = code;
+      }
+      resolve();
+    });
+  });
+}
+
+/**
+ * Fail before any request when SYSTEM_CA=on is set on a Node that cannot
+ * honor it. Only network commands call this, so help, config and update-key
+ * still work and the user can turn the setting off.
+ */
+export function refuseUnsupportedSystemCa(systemCaEnabled, profilePath) {
   if (!systemCaEnabled || supportsSystemCa()) return false;
   console.error(
-    `${c.red}SYSTEM_CA=on requires Node 22 or newer; this is ${process.version}.${c.reset}`,
+    `${c.red}SYSTEM_CA=on needs Node 22.15 or newer (the --use-system-ca flag); this is ${process.version}.${c.reset}`,
   );
-  console.error(`${c.dim}Turn it off, or upgrade Node, then retry.${c.reset}`);
+  const where = profilePath ? ` from ${profilePath}` : '';
+  console.error(
+    `${c.dim}Remove SYSTEM_CA=on${where} with subc config edit, or upgrade Node, then retry.${c.reset}`,
+  );
   process.exitCode = 1;
   return true;
 }

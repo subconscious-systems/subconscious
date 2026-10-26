@@ -163,6 +163,9 @@ test('loginCommand routes the default fetch through HTTPS_PROXY', async () => {
       // Unreachable proxy: the request must fail through the proxy path and
       // the failure must name the proxy, proving HTTPS_PROXY was honored.
       HTTPS_PROXY: 'http://127.0.0.1:1',
+      // A developer's own NO_PROXY=* would bypass the proxy under test.
+      NO_PROXY: '',
+      no_proxy: '',
     },
   });
   let stderr = '';

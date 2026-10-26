@@ -60,6 +60,23 @@ function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
 }
 
+// Commands that never make a network request.
+const OFFLINE_COMMANDS = new Set([
+  '--help',
+  '-h',
+  'help',
+  'config',
+  'update-key',
+  'logout',
+  'setup',
+  'settings',
+  'cursor',
+]);
+
+function needsNetwork(args) {
+  return !OFFLINE_COMMANDS.has(args[0]) && !isHelpArg(args[1]);
+}
+
 function printHelp() {
   const agents = agentList()
     .map(
@@ -149,7 +166,7 @@ Behind a proxy or firewall:
   If the error names a certificate (SELF_SIGNED_CERT_IN_CHAIN, UNABLE_TO_VERIFY_LEAF_SIGNATURE),
   the proxy re-signs TLS traffic. Ask IT for its root certificate, then either:
     export NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem
-    or set SYSTEM_CA=on in the profile (subc config edit) to trust the OS certificate store. Needs Node 22 or newer.
+    or set SYSTEM_CA=on in the profile (subc config edit) to trust the OS certificate store. Needs Node 22.15 or newer.
   If nothing works, subc update-key <your-api-key> saves a key without any network request.
 `,
   logout: `
@@ -364,15 +381,6 @@ async function main() {
   let { args, profileName, profileExplicit } = parsed;
   let command = args[0];
 
-  // Trust the OS certificate store before any request when the profile opts in.
-  // Node reads --use-system-ca at startup, so this re-execs once.
-  {
-    const profile = await loadProfile(profileName);
-    const systemCaEnabled = systemCaEnabledFor(profile);
-    if (refuseUnsupportedSystemCa(systemCaEnabled)) return;
-    if (systemCaEnabled) ensureSystemCa();
-  }
-
   // Version output must be fast and reliable even when npm or the gateway is
   // unavailable, so handle it before the automatic update check.
   if (command === '--version' || command === '-v') {
@@ -391,6 +399,16 @@ async function main() {
     }
     harnessManifestCommand(args.slice(1));
     return;
+  }
+
+  // Trust the OS certificate store before any request when the profile opts in.
+  // Node reads --use-system-ca at startup, so this re-execs once. Commands that
+  // make no request skip it, so help and config edit still work on old Node.
+  if (needsNetwork(args)) {
+    const profile = await loadProfile(profileName);
+    const systemCaEnabled = systemCaEnabledFor(profile);
+    if (refuseUnsupportedSystemCa(systemCaEnabled, profile.path)) return;
+    if (systemCaEnabled && (await ensureSystemCa())) return;
   }
 
   const launchTui =
