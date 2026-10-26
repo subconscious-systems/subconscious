@@ -230,11 +230,24 @@ function proxyAuthorizationHeader(proxyUrl) {
   return null;
 }
 
+// The reason a signal aborted, as global fetch reports it: a TimeoutError for
+// AbortSignal.timeout(), an AbortError for a plain abort().
+function abortReason(signal) {
+  return (
+    signal.reason ??
+    new DOMException('This operation was aborted', 'AbortError')
+  );
+}
+
 // Open a TCP tunnel to `targetHost:targetPort` through the HTTP proxy, then
 // upgrade it to TLS for the target host. Resolves to a connected TLSSocket.
 // CONNECT establishes a tunnel to an HTTPS origin. It is the only form that
-// makes sense here: `createProxyFetch` never tunnels a plain `http:` target,
-// because Node's global fetch already honors proxy env vars for those.
+// makes sense here: `createProxyFetch` never tunnels a plain `http:` target
+// (see there for why).
+//
+// `timeoutMs` bounds the whole setup, CONNECT and TLS handshake together.
+// `signal` is the caller's: a proxy that answers CONNECT and then forwards
+// nothing must not outlive the caller's deadline.
 export function connectThroughProxy(
   proxyUrl,
   targetHost,
@@ -242,29 +255,49 @@ export function connectThroughProxy(
   options = {},
 ) {
   const timeoutMs = options.timeoutMs ?? 8000;
+  const signal = options.signal;
   const proxyPort =
     Number(proxyUrl.port) || (proxyUrl.protocol === 'https:' ? 443 : 80);
 
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(abortReason(signal));
+      return;
+    }
+
     // The promise must always settle. A proxy that blocks a destination just
     // closes the socket: with no 'error' event, no response, and no other work
     // left, the event loop empties and the CLI exits 0 having printed nothing.
     let settled = false;
+    let tlsSocket = null;
+    const cleanup = () => {
+      settled = true;
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      socket.removeListener('error', onError);
+      socket.removeListener('close', onClose);
+    };
     const fail = (error) => {
       if (settled) return;
-      settled = true;
+      cleanup();
+      tlsSocket?.destroy();
       socket.destroy();
       reject(error);
     };
-    const succeed = (tlsSocket) => {
-      if (settled) {
-        tlsSocket.destroy();
-        return;
-      }
-      settled = true;
+    const succeed = () => {
+      if (settled) return;
+      cleanup();
       resolve(tlsSocket);
     };
     const onError = (error) => fail(error);
+    const onClose = () => {
+      const error = new Error(
+        'The proxy closed the connection without responding to CONNECT',
+      );
+      error.code = 'EPROXY';
+      fail(error);
+    };
+    const onAbort = () => fail(abortReason(signal));
 
     // When the proxy itself is HTTPS, speak TLS to the proxy first.
     const socket =
@@ -276,20 +309,14 @@ export function connectThroughProxy(
           })
         : net.connect({ host: proxyUrl.hostname, port: proxyPort });
 
-    socket.setTimeout(timeoutMs);
-    socket.once('error', onError);
-    socket.once('timeout', () => {
-      const error = new Error('Proxy CONNECT timed out');
+    const timer = setTimeout(() => {
+      const error = new Error('Timed out opening the proxy tunnel');
       error.code = 'ETIMEDOUT';
       fail(error);
-    });
-    socket.once('close', () => {
-      const error = new Error(
-        'The proxy closed the connection without responding to CONNECT',
-      );
-      error.code = 'EPROXY';
-      fail(error);
-    });
+    }, timeoutMs);
+    signal?.addEventListener('abort', onAbort, { once: true });
+    socket.once('error', onError);
+    socket.once('close', onClose);
 
     const sendConnect = () => {
       const auth = proxyAuthorizationHeader(proxyUrl);
@@ -325,19 +352,16 @@ export function connectThroughProxy(
         return;
       }
       const remainder = buffer.slice(headerEnd + 4);
-      socket.setTimeout(0);
-      socket.removeListener('error', onError);
-      socket.removeListener('close', fail);
       if (remainder.length > 0)
         socket.unshift(Buffer.from(remainder, 'latin1'));
 
-      const tlsSocket = tls.connect({
+      tlsSocket = tls.connect({
         socket,
         servername: net.isIP(targetHost) ? undefined : targetHost,
         rejectUnauthorized: options.rejectUnauthorized ?? true,
         ca: options.ca,
       });
-      tlsSocket.once('secureConnect', () => succeed(tlsSocket));
+      tlsSocket.once('secureConnect', succeed);
       tlsSocket.once('error', (error) => fail(error));
     };
     socket.on('data', onData);
@@ -345,6 +369,10 @@ export function connectThroughProxy(
 }
 
 const MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
+const MAX_REDIRECTS = 20;
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+// Statuses whose Response must be built with a null body.
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
 
 // A proxy can re-encode the response (some middleboxes gzip application/json
 // on the way through). Node's global fetch decompresses transparently; the
@@ -366,7 +394,7 @@ function decodeBody(buffer, encoding) {
   return buffer;
 }
 
-function readResponseBody(response, encoding, onDone) {
+function readResponseBody(response) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
@@ -379,78 +407,156 @@ function readResponseBody(response, encoding, onDone) {
       }
       chunks.push(chunk);
     });
-    response.on('end', () => {
-      onDone();
+    response.once('end', () => {
       try {
-        resolve(decodeBody(Buffer.concat(chunks), encoding));
+        resolve(
+          decodeBody(
+            Buffer.concat(chunks),
+            response.headers['content-encoding'],
+          ),
+        );
       } catch (error) {
         reject(error);
       }
     });
-    response.on('error', (error) => {
-      onDone();
-      reject(error);
+    response.once('error', reject);
+    response.once('close', () => {
+      if (!response.complete) {
+        reject(new Error('The connection closed before the response ended'));
+      }
     });
   });
 }
 
-function requestThroughProxy(targetUrl, init, proxyUrl, options = {}) {
+// Build a real Response, so callers get the same object global fetch returns
+// (`headers.get()`, `arrayBuffer()`, `url`, ...) whether or not a proxy is set.
+function toResponse(response, body, url, redirected) {
+  const headers = new Headers();
+  for (const [name, value] of Object.entries(response.headers)) {
+    if (value === undefined) continue;
+    for (const item of Array.isArray(value) ? value : [value]) {
+      headers.append(name, item);
+    }
+  }
+  // The body is already decoded, so these no longer describe it.
+  headers.delete('content-encoding');
+  headers.delete('content-length');
+  const status = response.statusCode;
+  const result = new Response(NULL_BODY_STATUSES.has(status) ? null : body, {
+    status,
+    statusText: response.statusMessage,
+    headers,
+  });
+  Object.defineProperty(result, 'url', { value: url });
+  Object.defineProperty(result, 'redirected', { value: redirected });
+  return result;
+}
+
+// Send one request through a fresh tunnel and buffer the whole response. The
+// tunnel carries exactly one request and closes when it settles: an idle open
+// socket would keep the event loop alive and make the CLI hang on exit.
+function requestThroughProxy(targetUrl, init, proxyUrl, options) {
   const url = new URL(targetUrl);
   const targetPort = Number(url.port) || 443;
   // URL keeps the brackets on an IPv6 literal; the proxy expects a bare host.
   const targetHost = url.hostname.replace(/^\[|\]$/g, '');
+  const signal = init.signal;
 
   return new Promise((resolve, reject) => {
-    connectThroughProxy(proxyUrl, targetHost, targetPort, options)
-      .then((tlsSocket) => {
-        const headers = { ...(init.headers || {}) };
-        headers.Host = url.host;
-        const request = https.request({
+    if (signal?.aborted) {
+      reject(abortReason(signal));
+      return;
+    }
+    let done = false;
+    let tlsSocket = null;
+    let request = null;
+    const settle = (callback, value) => {
+      if (done) return;
+      done = true;
+      signal?.removeEventListener('abort', onAbort);
+      request?.destroy();
+      tlsSocket?.destroy();
+      callback(value);
+    };
+    const onAbort = () => settle(reject, abortReason(signal));
+    signal?.addEventListener('abort', onAbort, { once: true });
+
+    connectThroughProxy(proxyUrl, targetHost, targetPort, {
+      ...options,
+      signal,
+    }).then(
+      (socket) => {
+        if (done) {
+          socket.destroy();
+          return;
+        }
+        tlsSocket = socket;
+        const headers = {
+          ...Object.fromEntries(new Headers(init.headers ?? {})),
+          host: url.host,
+        };
+        request = https.request({
           method: init.method || 'GET',
           path: `${url.pathname}${url.search}`,
           headers,
-          createConnection: () => tlsSocket,
-          signal: init.signal,
+          createConnection: () => socket,
         });
-        request.once('error', reject);
+        request.once('error', (error) => settle(reject, error));
         request.once('response', (response) => {
-          // The tunnel is used for exactly one request. Close it once the body
-          // is read; an idle open socket would otherwise keep the event loop
-          // alive and make the CLI appear to hang after the response.
-          let settled = false;
-          const finish = () => {
-            if (settled) return;
-            settled = true;
-            tlsSocket.destroy();
-          };
-          const encoding = response.headers['content-encoding'];
-          resolve({
-            ok: response.statusCode >= 200 && response.statusCode < 300,
-            status: response.statusCode,
-            statusText: response.statusMessage,
-            headers: response.headers,
-            text: () => readResponseBody(response, encoding, finish),
-            json: () =>
-              readResponseBody(response, encoding, finish).then((buffer) =>
-                JSON.parse(buffer.toString('utf8')),
+          readResponseBody(response).then(
+            (body) =>
+              settle(
+                resolve,
+                toResponse(response, body, targetUrl, options.redirected),
               ),
-          });
+            (error) => settle(reject, error),
+          );
         });
         if (init.body) request.write(init.body);
         request.end();
-      })
-      .catch(reject);
+      },
+      (error) => settle(reject, error),
+    );
   });
+}
+
+// The request to send after a redirect, following the fetch spec: 303 (and
+// 301/302 after a POST) becomes a bodiless GET, and credentials do not cross
+// to a different origin.
+function redirectInit(init, status, fromUrl, toUrl) {
+  const method = (init.method || 'GET').toUpperCase();
+  const toGet =
+    (status === 303 && method !== 'GET' && method !== 'HEAD') ||
+    ((status === 301 || status === 302) && method === 'POST');
+  const headers = new Headers(init.headers ?? {});
+  if (toGet) {
+    headers.delete('content-type');
+    headers.delete('content-length');
+  }
+  if (new URL(fromUrl).origin !== new URL(toUrl).origin) {
+    headers.delete('authorization');
+  }
+  return {
+    ...init,
+    method: toGet ? 'GET' : init.method,
+    body: toGet ? undefined : init.body,
+    headers: Object.fromEntries(headers),
+  };
+}
+
+function redirectError(message) {
+  return new TypeError('fetch failed', { cause: new Error(message) });
 }
 
 // Return a `fetch`-compatible function that routes through the configured proxy
 // (from `env`) when one applies to the target URL. Falls back to the provided
-// base fetch (global `fetch` by default) otherwise.
+// base fetch (global `fetch` by default) otherwise. Redirects are followed per
+// hop, so each new URL gets its own proxy and NO_PROXY decision.
 //
-// Only `https:` targets are tunneled. Node's global fetch already honors the
-// proxy env vars for plain `http:`, and a CONNECT tunnel would speak TLS to a
-// plaintext origin, breaking the `SUBCONSCIOUS_URL=http://localhost:3000`
-// local-development flow.
+// Only `https:` targets are tunneled. A CONNECT tunnel would speak TLS to a
+// plaintext origin, which breaks the `SUBCONSCIOUS_URL=http://localhost:3000`
+// local-development flow. Plain `http:` requests therefore go out directly
+// through the base fetch, which does not use the proxy env vars.
 export function createProxyFetch(options = {}) {
   const env = options.env || process.env;
   const baseFetch = options.fetchImpl || globalThis.fetch;
@@ -459,13 +565,30 @@ export function createProxyFetch(options = {}) {
     ca: options.ca,
     rejectUnauthorized: options.rejectUnauthorized,
   };
-  return (url, init = {}) => {
+  const proxyFetch = async (url, init = {}, hops = 0) => {
     const target = String(url);
     if (!/^https:/i.test(target)) return baseFetch(url, init);
     const proxy = proxyForUrl(target, env);
     if (!proxy) return baseFetch(url, init);
-    return requestThroughProxy(target, init, proxy, tunnel);
+
+    const response = await requestThroughProxy(target, init, proxy, {
+      ...tunnel,
+      redirected: hops > 0,
+    });
+    const mode = init.redirect ?? 'follow';
+    const location = response.headers.get('location');
+    if (!REDIRECT_STATUSES.has(response.status) || !location) return response;
+    if (mode === 'manual') return response;
+    if (mode === 'error') throw redirectError('unexpected redirect');
+    if (hops >= MAX_REDIRECTS) throw redirectError('redirect count exceeded');
+    const next = new URL(location, target).href;
+    return proxyFetch(
+      next,
+      redirectInit(init, response.status, target, next),
+      hops + 1,
+    );
   };
+  return (url, init) => proxyFetch(url, init);
 }
 
 // A process-wide proxy-aware `fetch`. Callers across the CLI use this as the

@@ -221,9 +221,9 @@ test('createProxyFetch rejects when the proxy drops the CONNECT', async () => {
 });
 
 test('createProxyFetch is not used for plain http targets', async () => {
-  // Node's global fetch already honors the proxy env vars for http, and a
-  // CONNECT tunnel would speak TLS to a plaintext origin. The SUBCONSCIOUS_URL
-  // local-development flow (http://localhost:3000) must keep working.
+  // A CONNECT tunnel would speak TLS to a plaintext origin. The
+  // SUBCONSCIOUS_URL local-development flow (http://localhost:3000) must keep
+  // working, so plain http goes straight to the base fetch.
   const calls = [];
   const baseFetch = async (url) => {
     calls.push(String(url));
