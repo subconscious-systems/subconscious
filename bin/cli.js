@@ -252,11 +252,18 @@ function printRetiredCursor() {
   console.error(`
   ${c.red}subc no longer supports Cursor.${c.reset} Support ended in October 2026.
 
-  To remove hooks that an earlier subc installed, delete the subconscious-hook
-  entries from ~/.cursor/hooks.json, then delete these files:
+  To remove hooks that an earlier subc installed, open ~/.cursor/hooks.json
+  and delete the subconscious-hook entries under beforeSubmitPrompt and
+  preCompact. Then delete these files:
 
-    ~/.cursor/hooks/subconscious-hook.sh   ${c.dim}(subconscious-hook.cjs on Windows)${c.reset}
-    ~/.cursor/subconscious-hooks.env       ${c.dim}(subconscious-windows.json on Windows)${c.reset}
+    ~/.cursor/hooks/subconscious-hook.sh
+    ~/.cursor/subconscious-hooks.env
+
+  On Windows, the files are under %USERPROFILE%\\.cursor instead:
+
+    %USERPROFILE%\\.cursor\\hooks.json
+    %USERPROFILE%\\.cursor\\hooks\\subconscious-hook.cjs
+    %USERPROFILE%\\.cursor\\subconscious-windows.json
 `);
 }
 
@@ -420,6 +427,11 @@ async function main() {
       printHelp();
       return;
     }
+    if (args[1] === 'cursor') {
+      printRetiredCursor();
+      process.exitCode = 1;
+      return;
+    }
     const agent = resolveAgent(args[1]);
     if (!agent) throw new Error(`Unknown coding agent: ${args[1]}`);
     const profile = await loadProfile(profileName);
@@ -428,7 +440,8 @@ async function main() {
   }
 
   if (command === 'setup') {
-    printRetiredSetup(args.slice(1));
+    if (args[1] === 'cursor') printRetiredCursor();
+    else printRetiredSetup(args.slice(1));
     process.exitCode = 1;
     return;
   }

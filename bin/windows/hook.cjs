@@ -21,7 +21,7 @@ async function main() {
   const response = client === 'copilot' ? { continue: true } : {};
   try {
     const config = JSON.parse(await fs.readFile(configPath, 'utf8'));
-    const cid = payload?.conversation_id || payload?.session_id;
+    const cid = payload?.session_id;
     if (!cid || typeof cid !== 'string' || !config.apiKey || !config.gatewayUrl) return;
     const post = async body => {
       const controller = new AbortController();
@@ -36,7 +36,7 @@ async function main() {
     };
     if (client === 'copilot' && event === 'UserPromptSubmit') {
       if (typeof payload.prompt !== 'string' || !payload.prompt) return;
-      const root = payload.workspace_roots?.[0] || payload.cwd;
+      const root = payload.cwd;
       await post({ event: 'conversation_ensure', prompt: payload.prompt, workspace: typeof root === 'string' ? path.win32.basename(root) : undefined });
     }
     if (client === 'codex' && ['PreCompact', 'PostCompact'].includes(event)) {

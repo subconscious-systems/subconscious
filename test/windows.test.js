@@ -821,7 +821,7 @@ test('Windows hooks report prompt and compaction events without Bash, jq or curl
       hook_event_name: 'UserPromptSubmit',
       session_id: '../../unsafe?session',
       prompt: 'next',
-      cwd: 'C:\\Project',
+      cwd: 'C:\\My Projects\\Project',
     }),
     { continue: true },
   );

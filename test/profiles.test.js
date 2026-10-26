@@ -399,7 +399,12 @@ test('subc cursor reports that Cursor support ended and how to clean up', async 
   const { spawnSync } = await import('node:child_process');
   const cli = new URL('../bin/cli.js', import.meta.url);
   const env = { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' };
-  for (const args of [['cursor'], ['cursor', 'uninstall']]) {
+  for (const args of [
+    ['cursor'],
+    ['cursor', 'uninstall'],
+    ['help', 'cursor'],
+    ['setup', 'cursor'],
+  ]) {
     const result = spawnSync(process.execPath, [cli.pathname, ...args], {
       encoding: 'utf-8',
       env,
@@ -407,6 +412,8 @@ test('subc cursor reports that Cursor support ended and how to clean up', async 
     assert.equal(result.status, 1);
     assert.match(result.stderr, /no longer supports Cursor/);
     assert.match(result.stderr, /~\/\.cursor\/hooks\.json/);
+    assert.match(result.stderr, /beforeSubmitPrompt and\s+preCompact/);
+    assert.match(result.stderr, /%USERPROFILE%\\\.cursor/);
     assert.doesNotMatch(result.stderr, /Unknown command/);
   }
 });

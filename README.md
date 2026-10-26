@@ -364,7 +364,7 @@ Its Custom Endpoint provider uses the Messages API at `/v1/messages` by
 default; rerun `subc copilot install` to migrate an older Chat Completions entry.
 
 The runbook scripts require Bash. Copilot, Pi, and Codex hook merge
-also require `jq`. Copilot also requires `curl`.
+also require `jq`. Copilot and Codex hooks also require `curl`.
 
 `subc dsh` defaults to the DeepSeek Harness Web UI. It injects an ephemeral
 Cordis overlay containing the active gateway URL, selected model, token limits,
