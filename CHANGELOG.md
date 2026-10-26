@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.3.0](https://github.com/subconscious-systems/subconscious/compare/v6.2.1...v6.3.0) (2026-10-26)
+
+
+### Features
+
+* remove Cursor IDE support from subc (SUBCON-845) ([#160](https://github.com/subconscious-systems/subconscious/issues/160)) ([2ece98f](https://github.com/subconscious-systems/subconscious/commit/2ece98f314b3ffe478a6712db095f50478967f97))
+
 ## [6.2.1](https://github.com/subconscious-systems/subconscious/compare/v6.2.0...v6.2.1) (2026-10-06)
 
 
