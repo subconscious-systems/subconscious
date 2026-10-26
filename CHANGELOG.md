@@ -1,5 +1,12 @@
 # Changelog
 
+## [6.3.1](https://github.com/subconscious-systems/subconscious/compare/v6.3.0...v6.3.1) (2026-10-26)
+
+
+### Bug fixes
+
+* **claude:** move an old subc Claude config folder aside instead of refusing to launch ([#165](https://github.com/subconscious-systems/subconscious/issues/165)) ([5128d0b](https://github.com/subconscious-systems/subconscious/commit/5128d0bcba0fdeb6dfa6248a1d3097bfb6f121da))
+
 ## [6.3.0](https://github.com/subconscious-systems/subconscious/compare/v6.2.1...v6.3.0) (2026-10-26)
 
 
