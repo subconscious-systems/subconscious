@@ -588,7 +588,7 @@ test('DeepSeek overlay is ephemeral, has no API key, and supports headless argv'
   assert.deepEqual(await fs.readdir(root), []);
 });
 
-for (const client of ['codex', 'cursor', 'copilot'])
+for (const client of ['codex', 'copilot'])
   test(`${client} hooks merge idempotently and remove only owned entries`, () => {
     const custom = {
       matcher: 'keep',
@@ -636,7 +636,7 @@ test('malformed hook configuration is rejected without overwriting any file', as
   assert.equal(await fs.readFile(file, 'utf8'), '{ malformed');
 });
 
-for (const client of ['codex', 'cursor', 'copilot', 'pi'])
+for (const client of ['codex', 'copilot', 'pi'])
   test(`${client} Windows setup survives install/status/reinstall/uninstall`, async (t) => {
     const home = await temporary(t);
     const appData = path.join(home, 'AppData', 'Roaming');
@@ -801,25 +801,6 @@ test('Windows hooks report prompt and compaction events without Bash, jq or curl
     assert.equal(result.stderr, '');
     return JSON.parse(result.stdout);
   };
-  assert.deepEqual(
-    await emit('cursor', {
-      hook_event_name: 'beforeSubmitPrompt',
-      conversation_id: 'c1',
-      prompt: 'hello & %PATH%',
-      workspace_roots: ['C:\\My Projects\\project'],
-    }),
-    { continue: true, permission: 'allow' },
-  );
-  assert.deepEqual(
-    await emit('cursor', {
-      hook_event_name: 'preCompact',
-      conversation_id: 'c1',
-      generation_id: 'g1',
-      context_tokens: 500,
-      is_first_compaction: true,
-    }),
-    {},
-  );
   await emit('codex', {
     hook_event_name: 'PreCompact',
     session_id: 'c2',
@@ -840,25 +821,17 @@ test('Windows hooks report prompt and compaction events without Bash, jq or curl
       hook_event_name: 'UserPromptSubmit',
       session_id: '../../unsafe?session',
       prompt: 'next',
-      cwd: 'C:\\Project',
+      cwd: 'C:\\My Projects\\Project',
     }),
     { continue: true },
   );
   assert.deepEqual(
     requests.map((r) => r.body.phase || r.body.event),
-    [
-      'conversation_ensure',
-      'point',
-      'start',
-      'end',
-      'start',
-      'conversation_ensure',
-      'end',
-    ],
+    ['start', 'end', 'start', 'conversation_ensure', 'end'],
   );
-  assert.equal(requests[0].body.workspace, 'project');
-  assert.equal(requests[1].body.dedupe_key, 'c1:g1:true');
-  assert.equal(requests[2].headers['x-subconscious-client'], 'codex');
+  assert.equal(requests[3].body.workspace, 'Project');
+  assert.equal(requests[0].headers['x-subconscious-client'], 'codex');
+  assert.equal(requests[2].headers['x-subconscious-client'], 'copilot');
   assert.ok(
     requests.every((r) => r.headers.authorization === 'Bearer sk-test'),
   );
@@ -873,15 +846,12 @@ test('hooks fail open for malformed input, missing credentials, and offline gate
   const config = path.join(home, 'config.json');
   const missing = await child(
     process.execPath,
-    [hook, 'cursor', config],
+    [hook, 'copilot', config],
     {},
     'not JSON',
   );
   assert.equal(missing.code, 0);
-  assert.deepEqual(JSON.parse(missing.stdout), {
-    continue: true,
-    permission: 'allow',
-  });
+  assert.deepEqual(JSON.parse(missing.stdout), { continue: true });
   await writeJson(config, {
     gatewayUrl: 'http://127.0.0.1:1',
     apiKey: 'sk-secret',
@@ -945,14 +915,11 @@ test('Windows host: real npm/npx shims and PowerShell hook argv run natively', {
   const config = path.join(dir, 'config.json');
   await fs.copyFile(hook, script);
   await writeJson(config, {});
-  const command = windowsHookCommand('cursor', script, config);
+  const command = windowsHookCommand('copilot', script, config);
   const [program, ...args] = command.split(' ');
   const result = await child(program, args, {}, '{}');
   assert.equal(result.code, 0, result.stderr);
-  assert.deepEqual(JSON.parse(result.stdout), {
-    continue: true,
-    permission: 'allow',
-  });
+  assert.deepEqual(JSON.parse(result.stdout), { continue: true });
 });
 
 test('Windows host: CLI routes every agent with a Bash-free PATH and preserves exit codes', {
@@ -1013,7 +980,7 @@ test('Windows host: CLI routes every agent with a Bash-free PATH and preserves e
     assert.doesNotMatch(result.stderr, /require.*bash/i);
     assert.doesNotMatch(result.stdout, /SERVICE_CONTROL_MUST_NOT_RUN/);
   }
-  for (const name of ['cursor', 'copilot', 'pi', 'codex']) {
+  for (const name of ['copilot', 'pi', 'codex']) {
     const result = await child(process.execPath, [cli, name, 'install'], {
       env: environment,
     });
@@ -1025,7 +992,6 @@ test('Windows host: CLI routes every agent with a Bash-free PATH and preserves e
     ['config', 'list'],
     ['whoami'],
     ['codex', 'status'],
-    ['cursor', 'uninstall'],
     ['copilot', 'uninstall'],
     ['pi', 'uninstall'],
   ]) {

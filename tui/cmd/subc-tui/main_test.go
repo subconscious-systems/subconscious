@@ -20,8 +20,8 @@ func TestActionArgsPreserveProfileAndModel(t *testing.T) {
 }
 
 func TestActionArgsDoNotSendModelToSetupAgent(t *testing.T) {
-	item := menuItem{Command: "cursor", Kind: itemAgent, Launch: false}
-	want := []string{"-p", "default", "cursor"}
+	item := menuItem{Command: "copilot", Kind: itemAgent, Launch: false}
+	want := []string{"-p", "default", "copilot"}
 	if got := actionArgs(item, "default", "subconscious/glm-5.3-marathon", ""); !reflect.DeepEqual(got, want) {
 		t.Fatalf("actionArgs() = %#v, want %#v", got, want)
 	}
@@ -367,7 +367,7 @@ func TestUpdateBaseURLArrowKeysEditInsideDefault(t *testing.T) {
 
 func TestMenuActionsUseOneFixedColumn(t *testing.T) {
 	launch := menuRowText("Claude Code", "Launch", 24, 12, false)
-	configure := menuRowText("Cursor", "Configure", 24, 12, false)
+	configure := menuRowText("Copilot", "Configure", 24, 12, false)
 	authenticate := menuRowText("Sign in", "Authenticate", 24, 12, false)
 	launchColumn := strings.Index(launch, "Launch")
 	if strings.Index(configure, "Configure") != launchColumn {

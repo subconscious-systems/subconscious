@@ -33,13 +33,16 @@ test('profile sections stay in sync with every registered CLI agent', () => {
 });
 
 test('agent actions support per-agent install, status, and leftover uninstall', () => {
-  const cursor = agents.resolveAgent('cursor');
   const pi = agents.resolveAgent('pi');
   const claude = agents.resolveAgent('claude');
   const codex = agents.resolveAgent('codex');
 
-  const cursorInstall = agents.parseAgentAction(cursor, ['install']);
-  assert.equal(cursorInstall.action, 'install');
+  const copilotInstall = agents.parseAgentAction(
+    agents.resolveAgent('copilot'),
+    ['install'],
+  );
+  assert.equal(copilotInstall.action, 'install');
+  assert.equal(agents.resolveAgent('cursor'), null);
 
   const piUninstall = agents.parseAgentAction(pi, ['uninstall']);
   assert.equal(piUninstall.action, 'uninstall');
@@ -390,6 +393,29 @@ test('config edit requires a terminal and rejects unknown editors', async () => 
   );
   assert.notEqual(unknown.status, 0);
   assert.match(unknown.stderr, /Unknown editor 'emacs' \(use .*vim, nano\)/);
+});
+
+test('subc cursor reports that Cursor support ended and how to clean up', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const cli = new URL('../bin/cli.js', import.meta.url);
+  const env = { ...process.env, SUBC_CONFIG_DIR: testConfigDir, NO_COLOR: '1' };
+  for (const args of [
+    ['cursor'],
+    ['cursor', 'uninstall'],
+    ['help', 'cursor'],
+    ['setup', 'cursor'],
+  ]) {
+    const result = spawnSync(process.execPath, [cli.pathname, ...args], {
+      encoding: 'utf-8',
+      env,
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /no longer supports Cursor/);
+    assert.match(result.stderr, /~\/\.cursor\/hooks\.json/);
+    assert.match(result.stderr, /beforeSubmitPrompt and\s+preCompact/);
+    assert.match(result.stderr, /%USERPROFILE%\\\.cursor/);
+    assert.doesNotMatch(result.stderr, /Unknown command/);
+  }
 });
 
 test('profile extras can remap Claude picker slots only to catalog models', () => {

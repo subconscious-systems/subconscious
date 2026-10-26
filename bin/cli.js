@@ -115,8 +115,8 @@ ${agents}
     ${c.dim}$${c.reset} subc feedback --subject "Bug" --message "Playground won't load"
     ${c.dim}$${c.reset} subc claude
     ${c.dim}$${c.reset} subc claude help
-    ${c.dim}$${c.reset} subc cursor install
-    ${c.dim}$${c.reset} subc cursor uninstall
+    ${c.dim}$${c.reset} subc copilot install
+    ${c.dim}$${c.reset} subc copilot uninstall
     ${c.dim}$${c.reset} subc pi install
     ${c.dim}$${c.reset} subc harness-manifest --json
     ${c.dim}$${c.reset} subc codex headless "fix the failing test"
@@ -227,7 +227,7 @@ session with a bounded, text-only handoff from the source conversation.
 
 function printRetiredSetup(args = []) {
   const maybeAgent = resolveAgent(args[0]);
-  const command = maybeAgent ? agentCommandName(maybeAgent) : 'cursor';
+  const command = maybeAgent ? agentCommandName(maybeAgent) : 'copilot';
   console.error(`
   ${c.red}subc setup is no longer used.${c.reset} Use the agent command instead:
 
@@ -245,6 +245,25 @@ function printRetiredSettings() {
     ${c.cyan}subc -p NAME config${c.reset}         Show a profile
     ${c.cyan}subc -p NAME config edit${c.reset}    Open the profile env file
     ${c.cyan}subc config help${c.reset}
+`);
+}
+
+function printRetiredCursor() {
+  console.error(`
+  ${c.red}subc no longer supports Cursor.${c.reset} Support ended in October 2026.
+
+  To remove hooks that an earlier subc installed, open ~/.cursor/hooks.json
+  and delete the subconscious-hook entries under beforeSubmitPrompt and
+  preCompact. Then delete these files:
+
+    ~/.cursor/hooks/subconscious-hook.sh
+    ~/.cursor/subconscious-hooks.env
+
+  On Windows, the files are under %USERPROFILE%\\.cursor instead:
+
+    %USERPROFILE%\\.cursor\\hooks.json
+    %USERPROFILE%\\.cursor\\hooks\\subconscious-hook.cjs
+    %USERPROFILE%\\.cursor\\subconscious-windows.json
 `);
 }
 
@@ -408,6 +427,11 @@ async function main() {
       printHelp();
       return;
     }
+    if (args[1] === 'cursor') {
+      printRetiredCursor();
+      process.exitCode = 1;
+      return;
+    }
     const agent = resolveAgent(args[1]);
     if (!agent) throw new Error(`Unknown coding agent: ${args[1]}`);
     const profile = await loadProfile(profileName);
@@ -416,13 +440,20 @@ async function main() {
   }
 
   if (command === 'setup') {
-    printRetiredSetup(args.slice(1));
+    if (args[1] === 'cursor') printRetiredCursor();
+    else printRetiredSetup(args.slice(1));
     process.exitCode = 1;
     return;
   }
 
   if (command === 'settings') {
     printRetiredSettings();
+    process.exitCode = 1;
+    return;
+  }
+
+  if (command === 'cursor') {
+    printRetiredCursor();
     process.exitCode = 1;
     return;
   }

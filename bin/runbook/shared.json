@@ -5,8 +5,7 @@
     "codex",
     "pi",
     "copilot",
-    "deepseek-harness",
-    "cursor"
+    "deepseek-harness"
   ],
   "defaults": {
     "model": "subconscious/glm-5.3-marathon",

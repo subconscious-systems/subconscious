@@ -78,7 +78,6 @@ export function mergeHooks(document, client, command) {
   if (command) {
     const events = {
       codex: ['PreCompact', 'PostCompact'],
-      cursor: ['beforeSubmitPrompt', 'preCompact'],
       copilot: ['UserPromptSubmit', 'PreCompact'],
     }[client];
     for (const event of events) {
@@ -99,7 +98,6 @@ export function mergeHooks(document, client, command) {
     }
   }
   result.hooks = hooks;
-  if (client === 'cursor' && command) result.version ??= 1;
   return result;
 }
 
@@ -136,11 +134,11 @@ export async function windowsSetup(
   const apiKey = options['--api-key'] || value(env, 'API_KEY');
   const installing = action === 'install';
   const removing = action === 'uninstall';
-  const needsKey = ['codex', 'cursor', 'copilot', 'pi'].includes(id);
+  const needsKey = ['codex', 'copilot', 'pi'].includes(id);
   if (installing && needsKey && !apiKey)
     throw new Error('An API key is required for setup. Run subc login first.');
 
-  if (['codex', 'cursor', 'copilot'].includes(id)) {
+  if (['codex', 'copilot'].includes(id)) {
     const dir =
       id === 'codex'
         ? env.CODEX_DIR || env.CODEX_HOME || path.join(home, '.codex')
@@ -243,10 +241,6 @@ export async function windowsSetup(
       await fs.rm(script, { force: true });
       await fs.rm(config, { force: true });
     }
-    if (installing && id === 'cursor')
-      log(
-        `In Cursor Settings, use ${gatewayUrl}/v1, your API key, and model ${value(env, 'MODEL', defaults.model)}. Restart Cursor to load hooks.`,
-      );
     if (installing && id === 'copilot')
       log(
         'Restart VS Code, select a Subconscious model, and enter your API key when prompted.',

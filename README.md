@@ -60,7 +60,6 @@ so OpenCode, Claude Code, Codex, and DeepSeek Harness can launch immediately.
 Persistent editor and Pi integrations are installed per agent:
 
 ```bash
-subc cursor install
 subc copilot install
 subc pi
 subc <agent> uninstall
@@ -90,7 +89,7 @@ profile; they do not authenticate, install, configure, or launch anything:
 subc opencode help
 subc claude help
 subc codex help
-subc cursor help
+subc copilot help
 subc config help
 subc login help
 ```
@@ -127,7 +126,6 @@ subc.cmd claude
 subc codex
 subc opencode
 subc dsh
-subc cursor install
 subc copilot install
 subc pi
 subc config edit notepad
@@ -155,7 +153,7 @@ and the native TUI use Windows paths and processes. Profile editing defaults to
 Notepad, honors `VISUAL`/`EDITOR`, and supports `code`/`code-insiders` with `--wait`.
 The existing profile location remains `%USERPROFILE%\.subconscious`.
 
-Cursor, Copilot, Codex, and Pi setup use native JSON merges and Node hooks. Other
+Copilot, Codex, and Pi setup use native JSON merges and Node hooks. Other
 providers and hooks are preserved; malformed configuration is left unchanged.
 Hook credentials are stored in `subconscious-windows.json` within the agent's
 user directory; treat that file as a secret. Copilot's model provider still uses
@@ -179,7 +177,6 @@ The packaged integrations live in `bin/runbook`.
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
-| `subc cursor install` | Install/update Cursor conversation and compaction hooks (Cursor desktop app and IDE only — the Cursor CLI is not supported) |
 
 ## Headless runs
 
@@ -323,8 +320,8 @@ characters. Tool payloads, tool results, system prompts, and hidden reasoning
 are not copied. Source transcripts remain owned by their original harness and
 are never rewritten.
 
-Cursor and GitHub Copilot sessions are not listed because their IDE-owned
-conversation stores do not expose a stable local resume interface. A session
+GitHub Copilot sessions are not listed because its IDE-owned
+conversation store does not expose a stable local resume interface. A session
 whose local transcript is missing remains available for native resume but does
 not offer cross-harness destinations.
 
@@ -346,7 +343,6 @@ Persistent writes are merge/unmerge only. They never replace a user's
 provider list. Remove Subconscious files with the matching uninstall command:
 
 ```bash
-subc cursor uninstall
 subc copilot uninstall
 subc pi uninstall
 subc codex uninstall
@@ -362,14 +358,13 @@ Inspect a persistent integration with `subc <agent> status`. A one-off
 `--api-key` passed to install takes precedence for that command but is not
 saved to the selected profile.
 
-Cursor still requires enabling its OpenAI API Key Override in Cursor Settings.
 Copilot requires entering the custom endpoint key once through VS Code's
 Manage Language Models UI. The install scripts print the relevant next steps.
 Its Custom Endpoint provider uses the Messages API at `/v1/messages` by
 default; rerun `subc copilot install` to migrate an older Chat Completions entry.
 
-The runbook scripts require Bash. Cursor, Copilot, Pi, and Codex hook merge
-also require `jq`; Cursor and Copilot also require `curl`.
+The runbook scripts require Bash. Copilot, Pi, and Codex hook merge
+also require `jq`. Copilot and Codex hooks also require `curl`.
 
 `subc dsh` defaults to the DeepSeek Harness Web UI. It injects an ephemeral
 Cordis overlay containing the active gateway URL, selected model, token limits,
@@ -434,7 +429,7 @@ subc -p staging config \
   --model subconscious/glm-5.3-marathon
 
 subc -p staging claude
-subc -p staging cursor install
+subc -p staging copilot install
 ```
 
 You can also select one with `SUBC_PROFILE=staging`. Explicit shell variables
@@ -468,7 +463,7 @@ export SUBCONSCIOUS_MODEL=subconscious/glm-5.3-marathon
 ```
 
 Every launch and install fetches the same live catalog without caching. Codex,
-OpenCode, Pi, Copilot, Cursor, and DeepSeek Harness receive the complete model
+OpenCode, Pi, Copilot, and DeepSeek Harness receive the complete model
 list. The selected profile model is listed first only while the gateway still
 advertises it.
 OpenCode rebuilds its isolated runtime provider on every `subc opencode` launch,
@@ -481,10 +476,7 @@ custom model option. The CLI remaps those aliases to the live catalog, then
 replaces the built-in `/model` lineup (`modelPicker.replaceBuiltInOptions`) and
 allowlists only those models (`availableModels`) so Anthropic Fable and
 ungranted slugs do not appear. Any other model can still be selected with
-`subc claude --model MODEL`. Cursor requires adding
-the printed model IDs in its OpenAI API Key Override settings. Use the printed
-`/v1` Base URL in Cursor Settings; the profile itself stores the gateway origin
-so correlation hooks can post to `/v1/agent-hooks`.
+`subc claude --model MODEL`.
 
 The default gateway is `https://api.subconscious.dev`. Profiles containing
 the former exact default (`https://api.subconscious.dev`) migrate automatically;

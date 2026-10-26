@@ -208,7 +208,7 @@ test('parseAgentAction recognizes headless only where it is supported', () => {
     );
   }
   assert.throws(
-    () => parseAgentAction(agentById('cursor'), ['headless', 'go']),
+    () => parseAgentAction(agentById('copilot'), ['headless', 'go']),
     /does not support headless/,
   );
 });
