@@ -882,3 +882,43 @@ test('an empty existing dir is claimed as the subc dir', () => {
   assert.equal(refused, false);
   assert.equal(fs.existsSync(path.join(dir, '.subc-written.json')), true);
 });
+
+test('a leftover Claude config at the subc path is moved aside and the launch proceeds', () => {
+  const agent = agentById('claude-code');
+  const { home, source } = fakeHome();
+  const subcBase = path.join(home, 'base');
+  const old = customConfig(home, path.join('base', 'claude-code'));
+  const before = snapshot(old);
+  const result = prepareClaudeLaunch(
+    agent,
+    { CLAUDE_CONFIG_DIR: old, SUBC_CONFIG_DIR: subcBase },
+    {},
+    { home },
+  );
+  assert.equal(result.refused, false);
+  const moved = fs
+    .readdirSync(subcBase)
+    .filter((name) => name.startsWith('claude-code.old-'));
+  assert.equal(moved.length, 1);
+  assert.deepEqual(snapshot(path.join(subcBase, moved[0])), before);
+  assert.match(result.warnings.join('\n'), /claude-code\.old-/);
+  assert.equal(fs.existsSync(path.join(old, '.subc-written.json')), true);
+  assert.equal(
+    fs.readlinkSync(path.join(old, 'skills')),
+    path.join(source, 'skills'),
+  );
+});
+
+test('a second leftover is moved to a new name, never over the first', () => {
+  const { home } = fakeHome();
+  const dir = customConfig(home, path.join('base', 'claude-code'));
+  const first = prepareClaudeConfigDir({ dir, home });
+  assert.equal(first.refused, false);
+  fs.rmSync(path.join(dir, '.subc-written.json'));
+  const second = prepareClaudeConfigDir({ dir, home });
+  assert.equal(second.refused, false);
+  const moved = fs
+    .readdirSync(path.join(home, 'base'))
+    .filter((name) => name.startsWith('claude-code.old-'));
+  assert.equal(moved.length, 2);
+});

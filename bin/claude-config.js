@@ -410,23 +410,35 @@ function readQuietly(file) {
   }
 }
 
+/** A free name beside `dir` for a leftover folder: `<dir>.old-<time>`. */
+function asideName(dir) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  for (let n = 0; ; n++) {
+    const name = `${dir}.old-${stamp}${n ? `-${n}` : ''}`;
+    if (!lstatOrUndefined(name)) return name;
+  }
+}
+
 /**
  * Make sure `dir` is a subc dir: an earlier launch's marker, or a new or
- * empty folder that is claimed now. Returns why a folder is not one, or
- * `undefined`. A Claude config folder that subc did not make is never
- * prepared, wherever it sits.
+ * empty folder that is claimed now. A Claude config there without the
+ * marker is left by an earlier subc build: it is renamed aside, never
+ * deleted, and a fresh dir is claimed. When the user's own
+ * CLAUDE_CONFIG_DIR is `dir` (`userDir`), it is theirs and is refused.
+ * Returns why a folder is not a subc dir, or `undefined`.
  */
-function claimDir(dir) {
+function claimDir(dir, userDir, warnings) {
   const marker = path.join(dir, WRITTEN_FILE);
   if (lstatOrUndefined(marker)) return undefined;
-  const existing = lstatOrUndefined(dir);
-  if (existing) {
-    const holdsConfig = ['settings.json', '.claude.json', 'projects'].some(
-      (name) => lstatOrUndefined(path.join(dir, name)),
-    );
-    if (holdsConfig) {
-      return `${dir} holds a Claude config that subc did not make. If it is an old subc folder, rename it and launch again.`;
+  if (lstatOrUndefined(dir) && looksLikeClaudeConfig(dir)) {
+    if (userDir) {
+      return `${dir} holds a Claude config that subc did not make`;
     }
+    const aside = asideName(dir);
+    fs.renameSync(dir, aside);
+    warnings.push(
+      `Moved an old subc Claude config folder to ${aside}; subc sessions now start from your own Claude setup.`,
+    );
   }
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   writeJsonAtomic(marker, {}, 0o600);
@@ -452,7 +464,8 @@ function readWritten(dir) {
  * .claude.json inside their CLAUDE_CONFIG_DIR).
  *
  * @param {{ dir: string, home?: string, source?: string, stateFile?: string,
- *   launchEnvNames?: Iterable<string> }} options
+ *   launchEnvNames?: Iterable<string>, userDir?: boolean }} options
+ *   `userDir` means the user's own CLAUDE_CONFIG_DIR is `dir`.
  * @returns {{ warnings: string[], refused: boolean }} `refused` means the
  *   dir aliases the user's own config; the launch must not run on it.
  */
@@ -462,14 +475,15 @@ export function prepareClaudeConfigDir({
   source = path.join(home, '.claude'),
   stateFile = path.join(home, '.claude.json'),
   launchEnvNames = [],
+  userDir = false,
 }) {
   const warnings = [];
   let unsafe = unsafeDirReason(dir, source, stateFile);
   if (!unsafe) {
     try {
-      unsafe = claimDir(dir);
+      unsafe = claimDir(dir, userDir, warnings);
     } catch (error) {
-      unsafe = `could not create it: ${error.message}`;
+      unsafe = `could not prepare it: ${error.message}`;
     }
   }
   if (unsafe) {
@@ -527,6 +541,17 @@ function looksLikeClaudeConfig(folder) {
   return ['settings.json', '.claude.json', 'projects'].some((name) =>
     fs.existsSync(path.join(folder, name)),
   );
+}
+
+/** Whether the user's own env names `dir` as their Claude config folder. */
+function pointsAt(inputEnv, dir) {
+  return [SOURCE_ENV, 'CLAUDE_CONFIG_DIR'].some((name) => {
+    const value = inputEnv[name]?.trim();
+    if (!value || !path.isAbsolute(value)) return false;
+    if (path.resolve(value) === path.resolve(dir)) return true;
+    const id = identity(value);
+    return Boolean(id) && id === identity(dir);
+  });
 }
 
 /**
@@ -615,6 +640,7 @@ export function prepareClaudeLaunch(agent, launchEnv, inputEnv, options = {}) {
     source,
     stateFile,
     launchEnvNames,
+    userDir: pointsAt(inputEnv, dir),
   });
   return {
     warnings: [...warnings, ...prepared.warnings],
