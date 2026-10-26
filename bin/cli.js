@@ -124,6 +124,9 @@ ${agents}
     ${c.dim}$${c.reset} subc codex headless "fix the failing test"
     ${c.dim}$${c.reset} subc -p staging codex
 
+  ${c.bold}Network${c.reset}
+    Behind a proxy or a TLS-inspecting firewall? Run ${c.cyan}subc login help${c.reset}.
+
   ${c.dim}Use subc <command> help for command-specific usage.${c.reset}
 `);
 }
@@ -138,6 +141,16 @@ Usage:
 Authenticate and save an API key to the selected profile.
 Opens a browser to a one-time login link. If the browser does not open, use the URL printed in the terminal.
 To sign in without a browser, copy an API key from the dashboard and run subc update-key <your-api-key>.
+
+Behind a proxy or firewall:
+  If login fails with ENOTFOUND, ECONNREFUSED or a timeout, the network may require a proxy.
+  Set HTTPS_PROXY=http://host:port (or http://user:pass@host:port) and retry.
+  NO_PROXY=host1,.example.com lists hosts to reach directly, not through the proxy.
+  If the error names a certificate (SELF_SIGNED_CERT_IN_CHAIN, UNABLE_TO_VERIFY_LEAF_SIGNATURE),
+  the proxy re-signs TLS traffic. Ask IT for its root certificate, then either:
+    export NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem
+    or set SYSTEM_CA=on in the profile (subc config edit) to trust the OS certificate store. Needs Node 22 or newer.
+  If nothing works, subc update-key <your-api-key> saves a key without any network request.
 `,
   logout: `
 Usage:

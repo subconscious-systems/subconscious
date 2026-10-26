@@ -606,3 +606,39 @@ export function describeProxy(url, env = process.env) {
   if (!proxy) return null;
   return `${proxy.protocol}//${proxy.host}`;
 }
+
+// Failures a proxy setting can explain: the host was never reached.
+const CONNECTION_ERROR_CODES = new Set([
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EPROXY',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
+
+function isConnectionError(error) {
+  if (error?.name === 'TimeoutError') return true;
+  return collectErrors(error).some((node) =>
+    CONNECTION_ERROR_CODES.has(errorCode(node)),
+  );
+}
+
+// One line about proxies for a request to `url` that failed with `error`.
+// With a proxy configured, name it so the user can check it. Without one,
+// suggest setting it: an agent driving subc sees only this output, so the
+// failure itself has to say where the fix is documented. Null when a proxy
+// cannot explain the failure (an HTTP error, or a TLS trust failure, which
+// tlsTrustHint covers).
+export function proxyHint(error, url, env = process.env) {
+  if (isTlsTrustError(error) || !isConnectionError(error)) return null;
+  const proxy = describeProxy(url, env);
+  if (proxy) {
+    return `Tried via proxy ${proxy} (from HTTPS_PROXY/NO_PROXY).`;
+  }
+  return 'If this network needs a proxy, set HTTPS_PROXY=http://host:port and retry. See subc login help.';
+}

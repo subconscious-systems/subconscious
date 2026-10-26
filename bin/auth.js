@@ -18,8 +18,8 @@ import path from 'node:path';
 import { c } from './colors.js';
 import {
   describeFetchError,
-  describeProxy,
   proxyAwareFetch,
+  proxyHint,
   tlsTrustHint,
 } from './network.js';
 import {
@@ -199,18 +199,13 @@ function printLoginFallback() {
 function printLoginFailure(platformUrl, error) {
   const message = describeFetchError(error);
   console.error(`  ${c.red}✗ ${message}${c.reset}`);
-  if (error instanceof Error && error.name === 'TimeoutError') return;
   const hint = tlsTrustHint(error);
   if (hint) {
     console.error(`  ${c.yellow}${hint}${c.reset}`);
     return;
   }
-  const proxy = describeProxy(platformUrl);
-  if (proxy) {
-    console.error(
-      `  ${c.dim}Tried via proxy ${proxy} (from HTTPS_PROXY/NO_PROXY).${c.reset}`,
-    );
-  }
+  const proxy = proxyHint(error, platformUrl);
+  if (proxy) console.error(`  ${c.dim}${proxy}${c.reset}`);
 }
 
 async function saveLoginKey(profileName, token) {

@@ -114,6 +114,41 @@ test('loginCommand surfaces the underlying network cause', async () => {
   await fs.rm(dir, { recursive: true, force: true });
 });
 
+test('loginCommand suggests HTTPS_PROXY when a connection fails without one', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-login-hint-'));
+  const script = `
+    import { loginCommand } from ${JSON.stringify(authModule)};
+    const error = new TypeError('fetch failed');
+    error.cause = Object.assign(new Error('connect ETIMEDOUT'), { code: 'ETIMEDOUT' });
+    await loginCommand([], {
+      profileName: 'default',
+      openBrowser() {},
+      fetchImpl: async () => { throw error; },
+    });
+  `;
+  const env = {
+    ...process.env,
+    SUBC_CONFIG_DIR: dir,
+    SUBCONSCIOUS_API_KEY: '',
+  };
+  delete env.HTTPS_PROXY;
+  delete env.https_proxy;
+  delete env.HTTP_PROXY;
+  delete env.http_proxy;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+    env,
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += chunk;
+  });
+  const code = await new Promise((resolve) => child.on('close', resolve));
+  assert.equal(code, 1);
+  assert.match(stderr, /HTTPS_PROXY=http:\/\/host:port/);
+  assert.match(stderr, /subc login help/);
+  await fs.rm(dir, { recursive: true, force: true });
+});
+
 test('loginCommand routes the default fetch through HTTPS_PROXY', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-login-proxy-'));
   const script = `

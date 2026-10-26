@@ -7,6 +7,7 @@ import { c } from './colors.js';
 import {
   describeFetchError,
   proxyAwareFetch,
+  proxyHint,
   tlsTrustHint,
 } from './network.js';
 import { DEFAULT_PROFILE } from './profiles.js';
@@ -269,11 +270,14 @@ export async function usageCommand(argv = [], options = {}) {
       console.log(
         `\n  ${c.yellow}Could not reach the platform (timed out).${c.reset}`,
       );
-      console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}\n`);
+      console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}`);
+      const proxy = proxyHint(error, platformUrl);
+      if (proxy) console.log(`  ${c.dim}${proxy}${c.reset}`);
+      console.log();
       return;
     }
     console.error(`\n  ${c.red}${describeFetchError(error)}${c.reset}`);
-    const hint = tlsTrustHint(error);
+    const hint = tlsTrustHint(error) || proxyHint(error, platformUrl);
     if (hint) console.error(`  ${c.yellow}${hint}${c.reset}`);
     console.error();
     process.exitCode = 1;
