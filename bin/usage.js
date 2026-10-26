@@ -4,6 +4,12 @@
 
 import { getApiKey, getPlatformUrl } from './auth.js';
 import { c } from './colors.js';
+import {
+  describeFetchError,
+  proxyAwareFetch,
+  proxyHint,
+  tlsTrustHint,
+} from './network.js';
 import { DEFAULT_PROFILE } from './profiles.js';
 import { printLoginUpgradeWarning } from './upgrade.js';
 
@@ -181,7 +187,11 @@ export function formatUsageDisplay(data) {
   return lines.join('\n');
 }
 
-export async function fetchUsage(apiKey, platformUrl, fetchImpl = fetch) {
+export async function fetchUsage(
+  apiKey,
+  platformUrl,
+  fetchImpl = proxyAwareFetch,
+) {
   const res = await fetchImpl(
     `${platformUrl.replace(/\/$/, '')}${USAGE_API_PATH}`,
     {
@@ -260,10 +270,16 @@ export async function usageCommand(argv = [], options = {}) {
       console.log(
         `\n  ${c.yellow}Could not reach the platform (timed out).${c.reset}`,
       );
-      console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}\n`);
+      console.log(`  ${c.dim}Host: ${platformUrl}${c.reset}`);
+      const proxy = proxyHint(error, platformUrl);
+      if (proxy) console.log(`  ${c.dim}${proxy}${c.reset}`);
+      console.log();
       return;
     }
-    console.error(`\n  ${c.red}${error.message}${c.reset}\n`);
+    console.error(`\n  ${c.red}${describeFetchError(error)}${c.reset}`);
+    const hint = tlsTrustHint(error) || proxyHint(error, platformUrl);
+    if (hint) console.error(`  ${c.yellow}${hint}${c.reset}`);
+    console.error();
     process.exitCode = 1;
   }
 }

@@ -17,6 +17,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { c } from './colors.js';
 import {
+  describeFetchError,
+  proxyAwareFetch,
+  proxyHint,
+  tlsTrustHint,
+} from './network.js';
+import {
   clearProfileApiKey,
   DEFAULT_PROFILE,
   ensureProfile,
@@ -128,7 +134,10 @@ function terminalLink(url) {
   return `\u001b]8;;${url}\u0007${url}\u001b]8;;\u0007`;
 }
 
-export async function registerDeviceLogin(platformUrl, fetchImpl = fetch) {
+export async function registerDeviceLogin(
+  platformUrl,
+  fetchImpl = proxyAwareFetch,
+) {
   const res = await fetchImpl(`${platformUrl}/api/cli/device/register`, {
     method: 'POST',
     signal: AbortSignal.timeout(8000),
@@ -146,7 +155,7 @@ export async function registerDeviceLogin(platformUrl, fetchImpl = fetch) {
 export async function pollDeviceLogin(
   platformUrl,
   deviceCode,
-  fetchImpl = fetch,
+  fetchImpl = proxyAwareFetch,
 ) {
   const res = await fetchImpl(`${platformUrl}/api/cli/device/token`, {
     method: 'POST',
@@ -180,8 +189,23 @@ function printDeviceInstructions(platformUrl, userCode) {
 
 function printLoginFallback() {
   console.error(
-    `  ${c.dim}You can also copy an API key from the dashboard and run${c.reset} ${c.cyan}subc update-key <your-api-key>${c.reset}${c.dim}.${c.reset}`,
+    `  ${c.dim}You can also copy an API key from the dashboard and run${c.reset} ${c.cyan}subc update-key <your-api-key>${c.reset}${c.dim}, which needs no network.${c.reset}`,
   );
+}
+
+// Render a login failure with the real underlying network cause. Node's fetch
+// reports every connection problem as a bare "fetch failed"; the diagnostic
+// (`ENOTFOUND`, `ECONNREFUSED`, `ETIMEDOUT`, TLS, proxy) lives on `cause`.
+function printLoginFailure(platformUrl, error) {
+  const message = describeFetchError(error);
+  console.error(`  ${c.red}✗ ${message}${c.reset}`);
+  const hint = tlsTrustHint(error);
+  if (hint) {
+    console.error(`  ${c.yellow}${hint}${c.reset}`);
+    return;
+  }
+  const proxy = proxyHint(error, platformUrl);
+  if (proxy) console.error(`  ${c.dim}${proxy}${c.reset}`);
 }
 
 async function saveLoginKey(profileName, token) {
@@ -196,7 +220,7 @@ async function saveLoginKey(profileName, token) {
 export async function loginCommand(_argv = [], options = {}) {
   const profileName = options.profileName || DEFAULT_PROFILE;
   const existing = await getApiKey(options.profile);
-  const fetchImpl = options.fetchImpl || fetch;
+  const fetchImpl = options.fetchImpl || proxyAwareFetch;
 
   if (existing) {
     const profile = await ensureProfile(profileName, existing.key);
@@ -225,7 +249,7 @@ export async function loginCommand(_argv = [], options = {}) {
   try {
     registered = await registerDeviceLogin(platformUrl, fetchImpl);
   } catch (error) {
-    console.error(`  ${c.red}✗ ${error.message}${c.reset}`);
+    printLoginFailure(platformUrl, error);
     printLoginFallback();
     console.log();
     process.exitCode = 1;
@@ -299,7 +323,7 @@ export async function loginCommand(_argv = [], options = {}) {
   } catch (error) {
     clearInterval(spinner);
     process.stdout.write(`\r${' '.repeat(50)}\r`);
-    console.error(`  ${c.red}✗ ${error.message}${c.reset}`);
+    printLoginFailure(platformUrl, error);
     printLoginFallback();
     console.log();
     process.exitCode = 1;
@@ -380,7 +404,7 @@ export async function whoamiCommand(_argv = [], options = {}) {
 
   // Validate the key against the server; falls back to offline display if unreachable
   try {
-    const res = await fetch(
+    const res = await proxyAwareFetch(
       `${getPlatformUrl(options.profile)}/api/cli/whoami`,
       {
         headers: { Authorization: `Bearer ${key}` },

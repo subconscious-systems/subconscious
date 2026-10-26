@@ -37,6 +37,7 @@ import {
   PUBLIC_CATALOG_FALLBACK_MESSAGE,
   resolveModelCatalog,
 } from './models.js';
+import { describeFailure } from './network.js';
 import { isUnsetSetting, resolvedModelSetting } from './profiles.js';
 import { runWindowsAgent } from './windows/agents.js';
 
@@ -372,7 +373,7 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
     console.error(
       `  ${c.yellow}Could not fetch the live model catalog; using packaged defaults.${c.reset}`,
     );
-    console.error(`  ${c.dim}${catalog.error.message}${c.reset}\n`);
+    console.error(`  ${c.dim}${describeFailure(catalog.error)}${c.reset}\n`);
   }
   return catalog;
 }

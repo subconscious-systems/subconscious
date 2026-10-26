@@ -12,9 +12,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { c } from './colors.js';
 import { PUBLIC_CATALOG_FALLBACK_MESSAGE } from './models.js';
+import { describeFailure } from './network.js';
 import {
   profileTemplate,
   RUNBOOK_DEFAULTS,
+  resolvedProfileValues,
   SUPPORTED_MODELS,
 } from './profile-settings.js';
 
@@ -25,6 +27,10 @@ export {
   resolvedProfileValues,
   SUPPORTED_MODELS,
 } from './profile-settings.js';
+
+export function systemCaEnabledFor(profile) {
+  return String(resolvedProfileValues(profile).SYSTEM_CA ?? '').trim() === 'on';
+}
 
 import { runWindows, windowsEditor } from './windows/process.js';
 
@@ -572,7 +578,7 @@ export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
     console.error(
       `\n  ${c.yellow}Could not fetch the live model catalog; showing packaged defaults.${c.reset}`,
     );
-    console.error(`  ${c.dim}${options.error.message}${c.reset}`);
+    console.error(`  ${c.dim}${describeFailure(options.error)}${c.reset}`);
   }
   console.log();
 }

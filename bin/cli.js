@@ -35,6 +35,7 @@ import {
 } from './harness-manifest.js';
 import { headlessPromptIndex } from './headless-args.js';
 import { resolveModelCatalog } from './models.js';
+import { ensureSystemCa, refuseUnsupportedSystemCa } from './network.js';
 import {
   configCommand,
   DEFAULT_PROFILE,
@@ -44,6 +45,7 @@ import {
   printConfigHelp,
   RUNBOOK_DEFAULTS,
   resolvedModelSetting,
+  systemCaEnabledFor,
   updatePlatformUrlCommand,
   updateUrlCommand,
   validateProfileName,
@@ -56,6 +58,23 @@ import { printUsageHelp, usageCommand } from './usage.js';
 
 function isHelpArg(arg) {
   return arg === 'help' || arg === '-h' || arg === '--help';
+}
+
+// Commands that never make a network request.
+const OFFLINE_COMMANDS = new Set([
+  '--help',
+  '-h',
+  'help',
+  'config',
+  'update-key',
+  'logout',
+  'setup',
+  'settings',
+  'cursor',
+]);
+
+function needsNetwork(args) {
+  return !OFFLINE_COMMANDS.has(args[0]) && !isHelpArg(args[1]);
 }
 
 function printHelp() {
@@ -122,6 +141,9 @@ ${agents}
     ${c.dim}$${c.reset} subc codex headless "fix the failing test"
     ${c.dim}$${c.reset} subc -p staging codex
 
+  ${c.bold}Network${c.reset}
+    Behind a proxy or a TLS-inspecting firewall? Run ${c.cyan}subc login help${c.reset}.
+
   ${c.dim}Use subc <command> help for command-specific usage.${c.reset}
 `);
 }
@@ -136,6 +158,16 @@ Usage:
 Authenticate and save an API key to the selected profile.
 Opens a browser to a one-time login link. If the browser does not open, use the URL printed in the terminal.
 To sign in without a browser, copy an API key from the dashboard and run subc update-key <your-api-key>.
+
+Behind a proxy or firewall:
+  If login fails with ENOTFOUND, ECONNREFUSED or a timeout, the network may require a proxy.
+  Set HTTPS_PROXY=http://host:port (or http://user:pass@host:port) and retry.
+  NO_PROXY=host1,.example.com lists hosts to reach directly, not through the proxy.
+  If the error names a certificate (SELF_SIGNED_CERT_IN_CHAIN, UNABLE_TO_VERIFY_LEAF_SIGNATURE),
+  the proxy re-signs TLS traffic. Ask IT for its root certificate, then either:
+    export NODE_EXTRA_CA_CERTS=/path/to/corporate-root-ca.pem
+    or set SYSTEM_CA=on in the profile (subc config edit) to trust the OS certificate store. Needs Node 22.15 or newer.
+  If nothing works, subc update-key <your-api-key> saves a key without any network request.
 `,
   logout: `
 Usage:
@@ -367,6 +399,16 @@ async function main() {
     }
     harnessManifestCommand(args.slice(1));
     return;
+  }
+
+  // Trust the OS certificate store before any request when the profile opts in.
+  // Node reads --use-system-ca at startup, so this re-execs once. Commands that
+  // make no request skip it, so help and config edit still work on old Node.
+  if (needsNetwork(args)) {
+    const profile = await loadProfile(profileName);
+    const systemCaEnabled = systemCaEnabledFor(profile);
+    if (refuseUnsupportedSystemCa(systemCaEnabled, profile.path)) return;
+    if (systemCaEnabled && (await ensureSystemCa())) return;
   }
 
   const launchTui =
