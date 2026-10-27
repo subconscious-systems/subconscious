@@ -119,18 +119,6 @@
       "type": "integer",
       "min": 1
     },
-    {
-      "name": "CLAUDE_CODE_ISOLATE",
-      "flag": "--no-isolate",
-      "flag_value": "off",
-      "default": "on",
-      "strict": true,
-      "choices": ["on", "off"],
-      "help": "Deprecated no-op: subc shares ~/.claude directly since 7.0",
-      "label": "Isolated Claude config (deprecated)",
-      "description": "Deprecated: Claude Code >=2.1.280 blocks model-driven writes that resolve through config-dir symlinks, so subc 7.0 removed config-dir isolation and runs sessions on your own Claude config. Accepted so existing profiles and scripts keep working; it no longer changes the launch.",
-      "comment": "No effect; kept for compatibility. subc claude uninstall removes the leftover 6.3 isolated dir."
-    },
     { "name": "MAX_CONCURRENT_SUBAGENTS" },
     {
       "name": "MAX_SUBAGENT_SPAWN_DEPTH",

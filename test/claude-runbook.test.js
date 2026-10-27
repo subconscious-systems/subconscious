@@ -104,20 +104,30 @@ test('Claude launch leaves the Claude config folder up to the user', async () =>
     'a user-set CLAUDE_CONFIG_DIR passes through verbatim',
   );
 
-  const flagged = runSync(
+  const flagBin = path.join(testDir, 'flag-bin');
+  await fs.mkdir(flagBin, { recursive: true });
+  await fs.writeFile(
+    path.join(flagBin, 'claude'),
+    '#!/bin/sh\nprintf \'%s\\n\' "$@"\n',
+    { mode: 0o755 },
+  );
+  const forwarded = runSync(
     launchCommand('claude-code', {
-      env: { ...shellEnv, ...base },
+      env: {
+        ...shellEnv,
+        ...base,
+        PATH: `${flagBin}:${process.env.PATH}`,
+      },
       args: ['--no-isolate'],
     }),
   );
-  assert.equal(flagged.status, 0, flagged.stderr);
-  assert.equal(
-    flagged.stdout,
-    '',
-    'the deprecated --no-isolate flag is still accepted',
+  assert.equal(forwarded.status, 0, forwarded.stderr);
+  assert.ok(
+    forwarded.stdout.includes('--no-isolate'),
+    'the retired --no-isolate flag is no longer intercepted: it passes through to the claude argv',
   );
 
-  const profileOptOut = runSync(
+  const staleSetting = runSync(
     launchCommand('claude-code', {
       env: {
         ...shellEnv,
@@ -126,11 +136,11 @@ test('Claude launch leaves the Claude config folder up to the user', async () =>
       },
     }),
   );
-  assert.equal(profileOptOut.status, 0, profileOptOut.stderr);
+  assert.equal(staleSetting.status, 0, staleSetting.stderr);
   assert.equal(
-    profileOptOut.stdout,
+    staleSetting.stdout,
     '',
-    'the deprecated CLAUDE_CODE_ISOLATE setting is still accepted',
+    'a stale CLAUDE_CODE_ISOLATE in a stored env file is ignored, not rejected',
   );
 });
 
