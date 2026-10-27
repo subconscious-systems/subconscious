@@ -352,7 +352,7 @@ function hostOptions(options = {}, env = process.env) {
   };
 }
 
-function appUserDir(app, host) {
+export function appUserDir(app, host) {
   if (host.platform === 'win32') {
     const appData = host.appData || path.join(host.home, 'AppData', 'Roaming');
     return path.join(appData, app, 'User');
