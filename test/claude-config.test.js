@@ -3,11 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import {
-  claudeSourceDir,
-  legacyClaudeConfigDir,
-  legacyClaudeDirNotice,
-} from '../bin/claude-config.js';
+import { claudeSourceDir } from '../bin/claude-config.js';
 
 const roots = [];
 after(() => {
@@ -62,45 +58,4 @@ test('the retired SUBC_CLAUDE_CONFIG_SOURCE override no longer redirects', () =>
     path.join(home, '.claude'),
     'a 6.3-era shell still carrying the source env reads ~/.claude',
   );
-});
-
-test('legacyClaudeConfigDir is the 6.3 path and honors SUBC_CONFIG_DIR', () => {
-  const home = tempHome('subc-claude-legacy-');
-  assert.equal(
-    legacyClaudeConfigDir({ env: {}, home }),
-    path.join(home, '.subconscious', 'claude-code'),
-  );
-  const relocated = path.join(home, 'subc');
-  assert.equal(
-    legacyClaudeConfigDir({ env: { SUBC_CONFIG_DIR: relocated }, home }),
-    path.join(relocated, 'claude-code'),
-  );
-});
-
-test('legacyClaudeDirNotice points at uninstall only while the leftover dir looks like a config', () => {
-  const home = tempHome('subc-claude-notice-');
-  const env = {};
-  assert.equal(
-    legacyClaudeDirNotice({ env, home }),
-    null,
-    'no leftover dir, no notice',
-  );
-
-  const dir = legacyClaudeConfigDir({ env, home });
-  fs.mkdirSync(dir, { recursive: true });
-  assert.equal(
-    legacyClaudeDirNotice({ env, home }),
-    null,
-    'an empty leftover dir is harmless and does not warn',
-  );
-
-  fs.writeFileSync(path.join(dir, '.subc-written.json'), '{}');
-  fs.writeFileSync(
-    path.join(dir, 'settings.json'),
-    '{"model":"subconscious/x"}',
-  );
-  const notice = legacyClaudeDirNotice({ env, home });
-  assert.ok(notice, 'a leftover 6.3 config dir warns');
-  assert.match(notice, /subc claude uninstall/);
-  assert.ok(notice.includes(dir), notice);
 });

@@ -1,11 +1,9 @@
 #!/usr/bin/env bash
 # ── Subconscious API Gateway — Claude Code leftovers ──────────────────────────
 # Claude Code is launch-only: `subc claude` passes everything as env and flags
-# and writes nothing persistent. Two leftovers remain from older releases:
-# the ~/.claude/subconscious-gateway.env file from the first persistent setup,
-# and the isolated config dir subc 6.3 made at ~/.subconscious/claude-code,
-# which shared ~/.claude through symlinks. This script reports and removes
-# both.
+# and writes nothing persistent. One leftover remains from older releases:
+# the ~/.claude/subconscious-gateway.env file from the first persistent setup.
+# This script reports and removes it.
 #
 #   subc claude status
 #   subc claude uninstall
@@ -18,7 +16,6 @@ set -euo pipefail
 
 CLAUDE_DIR="${HOME}/.claude"
 ENV_FILE="${CLAUDE_DIR}/subconscious-gateway.env"
-ISOLATED_DIR="${SUBC_CONFIG_DIR:-${HOME}/.subconscious}/claude-code"
 COMMAND="status"
 
 usage() {
@@ -29,8 +26,7 @@ Usage:
   subc claude help
 
 Claude Code is launch-only: subc claude. Uninstall removes leftover
-~/.claude/subconscious-gateway.env from older persistent setup and the
-unused ~/.subconscious/claude-code config dir subc 6.3 made.
+~/.claude/subconscious-gateway.env from older persistent setup.
 EOF
 }
 
@@ -51,48 +47,6 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
-
-# Whether `dir` looks like a Claude config folder Claude Code has used.
-looks_like_claude_config() {
-  [[ -f "$1/settings.json" || -f "$1/.claude.json" || -e "$1/projects" ]]
-}
-
-isolated_summary() {
-  if [[ -L "$ISOLATED_DIR" ]]; then
-    echo "present, but a symlink subc will not touch; remove it yourself"
-  elif [[ -d "$ISOLATED_DIR" ]]; then
-    if [[ -f "$ISOLATED_DIR/.subc-written.json" ]]; then
-      echo "present, subc-made (subc claude uninstall removes it)"
-    elif looks_like_claude_config "$ISOLATED_DIR"; then
-      echo "present, but it holds a Claude config subc did not make; remove it yourself"
-    else
-      echo "present"
-    fi
-  else
-    echo "missing"
-  fi
-}
-
-remove_isolated_dir() {
-  if [[ -L "$ISOLATED_DIR" ]]; then
-    echo "Refusing to remove $ISOLATED_DIR: it is a symlink, so remove it yourself." >&2
-    return 1
-  fi
-  if [[ ! -d "$ISOLATED_DIR" ]]; then
-    echo "Isolated config dir: missing"
-    return 0
-  fi
-  if [[ ! -f "$ISOLATED_DIR/.subc-written.json" ]] && looks_like_claude_config "$ISOLATED_DIR"; then
-    echo "Refusing to remove $ISOLATED_DIR: it holds a Claude config subc did not make." >&2
-    return 1
-  fi
-  # Remove the entries, never the linked targets: find at depth one names the
-  # links themselves, and rm on a link unlinks it. rm -r with a trailing
-  # slash would follow directory links into ~/.claude instead.
-  find "$ISOLATED_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
-  rmdir "$ISOLATED_DIR"
-  echo "Removed $ISOLATED_DIR (its entries were links; nothing inside ~/.claude was touched)"
-}
 
 status() {
   echo "scope: user"
@@ -117,20 +71,12 @@ status() {
     echo "env file: missing"
     echo "Launch Claude with: subc claude"
   fi
-  echo "isolated config dir: $ISOLATED_DIR ($(isolated_summary))"
-  local aside
-  aside="$(ls -d "${ISOLATED_DIR}.old-"* 2>/dev/null || true)"
-  if [[ -n "$aside" ]]; then
-    echo "old configs moved aside by earlier subc builds (kept, remove yourself):"
-    echo "$aside"
-  fi
 }
 
 case "$COMMAND" in
   uninstall)
     rm -f "$ENV_FILE"
     echo "Removed $ENV_FILE"
-    remove_isolated_dir
     ;;
   status)
     status

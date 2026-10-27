@@ -5,11 +5,7 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { agentById } from '../bin/agent-data.js';
 import { runbookEnv } from '../bin/agents.js';
-import {
-  launchCommand,
-  runSync,
-  setupCommand,
-} from './helpers/agent-command.js';
+import { launchCommand, runSync } from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-claude-test-'));
 const fakeClaude = path.join(testDir, 'claude');
@@ -103,117 +99,6 @@ test('Claude launch leaves the Claude config folder up to the user', async () =>
     '/custom/claude',
     'a user-set CLAUDE_CONFIG_DIR passes through verbatim',
   );
-
-  const flagBin = path.join(testDir, 'flag-bin');
-  await fs.mkdir(flagBin, { recursive: true });
-  await fs.writeFile(
-    path.join(flagBin, 'claude'),
-    '#!/bin/sh\nprintf \'%s\\n\' "$@"\n',
-    { mode: 0o755 },
-  );
-  const forwarded = runSync(
-    launchCommand('claude-code', {
-      env: {
-        ...shellEnv,
-        ...base,
-        PATH: `${flagBin}:${process.env.PATH}`,
-      },
-      args: ['--no-isolate'],
-    }),
-  );
-  assert.equal(forwarded.status, 0, forwarded.stderr);
-  assert.ok(
-    forwarded.stdout.includes('--no-isolate'),
-    'the retired --no-isolate flag is no longer intercepted: it passes through to the claude argv',
-  );
-
-  const staleSetting = runSync(
-    launchCommand('claude-code', {
-      env: {
-        ...shellEnv,
-        ...base,
-        CLAUDE_CODE_ISOLATE: 'off',
-      },
-    }),
-  );
-  assert.equal(staleSetting.status, 0, staleSetting.stderr);
-  assert.equal(
-    staleSetting.stdout,
-    '',
-    'a stale CLAUDE_CODE_ISOLATE in a stored env file is ignored, not rejected',
-  );
-});
-
-test('subc claude uninstall removes the leftover isolated config dir link-safely', async () => {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-claude-clean-'));
-  try {
-    const source = path.join(home, '.claude');
-    await fs.mkdir(path.join(source, 'plans'), { recursive: true });
-    await fs.writeFile(path.join(source, 'plans', 'plan.md'), 'keep');
-    await fs.writeFile(path.join(source, 'CLAUDE.md'), '# user config');
-    const dir = path.join(home, '.subconscious', 'claude-code');
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(path.join(dir, '.subc-written.json'), '{}');
-    await fs.symlink(path.join(source, 'plans'), path.join(dir, 'plans'));
-    await fs.symlink(
-      path.join(source, 'CLAUDE.md'),
-      path.join(dir, 'CLAUDE.md'),
-    );
-    await fs.writeFile(
-      path.join(dir, 'settings.json'),
-      '{"model":"subconscious/x"}',
-    );
-    await fs.mkdir(path.join(dir, 'plugins'));
-    await fs.writeFile(path.join(dir, 'plugins', 'config.json'), '{}');
-
-    const env = {
-      ...process.env,
-      HOME: home,
-      SUBC_CONFIG_DIR: path.join(home, '.subconscious'),
-    };
-    const reported = runSync(setupCommand('claude-code', ['status'], env));
-    assert.equal(reported.status, 0, reported.stderr);
-    assert.match(reported.stdout, /present, subc-made/);
-
-    const result = runSync(setupCommand('claude-code', ['uninstall'], env));
-    assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /Removed .*claude-code/);
-
-    await assert.rejects(fs.access(dir), 'the isolated dir is gone');
-    assert.equal(
-      await fs.readFile(path.join(home, '.claude', 'plans', 'plan.md'), 'utf8'),
-      'keep',
-      'a linked target survives the cleanup',
-    );
-    assert.equal(
-      await fs.readFile(path.join(home, '.claude', 'CLAUDE.md'), 'utf8'),
-      '# user config',
-      'a linked file survives the cleanup',
-    );
-  } finally {
-    await fs.rm(home, { recursive: true, force: true });
-  }
-});
-
-test('subc claude uninstall refuses a Claude config subc did not make', async () => {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-claude-foreign-'));
-  try {
-    const dir = path.join(home, '.subconscious', 'claude-code');
-    await fs.mkdir(path.join(dir, 'projects'), { recursive: true });
-    await fs.writeFile(path.join(dir, 'settings.json'), '{}');
-    const env = {
-      ...process.env,
-      HOME: home,
-      SUBC_CONFIG_DIR: path.join(home, '.subconscious'),
-    };
-    const result = runSync(setupCommand('claude-code', ['uninstall'], env));
-    assert.notEqual(result.status, 0, 'a foreign config must be refused');
-    assert.match(result.stderr, /Refusing to remove/);
-    const kept = await fs.readFile(path.join(dir, 'settings.json'), 'utf8');
-    assert.equal(kept, '{}', 'the refused dir keeps its files');
-  } finally {
-    await fs.rm(home, { recursive: true, force: true });
-  }
 });
 
 test('Claude launch picker stays inside the live catalog', async () => {

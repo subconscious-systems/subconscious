@@ -354,11 +354,8 @@ subc opencode uninstall
 from older overwrite-style setup. `subc claude` writes nothing persistent: it
 passes routing, credentials and the model picker through the launch env and
 `--settings`, and sessions use your own Claude config (~/.claude, or your
-CLAUDE_CONFIG_DIR). `subc claude uninstall` also removes the unused
-~/.subconscious/claude-code dir subc 6.3 made; its entries are links, so the
-command unlinks them instead of following, and it refuses a dir subc did not
-make. Launch those agents with `subc claude` / `subc opencode`; they do not
-need install.
+CLAUDE_CONFIG_DIR). Launch those agents with `subc claude` / `subc opencode`;
+they do not need install.
 
 Inspect a persistent integration with `subc <agent> status`. A one-off
 `--api-key` passed to install takes precedence for that command but is not

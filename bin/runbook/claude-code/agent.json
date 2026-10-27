@@ -31,13 +31,10 @@
     "behavior": "Launches Claude Code with the active Subconscious profile and model picker, using your own Claude config (~/.claude, or your CLAUDE_CONFIG_DIR) unchanged - plans, sessions, memory, skills and settings stay where plain claude keeps them. Subconscious routing, credentials and model pinning ride the launch env and --settings, which persist nothing. A /model pick inside a subc session changes your Claude default, as it does in plain claude. Persistent files are leftover-only: subc claude uninstall.",
     "options": [
       ["help", "Show this help"],
-      [
-        "status",
-        "Inspect leftovers: ~/.claude/subconscious-gateway.env and the unused ~/.subconscious/claude-code isolated config"
-      ],
+      ["status", "Inspect leftovers: ~/.claude/subconscious-gateway.env"],
       [
         "uninstall",
-        "Remove those leftovers (the 6.3-era isolated config dir is removed link-safely; nothing in ~/.claude is touched)"
+        "Remove leftover ~/.claude/subconscious-gateway.env from older persistent setup"
       ],
       ["--model MODEL", "Override the profile model for this launch"]
     ],
@@ -238,12 +235,6 @@
         }
       },
       "description": "Replaces the built-in model picker with the live catalog and allowlists only those models."
-    },
-    {
-      "kind": "file",
-      "path": "~/.subconscious/claude-code",
-      "lifetime": "legacy",
-      "description": "Isolated Claude config dir subc 6.3 made and pointed sessions at (honoring $SUBC_CONFIG_DIR). Named CLAUDE.md, history.jsonl, keybindings.json and the rules, agents, commands, skills, output-styles, hooks, projects, file-history, todos, plans and ide folders in it are links into ~/.claude; settings.json, .claude.json and the plugin index were rebuilds of the user's files. Claude Code >=2.1.280 denies model-driven writes that resolve through those links, so subc 7.0 runs sessions on the user's own config and leaves this dir unused. subc claude status reports it and subc claude uninstall removes it link-safely (entries are unlinked at depth one; nothing in ~/.claude is touched); subc never removes (dir).old-* folders moved aside by earlier builds. Do not delete it with rm -r and a trailing slash: that follows the links into ~/.claude."
     },
     {
       "kind": "file",

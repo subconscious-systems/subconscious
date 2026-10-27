@@ -19,7 +19,6 @@ import {
 import { launchPlan, resolveInputs } from './agent-launch.js';
 import { planCommand, runCommand, scriptCommand } from './agent-spawn.js';
 import { getApiKey } from './auth.js';
-import { legacyClaudeDirNotice } from './claude-config.js';
 import {
   applyClaudePickerCatalog,
   CLAUDE_PICKER_ENV_DESCRIPTION,
@@ -547,10 +546,5 @@ async function launchAgent(agent, argv, profile, headless) {
   // The headless endpoint is the one endpoint for every harness, Claude too.
   const launchEnv = headless ? { ...env, CLAUDE_GATEWAY_URL: '' } : env;
   const plan = launchPlan(agent, { env: launchEnv, ...headlessParts(rest) });
-  if (agent.id === CLAUDE_CODE) {
-    const notice = legacyClaudeDirNotice({ env: launchEnv });
-    if (notice) console.error(`  ${c.yellow}${notice}${c.reset}`);
-    return runCommand(planCommand(agent, plan, binDir));
-  }
   return runCommand(planCommand(agent, plan, binDir));
 }
