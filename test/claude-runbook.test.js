@@ -61,23 +61,21 @@ test('an UNSET subagent model follows the launch model', () => {
   assert.equal(result.stdout, 'false\nsubconscious/main-model\n0');
 });
 
-test('Claude launch points Claude Code at the isolated subc config dir', async () => {
-  const isolateDir = path.join(testDir, 'isolate-bin');
-  await fs.mkdir(isolateDir, { recursive: true });
-  const subcConfig = path.join(testDir, 'subc-config');
+test('Claude launch leaves the Claude config folder up to the user', async () => {
+  const configBin = path.join(testDir, 'config-bin');
+  await fs.mkdir(configBin, { recursive: true });
   await fs.writeFile(
-    path.join(isolateDir, 'claude'),
+    path.join(configBin, 'claude'),
     '#!/bin/sh\nprintf \'%s\' "$CLAUDE_CONFIG_DIR"\n',
     { mode: 0o755 },
   );
-  // A CLAUDE_CONFIG_DIR in the developer's shell would win over isolation.
   const { CLAUDE_CONFIG_DIR: _shellConfigDir, ...shellEnv } = process.env;
   const base = {
-    PATH: `${isolateDir}:${process.env.PATH}`,
+    PATH: `${configBin}:${process.env.PATH}`,
     GATEWAY_URL: 'https://gateway.example',
     API_KEY: 'sk-test',
     MODEL: 'subconscious/main-model',
-    SUBC_CONFIG_DIR: subcConfig,
+    SUBC_CONFIG_DIR: path.join(testDir, 'subc-config'),
   };
 
   const launched = runSync(
@@ -86,29 +84,8 @@ test('Claude launch points Claude Code at the isolated subc config dir', async (
   assert.equal(launched.status, 0, launched.stderr);
   assert.equal(
     launched.stdout,
-    path.join(subcConfig, 'claude-code'),
-    'CLAUDE_CONFIG_DIR must be the absolute isolated dir by default',
-  );
-
-  const flagged = runSync(
-    launchCommand('claude-code', {
-      env: { ...shellEnv, ...base },
-      args: ['--no-isolate'],
-    }),
-  );
-  assert.equal(flagged.status, 0, flagged.stderr);
-  assert.equal(flagged.stdout, '', '--no-isolate must unset CLAUDE_CONFIG_DIR');
-
-  const profileOptOut = runSync(
-    launchCommand('claude-code', {
-      env: { ...shellEnv, ...base, CLAUDE_CODE_ISOLATE: 'off' },
-    }),
-  );
-  assert.equal(profileOptOut.status, 0, profileOptOut.stderr);
-  assert.equal(
-    profileOptOut.stdout,
     '',
-    'CLAUDE_CODE_ISOLATE=off must unset CLAUDE_CONFIG_DIR',
+    'subc must not point Claude Code at a config dir of its own',
   );
 
   const own = runSync(
@@ -119,21 +96,8 @@ test('Claude launch points Claude Code at the isolated subc config dir', async (
   assert.equal(own.status, 0, own.stderr);
   assert.equal(
     own.stdout,
-    path.join(subcConfig, 'claude-code'),
-    'a user-set CLAUDE_CONFIG_DIR is the source subc shares from, not the launch dir',
-  );
-
-  const ownOptOut = runSync(
-    launchCommand('claude-code', {
-      env: { ...shellEnv, ...base, CLAUDE_CONFIG_DIR: '/custom/claude' },
-      args: ['--no-isolate'],
-    }),
-  );
-  assert.equal(ownOptOut.status, 0, ownOptOut.stderr);
-  assert.equal(
-    ownOptOut.stdout,
     '/custom/claude',
-    '--no-isolate must keep the user-set CLAUDE_CONFIG_DIR',
+    'a user-set CLAUDE_CONFIG_DIR passes through verbatim',
   );
 });
 

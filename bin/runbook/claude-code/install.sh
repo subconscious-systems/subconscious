@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # ── Subconscious API Gateway — Claude Code leftovers ──────────────────────────
 # Claude Code is launch-only: `subc claude` passes everything as env and flags
-# and writes nothing. Older persistent setups wrote
-# ~/.claude/subconscious-gateway.env; this script reports and removes it.
+# and writes nothing persistent. One leftover remains from older releases:
+# the ~/.claude/subconscious-gateway.env file from the first persistent setup.
+# This script reports and removes it.
 #
 #   subc claude status
 #   subc claude uninstall

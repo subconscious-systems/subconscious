@@ -1,16 +1,12 @@
-import path from 'node:path';
 import { agentInputs, agentKeyName } from './agent-data.js';
 import { openCodeConfigFromEnv } from './opencode-provider.js';
-import { configDir, isUnsetSetting } from './profiles.js';
+import { isUnsetSetting } from './profiles.js';
 
 // One pass, so a substituted value (a prompt, a settings document) is never
 // scanned again for placeholders.
 const PLACEHOLDER = /\$\{([A-Z_][A-Z0-9_]*)\}(\/)?|\{([A-Za-z][A-Za-z0-9]*)\}/g;
 const present = (value) =>
   value !== undefined && value !== null && value !== '';
-
-// CLAUDE_CODE_ISOLATE values that stop Claude Code config isolation.
-const ISOLATE_OFF = new Set(['off', '0', 'false', 'no']);
 
 function tokensFor(agent, env, extra) {
   const baseUrl = String(env.GATEWAY_URL ?? '').replace(/\/+$/, '');
@@ -23,26 +19,6 @@ function tokensFor(agent, env, extra) {
     // Left for the runbook, which writes the file and substitutes its path.
     tempFile: '{tempFile}',
     opencodeConfig: () => JSON.stringify(openCodeConfigFromEnv(env)),
-    // Claude Code config isolation: subc sessions keep their Claude config
-    // (settings, sessions, plugins, credentials) under the subc config dir
-    // instead of ~/.claude, so session state cannot bleed into a plain
-    // `claude` installation. Empty when CLAUDE_CODE_ISOLATE opts out.
-    claudeConfigDir: () => {
-      const setting = String(env.CLAUDE_CODE_ISOLATE ?? '')
-        .trim()
-        .toLowerCase();
-      // Opted out: the user's own folder, as plain `claude` would use it.
-      if (ISOLATE_OFF.has(setting)) {
-        return String(
-          env.SUBC_CLAUDE_CONFIG_SOURCE || env.CLAUDE_CONFIG_DIR || '',
-        ).trim();
-      }
-      const base = String(env.SUBC_CONFIG_DIR ?? '').trim() || configDir();
-      // A relative base would put the config, MCP tokens included, in the
-      // current directory; use ~/.claude unchanged instead.
-      if (!path.isAbsolute(base)) return '';
-      return path.join(base, 'claude-code');
-    },
     ...extra,
   };
 }
