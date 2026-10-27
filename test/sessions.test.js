@@ -342,14 +342,12 @@ test('Claude sessions come from the folder plain claude uses', async (t) => {
   assert.deepEqual(await keys({ CLAUDE_CONFIG_DIR: personal }), [
     'claude:personal-id',
   ]);
-  // Inside a subc session CLAUDE_CONFIG_DIR is the subc dir; the carried
-  // source still names the user's folder.
+  // subc no longer swaps CLAUDE_CONFIG_DIR, so the 6.3-era source override is
+  // ignored: sessions come from wherever plain claude keeps them.
   assert.deepEqual(
-    await keys({
-      CLAUDE_CONFIG_DIR: path.join(home, '.subconscious', 'claude-code'),
-      SUBC_CLAUDE_CONFIG_SOURCE: personal,
-    }),
-    ['claude:personal-id'],
+    await keys({ SUBC_CLAUDE_CONFIG_SOURCE: personal }),
+    [],
+    'the retired 6.3 source override is ignored',
   );
   assert.deepEqual(await keys({}), [], 'no CLAUDE_CONFIG_DIR reads ~/.claude');
 });

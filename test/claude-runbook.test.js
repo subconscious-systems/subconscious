@@ -5,7 +5,11 @@ import path from 'node:path';
 import { after, test } from 'node:test';
 import { agentById } from '../bin/agent-data.js';
 import { runbookEnv } from '../bin/agents.js';
-import { launchCommand, runSync } from './helpers/agent-command.js';
+import {
+  launchCommand,
+  runSync,
+  setupCommand,
+} from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-claude-test-'));
 const fakeClaude = path.join(testDir, 'claude');
@@ -61,23 +65,21 @@ test('an UNSET subagent model follows the launch model', () => {
   assert.equal(result.stdout, 'false\nsubconscious/main-model\n0');
 });
 
-test('Claude launch points Claude Code at the isolated subc config dir', async () => {
-  const isolateDir = path.join(testDir, 'isolate-bin');
-  await fs.mkdir(isolateDir, { recursive: true });
-  const subcConfig = path.join(testDir, 'subc-config');
+test('Claude launch leaves the Claude config folder up to the user', async () => {
+  const configBin = path.join(testDir, 'config-bin');
+  await fs.mkdir(configBin, { recursive: true });
   await fs.writeFile(
-    path.join(isolateDir, 'claude'),
+    path.join(configBin, 'claude'),
     '#!/bin/sh\nprintf \'%s\' "$CLAUDE_CONFIG_DIR"\n',
     { mode: 0o755 },
   );
-  // A CLAUDE_CONFIG_DIR in the developer's shell would win over isolation.
   const { CLAUDE_CONFIG_DIR: _shellConfigDir, ...shellEnv } = process.env;
   const base = {
-    PATH: `${isolateDir}:${process.env.PATH}`,
+    PATH: `${configBin}:${process.env.PATH}`,
     GATEWAY_URL: 'https://gateway.example',
     API_KEY: 'sk-test',
     MODEL: 'subconscious/main-model',
-    SUBC_CONFIG_DIR: subcConfig,
+    SUBC_CONFIG_DIR: path.join(testDir, 'subc-config'),
   };
 
   const launched = runSync(
@@ -86,29 +88,8 @@ test('Claude launch points Claude Code at the isolated subc config dir', async (
   assert.equal(launched.status, 0, launched.stderr);
   assert.equal(
     launched.stdout,
-    path.join(subcConfig, 'claude-code'),
-    'CLAUDE_CONFIG_DIR must be the absolute isolated dir by default',
-  );
-
-  const flagged = runSync(
-    launchCommand('claude-code', {
-      env: { ...shellEnv, ...base },
-      args: ['--no-isolate'],
-    }),
-  );
-  assert.equal(flagged.status, 0, flagged.stderr);
-  assert.equal(flagged.stdout, '', '--no-isolate must unset CLAUDE_CONFIG_DIR');
-
-  const profileOptOut = runSync(
-    launchCommand('claude-code', {
-      env: { ...shellEnv, ...base, CLAUDE_CODE_ISOLATE: 'off' },
-    }),
-  );
-  assert.equal(profileOptOut.status, 0, profileOptOut.stderr);
-  assert.equal(
-    profileOptOut.stdout,
     '',
-    'CLAUDE_CODE_ISOLATE=off must unset CLAUDE_CONFIG_DIR',
+    'subc must not point Claude Code at a config dir of its own',
   );
 
   const own = runSync(
@@ -119,22 +100,110 @@ test('Claude launch points Claude Code at the isolated subc config dir', async (
   assert.equal(own.status, 0, own.stderr);
   assert.equal(
     own.stdout,
-    path.join(subcConfig, 'claude-code'),
-    'a user-set CLAUDE_CONFIG_DIR is the source subc shares from, not the launch dir',
+    '/custom/claude',
+    'a user-set CLAUDE_CONFIG_DIR passes through verbatim',
   );
 
-  const ownOptOut = runSync(
+  const flagged = runSync(
     launchCommand('claude-code', {
-      env: { ...shellEnv, ...base, CLAUDE_CONFIG_DIR: '/custom/claude' },
+      env: { ...shellEnv, ...base },
       args: ['--no-isolate'],
     }),
   );
-  assert.equal(ownOptOut.status, 0, ownOptOut.stderr);
+  assert.equal(flagged.status, 0, flagged.stderr);
   assert.equal(
-    ownOptOut.stdout,
-    '/custom/claude',
-    '--no-isolate must keep the user-set CLAUDE_CONFIG_DIR',
+    flagged.stdout,
+    '',
+    'the deprecated --no-isolate flag is still accepted',
   );
+
+  const profileOptOut = runSync(
+    launchCommand('claude-code', {
+      env: {
+        ...shellEnv,
+        ...base,
+        CLAUDE_CODE_ISOLATE: 'off',
+      },
+    }),
+  );
+  assert.equal(profileOptOut.status, 0, profileOptOut.stderr);
+  assert.equal(
+    profileOptOut.stdout,
+    '',
+    'the deprecated CLAUDE_CODE_ISOLATE setting is still accepted',
+  );
+});
+
+test('subc claude uninstall removes the leftover isolated config dir link-safely', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-claude-clean-'));
+  try {
+    const source = path.join(home, '.claude');
+    await fs.mkdir(path.join(source, 'plans'), { recursive: true });
+    await fs.writeFile(path.join(source, 'plans', 'plan.md'), 'keep');
+    await fs.writeFile(path.join(source, 'CLAUDE.md'), '# user config');
+    const dir = path.join(home, '.subconscious', 'claude-code');
+    await fs.mkdir(dir, { recursive: true });
+    await fs.writeFile(path.join(dir, '.subc-written.json'), '{}');
+    await fs.symlink(path.join(source, 'plans'), path.join(dir, 'plans'));
+    await fs.symlink(
+      path.join(source, 'CLAUDE.md'),
+      path.join(dir, 'CLAUDE.md'),
+    );
+    await fs.writeFile(
+      path.join(dir, 'settings.json'),
+      '{"model":"subconscious/x"}',
+    );
+    await fs.mkdir(path.join(dir, 'plugins'));
+    await fs.writeFile(path.join(dir, 'plugins', 'config.json'), '{}');
+
+    const env = {
+      ...process.env,
+      HOME: home,
+      SUBC_CONFIG_DIR: path.join(home, '.subconscious'),
+    };
+    const reported = runSync(setupCommand('claude-code', ['status'], env));
+    assert.equal(reported.status, 0, reported.stderr);
+    assert.match(reported.stdout, /present, subc-made/);
+
+    const result = runSync(setupCommand('claude-code', ['uninstall'], env));
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /Removed .*claude-code/);
+
+    await assert.rejects(fs.access(dir), 'the isolated dir is gone');
+    assert.equal(
+      await fs.readFile(path.join(home, '.claude', 'plans', 'plan.md'), 'utf8'),
+      'keep',
+      'a linked target survives the cleanup',
+    );
+    assert.equal(
+      await fs.readFile(path.join(home, '.claude', 'CLAUDE.md'), 'utf8'),
+      '# user config',
+      'a linked file survives the cleanup',
+    );
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('subc claude uninstall refuses a Claude config subc did not make', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-claude-foreign-'));
+  try {
+    const dir = path.join(home, '.subconscious', 'claude-code');
+    await fs.mkdir(path.join(dir, 'projects'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'settings.json'), '{}');
+    const env = {
+      ...process.env,
+      HOME: home,
+      SUBC_CONFIG_DIR: path.join(home, '.subconscious'),
+    };
+    const result = runSync(setupCommand('claude-code', ['uninstall'], env));
+    assert.notEqual(result.status, 0, 'a foreign config must be refused');
+    assert.match(result.stderr, /Refusing to remove/);
+    const kept = await fs.readFile(path.join(dir, 'settings.json'), 'utf8');
+    assert.equal(kept, '{}', 'the refused dir keeps its files');
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
+  }
 });
 
 test('Claude launch picker stays inside the live catalog', async () => {

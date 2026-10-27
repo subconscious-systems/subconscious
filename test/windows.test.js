@@ -1101,8 +1101,8 @@ test('Windows agents other than Claude get the gateway and key as SUBCONSCIOUS_*
   assert.equal(claude.env.SUBCONSCIOUS_GATEWAY_URL, undefined);
 });
 
-test('Windows Claude launch never runs on a dir inside ~/.claude', async () => {
-  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-win-refuse-'));
+test('Windows Claude launch writes nothing to disk', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-win-write-'));
   try {
     await fs.mkdir(path.join(home, '.claude'), { recursive: true });
     const spec = await windowsLaunch('claude-code', [], {
@@ -1110,23 +1110,23 @@ test('Windows Claude launch never runs on a dir inside ~/.claude', async () => {
       SUBC_CONFIG_DIR: path.join(home, '.claude'),
     });
     let ran = false;
-    const code = await executeWindowsLaunch(
-      spec,
-      async () => {
-        ran = true;
-        return 0;
-      },
-      { home },
+    const code = await executeWindowsLaunch(spec, async () => {
+      ran = true;
+      return 0;
+    });
+    assert.equal(code, 0);
+    assert.equal(ran, true);
+    assert.deepEqual(
+      await fs.readdir(path.join(home, '.claude')),
+      [],
+      'a launch inside a user dir must not add anything to it',
     );
-    assert.equal(code, 1);
-    assert.equal(ran, false);
-    assert.deepEqual(await fs.readdir(path.join(home, '.claude')), []);
   } finally {
     await fs.rm(home, { recursive: true, force: true });
   }
 });
 
-test('Windows Claude launch prepares the shared config dir only when it runs', async () => {
+test('Windows Claude launch leaves the config folder up to the user', async () => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-win-claude-'));
   try {
     await fs.mkdir(path.join(home, '.claude', 'skills'), { recursive: true });
@@ -1135,13 +1135,81 @@ test('Windows Claude launch prepares the shared config dir only when it runs', a
       ...env,
       SUBC_CONFIG_DIR: subcConfig,
     });
-    const dir = path.join(subcConfig, 'claude-code');
-    assert.equal(spec.env.CLAUDE_CONFIG_DIR, dir);
-    await assert.rejects(fs.access(dir), 'planning must not touch disk');
-    assert.equal(await executeWindowsLaunch(spec, async () => 0, { home }), 0);
-    const skills = await fs.lstat(path.join(dir, 'skills'));
-    assert.equal(skills.isSymbolicLink(), true);
+    assert.equal(
+      spec.env.CLAUDE_CONFIG_DIR,
+      undefined,
+      'subc must not point Claude Code at a config dir of its own',
+    );
+    const own = await windowsLaunch('claude-code', [], {
+      ...env,
+      SUBC_CONFIG_DIR: subcConfig,
+      CLAUDE_CONFIG_DIR: path.join(home, 'claude-personal'),
+    });
+    assert.equal(
+      own.env.CLAUDE_CONFIG_DIR,
+      path.join(home, 'claude-personal'),
+      'a user-set CLAUDE_CONFIG_DIR passes through verbatim',
+    );
+    assert.equal(await executeWindowsLaunch(spec, async () => 0), 0);
+    await assert.rejects(
+      fs.access(path.join(subcConfig, 'claude-code')),
+      'planning and running must not create an isolated dir',
+    );
   } finally {
     await fs.rm(home, { recursive: true, force: true });
   }
+});
+
+test('Windows Claude uninstall removes the leftover isolated dir without touching links', async (t) => {
+  const home = await temporary(t);
+  const source = path.join(home, '.claude');
+  await fs.mkdir(path.join(source, 'plans'), { recursive: true });
+  await fs.writeFile(path.join(source, 'plans', 'plan.md'), 'keep');
+  const isolated = path.join(home, '.subconscious', 'claude-code');
+  await fs.mkdir(isolated, { recursive: true });
+  await fs.writeFile(path.join(isolated, '.subc-written.json'), '{}');
+  await fs.symlink(path.join(source, 'plans'), path.join(isolated, 'plans'));
+  await fs.writeFile(
+    path.join(isolated, 'settings.json'),
+    '{"model":"subconscious/x"}',
+  );
+
+  const logged = [];
+  const code = await windowsSetup(
+    'claude-code',
+    'uninstall',
+    [],
+    {
+      SUBC_CONFIG_DIR: path.join(home, '.subconscious'),
+    },
+    { home, log: (message) => logged.push(message) },
+  );
+  assert.equal(code, 0);
+  await assert.rejects(fs.access(isolated));
+  assert.equal(
+    await fs.readFile(path.join(source, 'plans', 'plan.md'), 'utf8'),
+    'keep',
+    'a linked target survives the cleanup',
+  );
+
+  const foreign = path.join(home, 'elsewhere');
+  await fs.mkdir(path.join(foreign, 'claude-code', 'projects'), {
+    recursive: true,
+  });
+  await fs.writeFile(path.join(foreign, 'claude-code', 'settings.json'), '{}');
+  const refused = await windowsSetup(
+    'claude-code',
+    'uninstall',
+    [],
+    { SUBC_CONFIG_DIR: foreign },
+    { home, log: () => {} },
+  );
+  assert.equal(refused, 1, 'a config subc did not make is refused');
+  assert.equal(
+    await fs.readFile(
+      path.join(foreign, 'claude-code', 'settings.json'),
+      'utf8',
+    ),
+    '{}',
+  );
 });

@@ -37,6 +37,76 @@ const exists = async (file) => {
   }
 };
 
+// Whether `dir` looks like a Claude config folder Claude Code has used.
+const looksLikeClaudeConfig = async (dir) =>
+  (
+    await Promise.all(
+      ['settings.json', '.claude.json', 'projects'].map((name) =>
+        exists(path.join(dir, name)),
+      ),
+    )
+  ).some(Boolean);
+
+/** One-line report about the leftover config dir subc 6.3 isolated Claude Code in. */
+async function isolatedSummary(dir) {
+  let stat;
+  try {
+    stat = await fs.lstat(dir);
+  } catch {
+    return 'missing';
+  }
+  if (stat.isSymbolicLink()) return 'present, but a link subc will not touch';
+  if (await exists(path.join(dir, '.subc-written.json')))
+    return 'present, subc-made (uninstall removes it)';
+  if (await looksLikeClaudeConfig(dir)) return 'present, but not subc-made';
+  return 'present';
+}
+
+/**
+ * Remove the unused config dir subc 6.3 isolated Claude Code in, without
+ * touching a linked target: entries are unlinked at depth one, never
+ * followed. Refuses (and returns 1) a dir subc did not make. Returns 0 also
+ * when there is nothing to remove.
+ */
+async function removeIsolatedClaudeDir(dir, log) {
+  let stat;
+  try {
+    stat = await fs.lstat(dir);
+  } catch {
+    log('Isolated config dir: missing');
+    return 0;
+  }
+  if (stat.isSymbolicLink()) {
+    log(`Refusing to remove ${dir}: it is a link, so remove it yourself.`);
+    return 1;
+  }
+  if (!stat.isDirectory()) {
+    log(`Refusing to remove ${dir}: it is not a directory.`);
+    return 1;
+  }
+  if (!(await exists(path.join(dir, '.subc-written.json')))) {
+    if (await looksLikeClaudeConfig(dir)) {
+      log(
+        `Refusing to remove ${dir}: it holds a Claude config subc did not make.`,
+      );
+      return 1;
+    }
+  }
+  for (const entry of await fs.readdir(dir)) {
+    const child = path.join(dir, entry);
+    // A link (junctions count as links) is unlinked; anything else inside
+    // the subc dir is removed, hard-linked files included (unlinking one
+    // name of a hard link leaves the other alone).
+    if ((await fs.lstat(child)).isSymbolicLink()) await fs.unlink(child);
+    else await fs.rm(child, { recursive: true, force: true });
+  }
+  await fs.rmdir(dir);
+  log(
+    `Removed ${dir} (its entries were links; nothing inside ~/.claude was touched)`,
+  );
+  return 0;
+}
+
 // Hook hosts expect command strings. Keep paths and credentials out of shell
 // syntax: PowerShell decodes data, then invokes Node with an argv array.
 export function windowsHookCommand(
@@ -352,10 +422,24 @@ export async function windowsSetup(
         );
     }
     if (removing) await fs.rm(legacy, { force: true });
+    let code = 0;
+    if (id === 'claude-code') {
+      const isolated = path.join(
+        String(env.SUBC_CONFIG_DIR || '').trim() ||
+          path.join(home, '.subconscious'),
+        'claude-code',
+      );
+      if (removing) {
+        code = await removeIsolatedClaudeDir(isolated, log);
+      } else {
+        const summary = await isolatedSummary(isolated);
+        log(`Isolated config dir: ${isolated}: ${summary}`);
+      }
+    }
     log(
       `${id}: ${removing ? 'legacy integration removed' : present ? 'legacy integration exists' : 'launch-only; no legacy integration'}.`,
     );
-    return 0;
+    return code;
   }
   throw new Error(`No native Windows setup is available for ${id}`);
 }
