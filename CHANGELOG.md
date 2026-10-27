@@ -1,5 +1,25 @@
 # Changelog
 
+## [7.0.0](https://github.com/subconscious-systems/subconscious/compare/v6.3.1...v7.0.0) (2026-10-27)
+
+
+### ⚠ BREAKING CHANGES
+
+* **claude:** remove all 6.3 isolated-config remnants
+* **claude:** --no-isolate is no longer accepted by subc claude, and CLAUDE_CODE_ISOLATE has no effect; scripts still passing --no-isolate now fail fast at the claude argv.
+* **claude:** subc claude sessions now share ~/.claude (or the user's CLAUDE_CONFIG_DIR) directly, so a /model pick inside a subc session changes the user's Claude default, as it does in plain claude. The isolated config dir is never created again.
+
+### Features
+
+* **claude:** drop config-dir isolation and run sessions on the user's own Claude config ([a275685](https://github.com/subconscious-systems/subconscious/commit/a275685f2804b084091b8ac78303694b8235bf27))
+* **claude:** remove all 6.3 isolated-config remnants ([238c3c8](https://github.com/subconscious-systems/subconscious/commit/238c3c81e80aa78d71ae5ec7225d7d2dc8712281))
+* **claude:** remove the retired isolation surface, --no-isolate and CLAUDE_CODE_ISOLATE ([aaea5b9](https://github.com/subconscious-systems/subconscious/commit/aaea5b954edb5d3fd36580a288dbc0d7cf157950))
+
+
+### Bug fixes
+
+* **auth:** surface network causes and honor proxy env vars in login ([#152](https://github.com/subconscious-systems/subconscious/issues/152)) ([72ab64f](https://github.com/subconscious-systems/subconscious/commit/72ab64ffe6d6793044c41e88cc1c4a39d433e65c))
+
 ## [6.3.1](https://github.com/subconscious-systems/subconscious/compare/v6.3.0...v6.3.1) (2026-10-26)
 
 
