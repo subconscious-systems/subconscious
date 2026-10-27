@@ -170,7 +170,6 @@ function resolvedTestEnv(overrides = {}) {
         ANTHROPIC_DEFAULT_OPUS_MODEL: 'subconscious/glm-5.3-marathon',
         ANTHROPIC_DEFAULT_OPUS_MODEL_NAME: 'subconscious/glm-5.3-marathon',
         ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION: 'Subconscious model',
-        SUBC_CONFIG_DIR: '/tmp/subc-test-config',
         ...overrides,
       },
       {},
@@ -186,7 +185,9 @@ test('claudeVscodeEnvironment carries the launch env without credentials or PATH
   const names = entries.map((entry) => entry.name);
   assert.equal(names.includes('ANTHROPIC_BASE_URL'), true);
   assert.equal(names.includes('ANTHROPIC_AUTH_TOKEN'), true);
-  assert.equal(names.includes('CLAUDE_CONFIG_DIR'), true);
+  // No config-dir swap: the extension runs on the user's own Claude
+  // config (~/.claude or their CLAUDE_CONFIG_DIR), matching subc claude.
+  assert.equal(names.includes('CLAUDE_CONFIG_DIR'), false);
   assert.equal(names.includes('ANTHROPIC_DEFAULT_OPUS_MODEL'), true);
   assert.equal(names.includes('API_KEY'), false);
   assert.equal(names.includes('CLAUDE_CODE_API_KEY'), false);
@@ -203,7 +204,6 @@ test('claudeVscodeEnvironment carries the launch env without credentials or PATH
   const byName = Object.fromEntries(entries.map((e) => [e.name, e.value]));
   assert.equal(byName.ANTHROPIC_BASE_URL, 'https://gateway.example');
   assert.equal(byName.ANTHROPIC_AUTH_TOKEN, 'sk-test');
-  assert.equal(byName.CLAUDE_CONFIG_DIR, '/tmp/subc-test-config/claude-code');
 });
 
 test('VSCODE_APPS lists the supported editors in a stable order', () => {
