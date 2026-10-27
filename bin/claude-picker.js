@@ -36,7 +36,10 @@ export const CLAUDE_PICKER_ENV_DESCRIPTION = [
   },
 ];
 
-const CLAUDE_MODEL_PICKER_KEYS = [
+// The env keys that make up Claude Code's model picker. Exported for
+// bin/claude-vscode.js, which mirrors the same picker inside the VS Code
+// extension's environmentVariables array.
+export const CLAUDE_MODEL_PICKER_KEYS = [
   'ANTHROPIC_DEFAULT_OPUS_MODEL',
   'ANTHROPIC_DEFAULT_OPUS_MODEL_NAME',
   'ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION',

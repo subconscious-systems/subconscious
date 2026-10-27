@@ -9,7 +9,7 @@ export const RUNBOOK_DIR = fileURLToPath(
 const ENV_NAME = /^[A-Z_][A-Z0-9_]*$/;
 const PLATFORMS = new Set(['darwin', 'linux', 'win32']);
 const MODES = new Set(['launch', 'setup']);
-const SETUP_ACTIONS = new Set(['install', 'status', 'uninstall']);
+const SETUP_ACTIONS = new Set(['install', 'status', 'uninstall', 'vscode']);
 const INPUT_TYPES = new Set([
   'secret',
   'integer',
@@ -108,7 +108,7 @@ function validateRunbook(runbook, where) {
   check(
     isStringList(actions) && actions.every((a) => SETUP_ACTIONS.has(a)),
     where,
-    'runbook.setup_actions may only list install, status, uninstall',
+    'runbook.setup_actions may only list install, status, uninstall, vscode',
   );
   check(
     actions.length === 0 || typeof runbook.setup_script === 'string',

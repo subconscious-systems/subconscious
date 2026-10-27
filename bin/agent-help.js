@@ -87,6 +87,11 @@ function printSetupHints(agent, profile) {
       `  Install the persistent integration with ${c.cyan}subc ${command} install${c.reset}.`,
     );
   }
+  if (actions.includes('vscode')) {
+    console.log(
+      `  Configure the VS Code extension with ${c.cyan}subc ${command} vscode install${c.reset} (uninstall restores the snapshotted settings).`,
+    );
+  }
   if (actions.includes('uninstall')) {
     console.log(
       `  Remove it with ${c.cyan}subc ${command} uninstall${c.reset}.`,
