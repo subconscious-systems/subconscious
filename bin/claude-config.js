@@ -57,7 +57,7 @@ export function legacyClaudeConfigDir({
 
 /**
  * A launch-time warning about the leftover 6.3 isolated config dir, or null
- * when there is nothing to say. The dir is inert after 6.4, but its entries
+ * when there is nothing to say. The dir is inert after 7.0, but its entries
  * link into ~/.claude, so point the user at `subc claude uninstall` instead
  * of letting a manual `rm -r` follow them.
  *

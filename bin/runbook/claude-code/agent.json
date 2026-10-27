@@ -126,9 +126,9 @@
       "default": "on",
       "strict": true,
       "choices": ["on", "off"],
-      "help": "Deprecated no-op: subc shares ~/.claude directly since 6.4",
+      "help": "Deprecated no-op: subc shares ~/.claude directly since 7.0",
       "label": "Isolated Claude config (deprecated)",
-      "description": "Deprecated: Claude Code >=2.1.280 blocks model-driven writes that resolve through config-dir symlinks, so subc 6.4 removed config-dir isolation and runs sessions on your own Claude config. Accepted so existing profiles and scripts keep working; it no longer changes the launch.",
+      "description": "Deprecated: Claude Code >=2.1.280 blocks model-driven writes that resolve through config-dir symlinks, so subc 7.0 removed config-dir isolation and runs sessions on your own Claude config. Accepted so existing profiles and scripts keep working; it no longer changes the launch.",
       "comment": "No effect; kept for compatibility. subc claude uninstall removes the leftover 6.3 isolated dir."
     },
     { "name": "MAX_CONCURRENT_SUBAGENTS" },
@@ -255,7 +255,7 @@
       "kind": "file",
       "path": "~/.subconscious/claude-code",
       "lifetime": "legacy",
-      "description": "Isolated Claude config dir subc 6.3 made and pointed sessions at (honoring $SUBC_CONFIG_DIR). Named CLAUDE.md, history.jsonl, keybindings.json and the rules, agents, commands, skills, output-styles, hooks, projects, file-history, todos, plans and ide folders in it are links into ~/.claude; settings.json, .claude.json and the plugin index were rebuilds of the user's files. Claude Code >=2.1.280 denies model-driven writes that resolve through those links, so subc 6.4 runs sessions on the user's own config and leaves this dir unused. subc claude status reports it and subc claude uninstall removes it link-safely (entries are unlinked at depth one; nothing in ~/.claude is touched); subc never removes (dir).old-* folders moved aside by earlier builds. Do not delete it with rm -r and a trailing slash: that follows the links into ~/.claude."
+      "description": "Isolated Claude config dir subc 6.3 made and pointed sessions at (honoring $SUBC_CONFIG_DIR). Named CLAUDE.md, history.jsonl, keybindings.json and the rules, agents, commands, skills, output-styles, hooks, projects, file-history, todos, plans and ide folders in it are links into ~/.claude; settings.json, .claude.json and the plugin index were rebuilds of the user's files. Claude Code >=2.1.280 denies model-driven writes that resolve through those links, so subc 7.0 runs sessions on the user's own config and leaves this dir unused. subc claude status reports it and subc claude uninstall removes it link-safely (entries are unlinked at depth one; nothing in ~/.claude is touched); subc never removes (dir).old-* folders moved aside by earlier builds. Do not delete it with rm -r and a trailing slash: that follows the links into ~/.claude."
     },
     {
       "kind": "file",
