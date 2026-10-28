@@ -155,6 +155,28 @@ func TestProfileSelectionRequestsFullStateReload(t *testing.T) {
 	}
 }
 
+func TestUpdateProfileValueReplacesDuplicateDefinitions(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "profile.env")
+	text := "GATEWAY_URL=https://first.example\n# keep this\nexport\tGATEWAY_URL=https://last.example\r\nMODEL=subconscious/test\n"
+	if err := os.WriteFile(file, []byte(text), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := updateProfileValue(file, "GATEWAY_URL", "https://new.example"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := string(data)
+	if strings.Contains(result, "first.example") || strings.Contains(result, "last.example") {
+		t.Fatalf("obsolete duplicate values remain: %q", result)
+	}
+	if !strings.Contains(result, "# keep this") || !strings.Contains(result, "MODEL=subconscious/test") {
+		t.Fatalf("unrelated content changed: %q", result)
+	}
+}
+
 func TestAccountStatusLivesOnlyInHeader(t *testing.T) {
 	m := newModel(inputState{
 		ActiveProfile: "default",
