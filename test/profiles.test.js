@@ -591,7 +591,7 @@ test('a blank profile model follows the first live catalog entry', () => {
     );
 
     const catalog = {
-      source: 'available',
+      source: 'catalog',
       models: ['subconscious/glm-5.3-marathon', 'subconscious/glm-5.2'],
     };
     assert.equal(
@@ -609,7 +609,7 @@ test('a blank profile model follows the first live catalog entry', () => {
 });
 
 test('a removed saved default yields to the first live model but explicit overrides do not', () => {
-  for (const source of ['available', 'public']) {
+  for (const source of ['catalog', 'public']) {
     const catalog = {
       source,
       models: ['subconscious/live', 'subconscious/other'],

@@ -4,22 +4,21 @@
  * A key-scoped GET /v1/models is the canonical source: the gateway filters
  * it by the key's model access and describes each model (lifecycle, limits,
  * modalities, capabilities). Older gateways without the canonical catalog
- * fall back to /v1/models/available, then the public /v1/models list.
- * Launches keep working with the packaged registry when the gateway is
- * offline or returns nothing usable.
+ * answer with a minimal list, which still names the fleet. Launches keep
+ * working with the packaged registry when the gateway is offline or returns
+ * nothing usable.
  */
 
 import { proxyAwareFetch } from './network.js';
 
 const MODEL_ID_PATTERN = /^[-A-Za-z0-9._:/+]+$/;
 export const DEFAULT_MODEL_FETCH_TIMEOUT_MS = 3000;
-export const AVAILABLE_MODELS_PATH = '/v1/models/available';
 export const PUBLIC_MODELS_PATH = '/v1/models';
 export const PUBLIC_CATALOG_FALLBACK_MESSAGE =
   'Provisioned catalog unavailable; showing the public model list.';
 
 export function isLiveModelSource(source) {
-  return source === 'catalog' || source === 'available' || source === 'public';
+  return source === 'catalog' || source === 'public';
 }
 
 export function isAbortError(error) {
@@ -266,7 +265,7 @@ export async function resolveModelCatalog({
   const key = apiKey?.trim() || '';
 
   if (key) {
-    let canonicalError;
+    let catalogError;
     try {
       // The canonical catalog is key-scoped and access-filtered by the
       // gateway, so no second request is needed when it answers.
@@ -278,49 +277,33 @@ export async function resolveModelCatalog({
         timeoutMs,
         signal,
       });
-      if (discovered.canonical) {
-        return liveCatalog(
-          discovered.models,
-          selectedModel,
-          'catalog',
-          discovered.entries,
-        );
-      }
+      // An older gateway answers /v1/models with a minimal public list;
+      // those ids still name the fleet, so use them rather than the
+      // packaged registry.
+      return discovered.canonical
+        ? liveCatalog(
+            discovered.models,
+            selectedModel,
+            'catalog',
+            discovered.entries,
+          )
+        : liveCatalog(discovered.models, selectedModel, 'public');
     } catch (error) {
       if (isAbortError(error) || signal?.aborted) throw error;
-      canonicalError = error;
+      catalogError = error;
     }
 
     try {
-      // An older gateway: /v1/models is a public minimal list, and
-      // /v1/models/available is the key-scoped one.
       const discovered = await fetchGatewayCatalog({
         baseUrl,
-        apiKey: key,
-        path: AVAILABLE_MODELS_PATH,
         fetchImpl,
         timeoutMs,
         signal,
       });
-      return liveCatalog(discovered.models, selectedModel, 'available');
-    } catch (availableError) {
-      if (isAbortError(availableError) || signal?.aborted) throw availableError;
-      try {
-        const discovered = await fetchGatewayCatalog({
-          baseUrl,
-          fetchImpl,
-          timeoutMs,
-          signal,
-        });
-        return liveCatalog(discovered.models, selectedModel, 'public');
-      } catch (publicError) {
-        if (isAbortError(publicError) || signal?.aborted) throw publicError;
-        return packagedCatalog(
-          selectedModel,
-          fallbackModels,
-          canonicalError ?? availableError,
-        );
-      }
+      return liveCatalog(discovered.models, selectedModel, 'public');
+    } catch (publicError) {
+      if (isAbortError(publicError) || signal?.aborted) throw publicError;
+      return packagedCatalog(selectedModel, fallbackModels, catalogError ?? publicError);
     }
   }
 

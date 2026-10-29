@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  AVAILABLE_MODELS_PATH,
   fetchGatewayModels,
   isAbortError,
   isLiveModelSource,
@@ -74,19 +73,19 @@ test('normalizeModelIds does not invent a selected model absent from the live ca
   );
 });
 
-test('isLiveModelSource treats available and public catalogs as live', () => {
-  assert.equal(isLiveModelSource('available'), true);
+test('isLiveModelSource treats the catalog and public listings as live', () => {
+  assert.equal(isLiveModelSource('catalog'), true);
   assert.equal(isLiveModelSource('public'), true);
   assert.equal(isLiveModelSource('packaged'), false);
   assert.equal(isLiveModelSource('gateway'), false);
 });
 
-test('fetchGatewayModels reads IDs from the provisioned endpoint when a key is supplied', async () => {
+test('fetchGatewayModels sends the key to the catalog endpoint', async () => {
   let request;
   const models = await fetchGatewayModels({
     baseUrl: 'https://gateway.example/',
     apiKey: 'sk-test',
-    path: AVAILABLE_MODELS_PATH,
+    path: PUBLIC_MODELS_PATH,
     fetchImpl: async (url, options) => {
       request = { url, options };
       return catalogResponse(['subconscious/one', 'subconscious/two']);
@@ -94,7 +93,7 @@ test('fetchGatewayModels reads IDs from the provisioned endpoint when a key is s
   });
 
   assert.deepEqual(models, ['subconscious/one', 'subconscious/two']);
-  assert.equal(request.url, 'https://gateway.example/v1/models/available');
+  assert.equal(request.url, 'https://gateway.example/v1/models');
   assert.equal(request.options.method, 'GET');
   assert.equal(request.options.headers.Authorization, 'Bearer sk-test');
   assert.equal(request.options.headers['Cache-Control'], 'no-cache, no-store');
@@ -194,7 +193,7 @@ test('resolveModelCatalog keeps the full list as defaults when every model is de
   assert.deepEqual(result.defaultModels, ['subconscious/old']);
 });
 
-test('resolveModelCatalog uses /available when the gateway answers with a minimal list', async () => {
+test('resolveModelCatalog uses a minimal list from an older gateway without a second request', async () => {
   const urls = [];
   const result = await resolveModelCatalog({
     baseUrl: 'https://gateway.example',
@@ -206,16 +205,13 @@ test('resolveModelCatalog uses /available when the gateway answers with a minima
     },
   });
 
-  assert.equal(result.source, 'available');
+  assert.equal(result.source, 'public');
   assert.equal(result.error, null);
   assert.deepEqual(result.models, ['subconscious/two', 'subconscious/one']);
-  assert.deepEqual(urls, [
-    'https://gateway.example/v1/models',
-    'https://gateway.example/v1/models/available',
-  ]);
+  assert.deepEqual(urls, ['https://gateway.example/v1/models']);
 });
 
-test('resolveModelCatalog treats a successful provisioned catalog as authoritative', async () => {
+test('resolveModelCatalog treats a successful live listing as authoritative', async () => {
   const result = await resolveModelCatalog({
     baseUrl: 'https://gateway.example',
     apiKey: 'sk-test',
@@ -224,7 +220,7 @@ test('resolveModelCatalog treats a successful provisioned catalog as authoritati
     fetchImpl: async () => catalogResponse(['subconscious/live']),
   });
 
-  assert.equal(result.source, 'available');
+  assert.equal(result.source, 'public');
   assert.deepEqual(result.models, ['subconscious/live']);
 });
 
@@ -249,12 +245,11 @@ test('resolveModelCatalog falls back to packaged models when every live listing 
   ]);
   assert.deepEqual(urls, [
     'https://gateway.example/v1/models',
-    'https://gateway.example/v1/models/available',
     'https://gateway.example/v1/models',
   ]);
 });
 
-test('resolveModelCatalog falls back to the public catalog without auth when the key-scoped listings fail', async () => {
+test('resolveModelCatalog falls back to the public catalog without auth when the key-scoped catalog fails', async () => {
   const requests = [];
   const result = await resolveModelCatalog({
     baseUrl: 'https://gateway.example',
@@ -263,9 +258,6 @@ test('resolveModelCatalog falls back to the public catalog without auth when the
     fallbackModels: ['subconscious/default'],
     fetchImpl: async (url, options) => {
       requests.push({ url, authorization: options.headers.Authorization });
-      if (url.endsWith(AVAILABLE_MODELS_PATH)) {
-        return { ok: false, status: 404, json: async () => ({}) };
-      }
       if (options.headers.Authorization) {
         return { ok: false, status: 503, json: async () => ({}) };
       }
@@ -281,15 +273,11 @@ test('resolveModelCatalog falls back to the public catalog without auth when the
       url: 'https://gateway.example/v1/models',
       authorization: 'Bearer sk-test',
     },
-    {
-      url: 'https://gateway.example/v1/models/available',
-      authorization: 'Bearer sk-test',
-    },
     { url: 'https://gateway.example/v1/models', authorization: undefined },
   ]);
 });
 
-test('resolveModelCatalog skips /available and uses the public catalog when no key is present', async () => {
+test('resolveModelCatalog uses the public catalog without auth when no key is present', async () => {
   const requests = [];
   const result = await resolveModelCatalog({
     baseUrl: 'https://gateway.example',
@@ -417,10 +405,7 @@ test('a blank pinned catalog still discovers', async () => {
     baseUrl: 'https://gateway.example',
     apiKey: 'key',
     pinnedModels: '  \n',
-    fetchImpl: async (url) =>
-      url.endsWith(AVAILABLE_MODELS_PATH)
-        ? catalogResponse(['subconscious/live'])
-        : canonicalResponse([{ id: 'subconscious/live' }]),
+    fetchImpl: async () => canonicalResponse([{ id: 'subconscious/live' }]),
   });
   assert.equal(catalog.source, 'catalog');
   assert.deepEqual(catalog.models, ['subconscious/live']);
