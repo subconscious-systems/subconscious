@@ -542,6 +542,7 @@ async function main() {
     });
     modelsCommand(catalog.models, {
       selectedModel,
+      entries: catalog.entries,
       error: catalog.error,
       source: catalog.source,
       hasApiKey: Boolean(auth?.key),
