@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { RUNBOOK_DIR } from './agent-data.js';
 import { modelIds } from './launch-values.js';
-import { visionModelList } from './model-capabilities.js';
+import { visionModelListFromMetadata } from './model-capabilities.js';
 
 /** Resolve a script inside the agent's own runbook directory. */
 export function runbookScriptPath(agent, relativeScript) {
@@ -95,7 +95,7 @@ export function scriptEnv(env, { strict = true } = {}) {
   return {
     ...env,
     ...(ids === undefined ? {} : { SUBC_MODEL_IDS: ids }),
-    SUBC_VISION_MODELS: visionModelList(),
+    SUBC_VISION_MODELS: visionModelListFromMetadata(env.SUBC_MODEL_METADATA),
   };
 }
 
