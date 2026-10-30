@@ -82,7 +82,7 @@ function openCodeConfigDocument(lookup) {
     file.startsWith(RUNBOOK_DIR)
       ? `<runbook>/${path.relative(RUNBOOK_DIR, file).split(path.sep).join('/')}`
       : file;
-  return { ...document, plugin: document.plugin.map(portable) };
+  return { ...document, plugins: document.plugins.map(portable) };
 }
 
 function resolver(agent) {
