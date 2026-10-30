@@ -1,5 +1,19 @@
 # Changelog
 
+## [8.0.0](https://github.com/subconscious-systems/subconscious/compare/v7.0.0...v8.0.0) (2026-10-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* against gateways older than the SUBCON-886 catalog, the CLI now shows the unfiltered public list instead of the key-scoped /v1/models/available listing.
+
+### Features
+
+* drive agent capabilities from catalog metadata when present ([ab0149f](https://github.com/subconscious-systems/subconscious/commit/ab0149f54f80ea8c4915f0eaade11bc87dec523c))
+* drop /v1/models/available from the discovery chain ([5b34225](https://github.com/subconscious-systems/subconscious/commit/5b342252b76fd74eb6cbf075b9100552cef692a1))
+* prefer the canonical /v1/models catalog and honor model lifecycle ([569d0a9](https://github.com/subconscious-systems/subconscious/commit/569d0a9e55593a479542f04eb855d511a5cbb71c))
+* **usage:** show invoiced orgs their spend window, not a wallet ([8020a78](https://github.com/subconscious-systems/subconscious/commit/8020a781a93d2d24a697314bca3ceec0c372b813))
+
 ## [7.0.0](https://github.com/subconscious-systems/subconscious/compare/v6.3.1...v7.0.0) (2026-10-27)
 
 
