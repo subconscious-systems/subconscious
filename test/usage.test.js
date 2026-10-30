@@ -6,7 +6,6 @@ import {
   formatCurrency,
   formatTokens,
   formatUsageDisplay,
-  isLegacyUsagePayload,
   renderProgressBar,
   shortModelSlug,
 } from '../bin/usage.js';
@@ -55,48 +54,6 @@ test('shortModelSlug strips subconscious prefix', () => {
     'glm-5.3-marathon',
   );
   assert.equal(shortModelSlug('other/model'), 'other/model');
-});
-
-test('isLegacyUsagePayload rejects pre-invoicing responses', () => {
-  assert.equal(
-    isLegacyUsagePayload({ dailyTokenCeiling: 100, consumedToday: 1 }),
-    true,
-  );
-  assert.equal(isLegacyUsagePayload(null), true);
-  assert.equal(
-    isLegacyUsagePayload({
-      billingMode: 'subscription',
-      plan: { label: 'Pro', dailyAllowance: null },
-      credits: { balanceDollars: 1, overageThisPeriodDollars: 0 },
-      models: [],
-    }),
-    true,
-  );
-  assert.equal(
-    isLegacyUsagePayload({
-      billingTerms: 'invoiced',
-      plan: { label: null, status: null, dailyAllowance: null },
-      credits: null,
-      invoice: {
-        accruedThisPeriodDollars: 427.5,
-        periodStart: '2026-10-01T00:00:00.000Z',
-        periodEnd: '2026-11-01T00:00:00.000Z',
-        limitDollars: 5000,
-      },
-      models: [],
-    }),
-    false,
-  );
-  assert.equal(
-    isLegacyUsagePayload({
-      billingTerms: 'prepaid',
-      plan: { label: 'Pro', status: 'active', dailyAllowance: null },
-      credits: { balanceDollars: 1, overageThisPeriodDollars: 0 },
-      invoice: null,
-      models: [],
-    }),
-    false,
-  );
 });
 
 test('formatAllowancePercent never rounds a remaining allowance up to 100', () => {

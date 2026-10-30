@@ -55,12 +55,6 @@ export function shortModelSlug(slug) {
     : text;
 }
 
-export function isLegacyUsagePayload(data) {
-  // The current platform always sends billingTerms; anything else is a host
-  // running a pre-invoicing build.
-  return !data || typeof data !== 'object' || !('billingTerms' in data);
-}
-
 export function meterColor(percentage) {
   if (percentage >= 100) return c.red;
   if (percentage >= 80) return c.yellow;
@@ -270,14 +264,6 @@ export async function usageCommand(argv = [], options = {}) {
         return;
       }
       throw new Error(message);
-    }
-
-    if (isLegacyUsagePayload(data)) {
-      console.log(`\n  ${c.yellow}Platform upgrade required.${c.reset}`);
-      console.log(
-        `  ${c.dim}This platform host returns a legacy usage shape. Deploy the latest platform or point PLATFORM_URL at a current host.${c.reset}\n`,
-      );
-      return;
     }
 
     if (jsonOutput) {
