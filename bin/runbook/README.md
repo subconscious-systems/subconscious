@@ -9,7 +9,7 @@ the default gateway, model capabilities, and the settings every agent uses
 | Agent | Launch | Setup |
 | --- | --- | --- |
 | `opencode` | binary | `install.sh` (leftover status/uninstall) |
-| `claude-code` | binary | `install.sh` (leftover status/uninstall) |
+| `claude-code` | binary | `install.sh` (leftover status/uninstall; `vscode` dispatches to `vscode.sh`, which runs `../claude-vscode.js`) |
 | `codex` | `run.sh` | `install.sh` (hooks) |
 | `pi` | `run.sh` | `install.sh` (provider and extensions) |
 | `copilot` | none | `install.sh` (provider and hooks) |

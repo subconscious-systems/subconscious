@@ -42,11 +42,15 @@ export async function runWindowsAgent(agent, argv, dependencies) {
     ...(environment.PATH || '').split(';'),
     ...windowsBinDirs(environment),
   ]);
-  if (['status', 'uninstall'].includes(parsed.action)) {
+  if (['status', 'uninstall'].includes(parsed.action))
     return finish(
       await windowsSetup(agent.id, parsed.action, args, environment),
     );
-  }
+  if (
+    parsed.action === 'vscode' &&
+    (args.find((word) => !word.startsWith('--')) ?? 'help') !== 'install'
+  )
+    return finish(await windowsSetup(agent.id, 'vscode', args, environment));
 
   // Honor -- after which all arguments belong to the underlying agent.
   const boundary = separatorIndex(args);
@@ -133,6 +137,8 @@ export async function runWindowsAgent(agent, argv, dependencies) {
   if (explicit['--gateway-url']) env.GATEWAY_URL = explicit['--gateway-url'];
   if (parsed.action === 'install')
     return finish(await windowsSetup(agent.id, 'install', args, env));
+  if (parsed.action === 'vscode')
+    return finish(await windowsSetup(agent.id, 'vscode', args, env));
   if (agent.id === 'pi') await windowsSetup('pi', 'install', [], env);
   if (agent.id === 'codex') {
     try {
