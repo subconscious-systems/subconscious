@@ -56,12 +56,9 @@ export function shortModelSlug(slug) {
 }
 
 export function isLegacyUsagePayload(data) {
-  if (!data || typeof data !== 'object') return true;
-  if ('credits' in data && data.plan && typeof data.plan === 'object')
-    return false;
-  return (
-    'dailyTokenCeiling' in data || 'consumedToday' in data || !('plan' in data)
-  );
+  // The current platform always sends billingTerms; anything else is a host
+  // running a pre-invoicing build.
+  return !data || typeof data !== 'object' || !('billingTerms' in data);
 }
 
 export function meterColor(percentage) {
@@ -91,18 +88,14 @@ export function formatAllowancePercent(percent) {
   return `${whole}%`;
 }
 
-/** New percent payloads, or the pre-basis token shape (consumed / amount). */
+/** Percent-only allowance payloads from the current platform. */
 export function describeDailyAllowance(allowance) {
   if (!allowance || typeof allowance !== 'object') return null;
   if (allowance.basis === 'unavailable') return { kind: 'unavailable' };
   if (allowance.basis === 'credit' || allowance.basis === 'tokens') {
     return { kind: allowance.basis, percent: Number(allowance.percent) || 0 };
   }
-
-  const consumed = Number(allowance.consumed) || 0;
-  const amount = Number(allowance.amount) || 0;
-  if (amount <= 0) return null;
-  return { kind: 'tokens', percent: (consumed / amount) * 100 };
+  return null;
 }
 
 export function formatUsageDisplay(data) {
@@ -126,36 +119,31 @@ export function formatUsageDisplay(data) {
   }
 
   const allowance = plan.dailyAllowance;
-  const unlimitedComp = Boolean(plan.isUnlimitedComp);
 
-  if (unlimitedComp) {
+  // Invoiced orgs bill against the spend limit, not a daily grant, so the
+  // daily allowance does not pertain to them and is never shown.
+  const described = invoiced ? null : describeDailyAllowance(allowance);
+  if (described) {
     lines.push('');
     lines.push(`  ${c.dim}Daily allowance${c.reset}`);
-    lines.push(`  ${c.green}Unlimited${c.reset} ${c.dim}(comp)${c.reset}`);
-  } else {
-    const described = describeDailyAllowance(allowance);
-    if (described) {
-      lines.push('');
-      lines.push(`  ${c.dim}Daily allowance${c.reset}`);
-      if (described.kind === 'unavailable') {
-        lines.push(`  ${c.dim}Daily credit unavailable${c.reset}`);
+    if (described.kind === 'unavailable') {
+      lines.push(`  ${c.dim}Daily credit unavailable${c.reset}`);
+      lines.push(
+        `  ${c.dim}Today's credit usage could not be read just now. Your plan and access are unaffected, and the figure returns on its own.${c.reset}`,
+      );
+    } else {
+      const label =
+        described.kind === 'credit'
+          ? 'of daily credit used'
+          : 'of daily tokens used';
+      lines.push(
+        `  ${renderProgressBar(described.percent)}  ${formatAllowancePercent(described.percent)} ${label}`,
+      );
+      lines.push(`  ${c.dim}Resets midnight UTC${c.reset}`);
+      if (described.kind === 'credit' && described.percent >= 100) {
         lines.push(
-          `  ${c.dim}Today's credit usage could not be read just now. Your plan and access are unaffected, and the figure returns on its own.${c.reset}`,
+          `  ${c.yellow}Past today's allowance - further usage bills from your balance.${c.reset}`,
         );
-      } else {
-        const label =
-          described.kind === 'credit'
-            ? 'of daily credit used'
-            : 'of daily tokens used';
-        lines.push(
-          `  ${renderProgressBar(described.percent)}  ${formatAllowancePercent(described.percent)} ${label}`,
-        );
-        lines.push(`  ${c.dim}Resets midnight UTC${c.reset}`);
-        if (described.kind === 'credit' && described.percent >= 100) {
-          lines.push(
-            `  ${c.yellow}Past today's allowance - further usage bills from your balance.${c.reset}`,
-          );
-        }
       }
     }
   }
