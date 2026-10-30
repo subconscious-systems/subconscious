@@ -109,9 +109,11 @@ export function formatUsageDisplay(data) {
   const lines = [];
   lines.push(`\n  ${c.bold}Subconscious Usage${c.reset}\n`);
 
-  const billingMode = data.billingMode ?? null;
+  const billingTerms = data.billingTerms ?? null;
+  const invoiced = billingTerms === 'invoiced';
   const plan = data.plan ?? {};
   const credits = data.credits ?? {};
+  const invoice = invoiced ? (data.invoice ?? {}) : {};
   const models = Array.isArray(data.models) ? data.models : [];
 
   const planLabel = plan.label || 'No plan';
@@ -119,8 +121,8 @@ export function formatUsageDisplay(data) {
   const planLine = planStatus ? `${planLabel} · ${planStatus}` : planLabel;
 
   lines.push(`  ${c.dim}Plan${c.reset}            ${planLine}`);
-  if (billingMode) {
-    lines.push(`  ${c.dim}Billing${c.reset}         ${billingMode}`);
+  if (invoiced) {
+    lines.push(`  ${c.dim}Billing${c.reset}         Invoiced monthly (net 30)`);
   }
 
   const allowance = plan.dailyAllowance;
@@ -158,16 +160,47 @@ export function formatUsageDisplay(data) {
     }
   }
 
-  lines.push('');
-  lines.push(
-    `  ${c.dim}Credits${c.reset}         ${formatCurrency(credits.balanceDollars ?? 0)}`,
-  );
-  if (billingMode === 'subscription' || billingMode === 'comp' || allowance) {
-    const overage = Number(credits.overageThisPeriodDollars) || 0;
-    const overageColor = overage > 0 ? c.yellow : c.reset;
+  if (invoiced) {
+    const accrued = invoice.accruedThisPeriodDollars;
+    const limit = invoice.limitDollars;
+    const periodEnd = invoice.periodEnd ? new Date(invoice.periodEnd) : null;
+
+    lines.push('');
+    lines.push(`  ${c.dim}Spend this period${c.reset}`);
+    if (accrued == null) {
+      lines.push(`  ${c.dim}Spend could not be read just now.${c.reset}`);
+      lines.push(
+        `  ${c.dim}Your plan and access are unaffected, and the figure returns on its own.${c.reset}`,
+      );
+    } else {
+      const limitText =
+        limit != null ? ` of ${formatCurrency(limit)} limit` : '';
+      const spendColor = limit != null && accrued >= limit ? c.red : c.reset;
+      lines.push(
+        `  ${spendColor}${formatCurrency(accrued)}${c.reset}${c.dim}${limitText}${c.reset}`,
+      );
+      if (periodEnd && !Number.isNaN(periodEnd.getTime())) {
+        const isoDay = periodEnd.toISOString().slice(0, 10);
+        lines.push(`  ${c.dim}Period ends ${isoDay}${c.reset}`);
+      }
+      if (limit != null && accrued >= limit) {
+        lines.push(
+          `  ${c.red}At the spend limit - further requests follow your limit policy.${c.reset}`,
+        );
+      }
+    }
+  } else if (credits.balanceDollars != null || data.credits) {
+    lines.push('');
     lines.push(
-      `  ${c.dim}Overage${c.reset}         ${overageColor}${formatCurrency(overage)} this period${c.reset}`,
+      `  ${c.dim}Credits${c.reset}         ${formatCurrency(credits.balanceDollars ?? 0)}`,
     );
+    const overage = Number(credits.overageThisPeriodDollars) || 0;
+    if (overage > 0 || allowance) {
+      const overageColor = overage > 0 ? c.yellow : c.reset;
+      lines.push(
+        `  ${c.dim}Overage${c.reset}         ${overageColor}${formatCurrency(overage)} this period${c.reset}`,
+      );
+    }
   }
 
   if (models.length > 0) {

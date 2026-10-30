@@ -73,6 +73,21 @@ test('isLegacyUsagePayload detects old quota-only responses', () => {
     }),
     false,
   );
+  assert.equal(
+    isLegacyUsagePayload({
+      billingTerms: 'invoiced',
+      plan: { label: null, status: null, dailyAllowance: null },
+      credits: null,
+      invoice: {
+        accruedThisPeriodDollars: 427.5,
+        periodStart: '2026-10-01T00:00:00.000Z',
+        periodEnd: '2026-11-01T00:00:00.000Z',
+        limitDollars: 5000,
+      },
+      models: [],
+    }),
+    false,
+  );
 });
 
 test('formatAllowancePercent never rounds a remaining allowance up to 100', () => {
@@ -213,4 +228,97 @@ test('renderProgressBar fills proportionally', () => {
   const bar = renderProgressBar(50, 10);
   assert.match(bar, /█{5}/);
   assert.match(bar, /░{5}/);
+});
+
+test('formatUsageDisplay renders an invoiced org without a wallet', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: 427.5,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      limitDollars: 5000,
+    },
+    models: [
+      { slug: 'subconscious/glm-5.3-marathon', consumedToday: 44_500_000 },
+    ],
+  });
+
+  assert.match(output, /Invoiced monthly \(net 30\)/);
+  assert.match(output, /Spend this period/);
+  assert.match(output, /\$427\.50 of \$5000\.00 limit/);
+  assert.match(output, /Period ends 2026-11-01/);
+  assert.doesNotMatch(output, /Credits/);
+  assert.doesNotMatch(output, /Overage/);
+});
+
+test('formatUsageDisplay renders invoiced spend without a limit', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: 12,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      limitDollars: null,
+    },
+    models: [],
+  });
+
+  assert.match(output, /\$12\.00/);
+  assert.doesNotMatch(output, /of \$.* limit/);
+  assert.doesNotMatch(output, /At the spend limit/);
+});
+
+test('formatUsageDisplay renders unreadable invoiced spend as unavailable', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: null,
+      periodStart: '',
+      periodEnd: '',
+      limitDollars: null,
+    },
+    models: [],
+  });
+
+  assert.match(output, /Spend could not be read just now/);
+  assert.doesNotMatch(output, /\$0\.00/);
+});
+
+test('formatUsageDisplay warns an invoiced org at the spend limit', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: 5000,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      limitDollars: 5000,
+    },
+    models: [],
+  });
+
+  assert.match(output, /At the spend limit/);
+});
+
+test('formatUsageDisplay keeps the wallet display for a prepaid org', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'prepaid',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: { balanceDollars: 12.34, overageThisPeriodDollars: 0 },
+    invoice: null,
+    models: [],
+  });
+
+  assert.match(output, /Credits/);
+  assert.match(output, /\$12\.34/);
+  assert.doesNotMatch(output, /Spend this period/);
+  assert.doesNotMatch(output, /Invoiced/);
 });
