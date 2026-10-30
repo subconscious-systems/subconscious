@@ -330,7 +330,7 @@ export async function loadRemoteTuiUpdates(state, options = {}) {
       });
       if (signal?.aborted) return;
       await enqueuePatch({
-        models: catalog.models,
+        models: catalog.defaultModels,
         modelError: catalog.error?.message || '',
         modelSource: catalog.source,
         modelsLoading: false,

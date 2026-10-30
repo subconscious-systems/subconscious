@@ -1,23 +1,24 @@
 /**
  * Resolve the model catalog exposed by an OpenAI-compatible gateway.
  *
- * When a profile (or agent) API key is present, prefer the key-scoped
- * /v1/models/available list. If that request fails, fall back to the public
- * /v1/models fleet catalog. Launches keep working with the packaged registry
- * when the gateway is offline or returns nothing usable.
+ * A key-scoped GET /v1/models is the canonical source: the gateway filters
+ * it by the key's model access and describes each model (lifecycle, limits,
+ * modalities, capabilities). Older gateways without the canonical catalog
+ * answer with a minimal list, which still names the fleet. Launches keep
+ * working with the packaged registry when the gateway is offline or returns
+ * nothing usable.
  */
 
 import { proxyAwareFetch } from './network.js';
 
 const MODEL_ID_PATTERN = /^[-A-Za-z0-9._:/+]+$/;
 export const DEFAULT_MODEL_FETCH_TIMEOUT_MS = 3000;
-export const AVAILABLE_MODELS_PATH = '/v1/models/available';
 export const PUBLIC_MODELS_PATH = '/v1/models';
 export const PUBLIC_CATALOG_FALLBACK_MESSAGE =
   'Provisioned catalog unavailable; showing the public model list.';
 
 export function isLiveModelSource(source) {
-  return source === 'available' || source === 'public';
+  return source === 'catalog' || source === 'public';
 }
 
 export function isAbortError(error) {
@@ -60,6 +61,34 @@ export function normalizeModelIds(modelIds = [], selectedModel) {
   return models;
 }
 
+/**
+ * Rich entry fields from a canonical /v1/models response: lifecycle
+ * (status, deprecation_date, replacement), limits, modalities, and
+ * capabilities. Minimal legacy responses produce entries that carry only
+ * the id; every optional field is absent, never guessed.
+ */
+export function parseCatalogEntries(data = []) {
+  const entries = [];
+  for (const model of data) {
+    if (model == null || typeof model !== 'object') continue;
+    const id = typeof model.id === 'string' ? model.id.trim() : '';
+    if (!id || !MODEL_ID_PATTERN.test(id)) continue;
+    entries.push({
+      id,
+      lifecycle: model.lifecycle ?? null,
+      limits: model.limits ?? null,
+      modalities: model.modalities ?? null,
+      capabilities: model.capabilities ?? null,
+    });
+  }
+  return entries;
+}
+
+/** True when the response is the canonical catalog, not a minimal list. */
+function isCanonicalResponse(data = []) {
+  return data.some((model) => model?.schema_version === '1');
+}
+
 function gatewayOrigin(baseUrl) {
   if (!baseUrl?.trim()) throw new Error('Gateway URL is not configured');
   return baseUrl.trim().replace(/\/+$/, '');
@@ -70,12 +99,12 @@ function modelsEndpoint(baseUrl, path) {
   return `${gatewayOrigin(baseUrl)}${normalizedPath}`;
 }
 
-export async function fetchGatewayModels({
+async function fetchModelsPayload({
   baseUrl,
   apiKey,
-  path = PUBLIC_MODELS_PATH,
-  fetchImpl = proxyAwareFetch,
-  timeoutMs = DEFAULT_MODEL_FETCH_TIMEOUT_MS,
+  path,
+  fetchImpl,
+  timeoutMs,
   signal,
 }) {
   if (typeof fetchImpl !== 'function') {
@@ -125,7 +154,7 @@ export async function fetchGatewayModels({
         throw new Error('Model discovery returned an invalid response');
       }
 
-      return normalizeModelIds(payload.data.map((model) => model?.id));
+      return payload.data;
     };
     return await Promise.race([discover(), aborted]);
   } catch (error) {
@@ -140,16 +169,35 @@ export async function fetchGatewayModels({
   }
 }
 
-async function fetchPublicModels({ baseUrl, fetchImpl, timeoutMs, signal }) {
-  const models = await fetchGatewayModels({
+/**
+ * Fetch one models listing. Returns the id list, the parsed catalog
+ * entries, and whether the gateway answered with the canonical catalog.
+ */
+export async function fetchGatewayCatalog({
+  baseUrl,
+  apiKey,
+  path = PUBLIC_MODELS_PATH,
+  fetchImpl = proxyAwareFetch,
+  timeoutMs = DEFAULT_MODEL_FETCH_TIMEOUT_MS,
+  signal,
+}) {
+  const data = await fetchModelsPayload({
     baseUrl,
-    path: PUBLIC_MODELS_PATH,
+    apiKey,
+    path,
     fetchImpl,
     timeoutMs,
     signal,
   });
+  const entries = parseCatalogEntries(data);
+  const models = normalizeModelIds(entries.map((entry) => entry.id));
   if (!models.length)
     throw new Error('Model discovery returned no usable model IDs');
+  return { models, entries, canonical: isCanonicalResponse(data) };
+}
+
+export async function fetchGatewayModels(args) {
+  const { models } = await fetchGatewayCatalog(args);
   return models;
 }
 
@@ -159,14 +207,33 @@ function packagedCatalog(selectedModel, fallbackModels, error) {
       [selectedModel, ...fallbackModels],
       selectedModel,
     ),
+    defaultModels: normalizeModelIds(
+      [selectedModel, ...fallbackModels],
+      selectedModel,
+    ),
+    entries: [],
     source: 'packaged',
     error,
   };
 }
 
-function liveCatalog(models, selectedModel, source) {
+/**
+ * Assemble the catalog views. `models` is everything the caller can invoke,
+ * deprecated models included. `defaultModels` drops models the gateway
+ * marked deprecated or retired, so new sessions pick a current model while
+ * existing configurations that name a deprecated model keep working.
+ */
+function liveCatalog(models, selectedModel, source, entries = []) {
+  const normalized = normalizeModelIds(models, selectedModel);
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
+  const defaults = normalized.filter((id) => {
+    const status = entryById.get(id)?.lifecycle?.status;
+    return status !== 'deprecated' && status !== 'retired';
+  });
   return {
-    models: normalizeModelIds(models, selectedModel),
+    models: normalized,
+    defaultModels: defaults.length ? defaults : normalized,
+    entries,
     source,
     error: null,
   };
@@ -188,6 +255,8 @@ export async function resolveModelCatalog({
   if (pinned?.length) {
     return {
       models: normalizeModelIds(pinned, selectedModel),
+      defaultModels: normalizeModelIds(pinned, selectedModel),
+      entries: [],
       source: 'pinned',
       error: null,
     };
@@ -196,41 +265,60 @@ export async function resolveModelCatalog({
   const key = apiKey?.trim() || '';
 
   if (key) {
+    let catalogError;
     try {
-      const discovered = await fetchGatewayModels({
+      // The canonical catalog is key-scoped and access-filtered by the
+      // gateway, so no second request is needed when it answers.
+      const discovered = await fetchGatewayCatalog({
         baseUrl,
         apiKey: key,
-        path: AVAILABLE_MODELS_PATH,
+        path: PUBLIC_MODELS_PATH,
         fetchImpl,
         timeoutMs,
         signal,
       });
-      return liveCatalog(discovered, selectedModel, 'available');
-    } catch (availableError) {
-      if (isAbortError(availableError) || signal?.aborted) throw availableError;
-      try {
-        const discovered = await fetchPublicModels({
-          baseUrl,
-          fetchImpl,
-          timeoutMs,
-          signal,
-        });
-        return liveCatalog(discovered, selectedModel, 'public');
-      } catch (publicError) {
-        if (isAbortError(publicError) || signal?.aborted) throw publicError;
-        return packagedCatalog(selectedModel, fallbackModels, availableError);
-      }
+      // An older gateway answers /v1/models with a minimal public list;
+      // those ids still name the fleet, so use them rather than the
+      // packaged registry.
+      return discovered.canonical
+        ? liveCatalog(
+            discovered.models,
+            selectedModel,
+            'catalog',
+            discovered.entries,
+          )
+        : liveCatalog(discovered.models, selectedModel, 'public');
+    } catch (error) {
+      if (isAbortError(error) || signal?.aborted) throw error;
+      catalogError = error;
+    }
+
+    try {
+      const discovered = await fetchGatewayCatalog({
+        baseUrl,
+        fetchImpl,
+        timeoutMs,
+        signal,
+      });
+      return liveCatalog(discovered.models, selectedModel, 'public');
+    } catch (publicError) {
+      if (isAbortError(publicError) || signal?.aborted) throw publicError;
+      return packagedCatalog(
+        selectedModel,
+        fallbackModels,
+        catalogError ?? publicError,
+      );
     }
   }
 
   try {
-    const discovered = await fetchPublicModels({
+    const discovered = await fetchGatewayCatalog({
       baseUrl,
       fetchImpl,
       timeoutMs,
       signal,
     });
-    return liveCatalog(discovered, selectedModel, 'public');
+    return liveCatalog(discovered.models, selectedModel, 'public');
   } catch (error) {
     if (isAbortError(error) || signal?.aborted) throw error;
     return packagedCatalog(selectedModel, fallbackModels, error);

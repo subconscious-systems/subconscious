@@ -5,6 +5,7 @@ import { DEFAULTS } from '../bin/agent-data.js';
 import {
   modelSupportsVision,
   visionModelList,
+  visionModelListFromMetadata,
 } from '../bin/model-capabilities.js';
 import { openCodeConfigFromEnv } from '../bin/opencode-provider.js';
 
@@ -54,4 +55,61 @@ test('the runbooks agree with Node on vision models, by exact ID', {
     );
     assert.equal(result.status, expected ? 0 : 1, `${id}: ${result.stderr}`);
   }
+});
+
+test('catalog metadata overrides the packaged vision map', () => {
+  const entries = [
+    {
+      id: 'custom/new-vision-model',
+      modalities: { input: ['text', 'image'], output: ['text'] },
+    },
+    {
+      id: visionModel,
+      modalities: { input: ['text'], output: ['text'] },
+    },
+    { id: 'subconscious/no-modality-data' },
+  ];
+  assert.equal(modelSupportsVision('custom/new-vision-model', entries), true);
+  // The packaged map says this one has vision; the gateway says it does not.
+  assert.equal(modelSupportsVision(visionModel, entries), false);
+  assert.equal(
+    modelSupportsVision('subconscious/no-modality-data', entries),
+    false,
+  );
+  assert.equal(modelSupportsVision('unlisted/model', entries), false);
+});
+
+test('visionModelListFromMetadata prefers catalog entries and falls back to the packaged map', () => {
+  const metadata = JSON.stringify([
+    { id: 'subconscious/one', modalities: { input: ['text', 'image'] } },
+    { id: 'subconscious/two', modalities: { input: ['text'] } },
+  ]);
+  assert.equal(visionModelListFromMetadata(metadata), 'subconscious/one');
+  assert.equal(visionModelListFromMetadata('[]'), visionModelList());
+  assert.equal(visionModelListFromMetadata('not json'), visionModelList());
+  assert.equal(visionModelListFromMetadata(undefined), visionModelList());
+});
+
+test('opencode config takes per-model limits and vision from catalog metadata', () => {
+  const config = openCodeConfigFromEnv({
+    GATEWAY_URL: 'https://gateway.example',
+    MODEL: 'subconscious/one',
+    SUBCONSCIOUS_MODELS: 'subconscious/one\nsubconscious/two',
+    OPENCODE_CONTEXT_LIMIT: '1000',
+    OPENCODE_OUTPUT_LIMIT: '100',
+    SUBC_MODEL_METADATA: JSON.stringify([
+      {
+        id: 'subconscious/one',
+        limits: { context_length: 200000, max_output_tokens: 32000 },
+        modalities: { input: ['text', 'image'], output: ['text'] },
+      },
+      { id: 'subconscious/two' },
+    ]),
+  });
+  const one = config.provider.subconscious.models['subconscious/one'];
+  assert.deepEqual(one.limit, { context: 200000, output: 32000 });
+  assert.equal(one.attachment, true);
+  const two = config.provider.subconscious.models['subconscious/two'];
+  assert.deepEqual(two.limit, { context: 1000, output: 100 });
+  assert.equal(two.attachment, undefined);
 });

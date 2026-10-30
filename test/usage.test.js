@@ -2,12 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  describeDailyAllowance,
   formatAllowancePercent,
   formatCurrency,
   formatTokens,
   formatUsageDisplay,
-  isLegacyUsagePayload,
   renderProgressBar,
   shortModelSlug,
 } from '../bin/usage.js';
@@ -58,23 +56,6 @@ test('shortModelSlug strips subconscious prefix', () => {
   assert.equal(shortModelSlug('other/model'), 'other/model');
 });
 
-test('isLegacyUsagePayload detects old quota-only responses', () => {
-  assert.equal(
-    isLegacyUsagePayload({ dailyTokenCeiling: 100, consumedToday: 1 }),
-    true,
-  );
-  assert.equal(isLegacyUsagePayload(null), true);
-  assert.equal(
-    isLegacyUsagePayload({
-      billingMode: 'subscription',
-      plan: { label: 'Pro', dailyAllowance: null, isUnlimitedComp: false },
-      credits: { balanceDollars: 1, overageThisPeriodDollars: 0 },
-      models: [],
-    }),
-    false,
-  );
-});
-
 test('formatAllowancePercent never rounds a remaining allowance up to 100', () => {
   assert.equal(formatAllowancePercent(5.5), '6%');
   assert.equal(formatAllowancePercent(99.6), '99%');
@@ -82,25 +63,12 @@ test('formatAllowancePercent never rounds a remaining allowance up to 100', () =
   assert.equal(formatAllowancePercent(140), '100%');
 });
 
-test('describeDailyAllowance computes a percent from the legacy token shape', () => {
-  assert.deepEqual(
-    describeDailyAllowance({
-      amount: 20_000_000,
-      units: 'tokens',
-      consumed: 12_400_000,
-      remaining: 7_600_000,
-    }),
-    { kind: 'tokens', percent: 62 },
-  );
-});
-
 test('formatUsageDisplay renders a credit allowance as a percent', () => {
   const output = formatUsageDisplay({
-    billingMode: 'subscription',
+    billingTerms: 'prepaid',
     plan: {
       label: 'Heavy',
       status: 'active',
-      isUnlimitedComp: false,
       dailyAllowance: {
         basis: 'credit',
         percent: 5.5,
@@ -108,6 +76,7 @@ test('formatUsageDisplay renders a credit allowance as a percent', () => {
       },
     },
     credits: { balanceDollars: 47479.24, overageThisPeriodDollars: 0 },
+    invoice: null,
     models: [
       { slug: 'subconscious/glm-5.3-marathon', consumedToday: 44_500_000 },
     ],
@@ -122,11 +91,10 @@ test('formatUsageDisplay renders a credit allowance as a percent', () => {
 
 test('formatUsageDisplay warns when the daily credit is spent', () => {
   const output = formatUsageDisplay({
-    billingMode: 'subscription',
+    billingTerms: 'prepaid',
     plan: {
       label: 'Heavy',
       status: 'active',
-      isUnlimitedComp: false,
       dailyAllowance: {
         basis: 'credit',
         percent: 112.4,
@@ -134,6 +102,7 @@ test('formatUsageDisplay warns when the daily credit is spent', () => {
       },
     },
     credits: { balanceDollars: 10, overageThisPeriodDollars: 1.2 },
+    invoice: null,
     models: [],
   });
 
@@ -143,17 +112,17 @@ test('formatUsageDisplay warns when the daily credit is spent', () => {
 
 test('formatUsageDisplay renders an unavailable daily credit', () => {
   const output = formatUsageDisplay({
-    billingMode: 'subscription',
+    billingTerms: 'prepaid',
     plan: {
       label: 'Heavy',
       status: 'active',
-      isUnlimitedComp: false,
       dailyAllowance: {
         basis: 'unavailable',
         resetAt: '2026-09-24T00:00:00.000Z',
       },
     },
     credits: { balanceDollars: 10, overageThisPeriodDollars: 0 },
+    invoice: null,
     models: [],
   });
 
@@ -162,22 +131,20 @@ test('formatUsageDisplay renders an unavailable daily credit', () => {
   assert.doesNotMatch(output, /% of daily/);
 });
 
-test('formatUsageDisplay renders subscription meter and models', () => {
+test('formatUsageDisplay renders the token meter and models', () => {
   const output = formatUsageDisplay({
-    billingMode: 'subscription',
+    billingTerms: 'prepaid',
     plan: {
       label: 'Pro',
       status: 'active',
-      isUnlimitedComp: false,
       dailyAllowance: {
-        amount: 20_000_000,
-        units: 'tokens',
-        consumed: 12_400_000,
-        remaining: 7_600_000,
+        basis: 'tokens',
+        percent: 62,
         resetAt: '2026-09-08T00:00:00.000Z',
       },
     },
     credits: { balanceDollars: 42.5, overageThisPeriodDollars: 0 },
+    invoice: null,
     models: [
       { slug: 'subconscious/tim-qwen3.6-27b', consumedToday: 8_200_000 },
       { slug: 'subconscious/glm-5.3-marathon', consumedToday: 4_200_000 },
@@ -192,25 +159,129 @@ test('formatUsageDisplay renders subscription meter and models', () => {
   assert.match(output, /tim-qwen3\.6-27b/);
 });
 
-test('formatUsageDisplay renders unlimited comp without meter', () => {
-  const output = formatUsageDisplay({
-    billingMode: 'comp',
-    plan: {
-      label: 'Custom',
-      status: 'active',
-      isUnlimitedComp: true,
-      dailyAllowance: null,
-    },
-    credits: { balanceDollars: 0, overageThisPeriodDollars: 0 },
-    models: [],
-  });
-
-  assert.match(output, /Unlimited/);
-  assert.doesNotMatch(output, /% of daily/);
-});
-
 test('renderProgressBar fills proportionally', () => {
   const bar = renderProgressBar(50, 10);
   assert.match(bar, /█{5}/);
   assert.match(bar, /░{5}/);
+});
+
+test('formatUsageDisplay renders an invoiced org without a wallet', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: 427.5,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      limitDollars: 5000,
+    },
+    models: [
+      { slug: 'subconscious/glm-5.3-marathon', consumedToday: 44_500_000 },
+    ],
+  });
+
+  assert.match(output, /Invoiced monthly \(net 30\)/);
+  assert.match(output, /Spend this period/);
+  assert.match(output, /\$427\.50 of \$5000\.00 limit/);
+  assert.match(output, /Period ends 2026-11-01/);
+  assert.doesNotMatch(output, /Credits/);
+  assert.doesNotMatch(output, /Overage/);
+  assert.doesNotMatch(output, /Daily allowance/);
+});
+
+test('formatUsageDisplay hides the daily allowance for an invoiced org even when sent', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: {
+      label: 'Team',
+      status: 'active',
+      dailyAllowance: {
+        basis: 'credit',
+        percent: 5.5,
+        resetAt: '2026-10-30T00:00:00.000Z',
+      },
+    },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: 12,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      limitDollars: null,
+    },
+    models: [],
+  });
+
+  assert.doesNotMatch(output, /Daily allowance/);
+  assert.doesNotMatch(output, /of daily credit used/);
+  assert.match(output, /Spend this period/);
+});
+
+test('formatUsageDisplay renders invoiced spend without a limit', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: 12,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      limitDollars: null,
+    },
+    models: [],
+  });
+
+  assert.match(output, /\$12\.00/);
+  assert.doesNotMatch(output, /of \$.* limit/);
+  assert.doesNotMatch(output, /At the spend limit/);
+});
+
+test('formatUsageDisplay renders unreadable invoiced spend as unavailable', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: null,
+      periodStart: '',
+      periodEnd: '',
+      limitDollars: null,
+    },
+    models: [],
+  });
+
+  assert.match(output, /Spend could not be read just now/);
+  assert.doesNotMatch(output, /\$0\.00/);
+});
+
+test('formatUsageDisplay warns an invoiced org at the spend limit', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'invoiced',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: null,
+    invoice: {
+      accruedThisPeriodDollars: 5000,
+      periodStart: '2026-10-01T00:00:00.000Z',
+      periodEnd: '2026-11-01T00:00:00.000Z',
+      limitDollars: 5000,
+    },
+    models: [],
+  });
+
+  assert.match(output, /At the spend limit/);
+});
+
+test('formatUsageDisplay keeps the wallet display for a prepaid org', () => {
+  const output = formatUsageDisplay({
+    billingTerms: 'prepaid',
+    plan: { label: null, status: null, dailyAllowance: null },
+    credits: { balanceDollars: 12.34, overageThisPeriodDollars: 0 },
+    invoice: null,
+    models: [],
+  });
+
+  assert.match(output, /Credits/);
+  assert.match(output, /\$12\.34/);
+  assert.doesNotMatch(output, /Spend this period/);
+  assert.doesNotMatch(output, /Invoiced/);
 });

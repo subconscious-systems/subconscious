@@ -1,6 +1,9 @@
 import { fileURLToPath } from 'node:url';
 import { modelIds, positiveInteger } from './launch-values.js';
-import { modelSupportsVision } from './model-capabilities.js';
+import {
+  catalogEntriesFromMetadata,
+  modelSupportsVision,
+} from './model-capabilities.js';
 
 export const OPENCODE_PROVIDER_ID = 'subconscious';
 const OPENCODE_IMAGE_WINDOW_PLUGIN = fileURLToPath(
@@ -40,15 +43,22 @@ export function opencodeModelDisplayName(modelId) {
   return slug.split(/[-_]/).filter(Boolean).map(formatToken).join(' ');
 }
 
-export function buildOpenCodeModels(modelIds, { context, output }) {
+export function buildOpenCodeModels(
+  modelIds,
+  { context, output, entries = [] },
+) {
+  const entryById = new Map(entries.map((entry) => [entry.id, entry]));
   return Object.fromEntries(
     modelIds.map((id) => [
       id,
       {
         name: opencodeModelDisplayName(id),
         tools: true,
-        limit: { context, output },
-        ...(modelSupportsVision(id)
+        limit: {
+          context: entryById.get(id)?.limits?.context_length ?? context,
+          output: entryById.get(id)?.limits?.max_output_tokens ?? output,
+        },
+        ...(modelSupportsVision(id, entries)
           ? {
               attachment: true,
               modalities: { input: ['text', 'image'], output: ['text'] },
@@ -65,6 +75,7 @@ export function buildOpenCodeConfig({
   modelIds,
   context,
   output,
+  entries = [],
 }) {
   return {
     $schema: 'https://opencode.ai/config.json',
@@ -82,7 +93,7 @@ export function buildOpenCodeConfig({
           headers: { 'x-subconscious-client': 'opencode' },
           modelsDiscovery: { enabled: false },
         },
-        models: buildOpenCodeModels(modelIds, { context, output }),
+        models: buildOpenCodeModels(modelIds, { context, output, entries }),
       },
     },
     model: `${OPENCODE_PROVIDER_ID}/${model}`,
@@ -100,5 +111,6 @@ export function openCodeConfigFromEnv(env) {
       'OPENCODE_CONTEXT_LIMIT',
     ),
     output: positiveInteger(env.OPENCODE_OUTPUT_LIMIT, 'OPENCODE_OUTPUT_LIMIT'),
+    entries: catalogEntriesFromMetadata(env.SUBC_MODEL_METADATA),
   });
 }

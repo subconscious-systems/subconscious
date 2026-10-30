@@ -566,11 +566,49 @@ export async function configCommand(
 export function modelsCommand(models = SUPPORTED_MODELS, options = {}) {
   const selectedModel =
     options.selectedModel || models[0] || RUNBOOK_DEFAULTS.MODEL;
+  const entryById = new Map(
+    (options.entries ?? []).map((entry) => [entry.id, entry]),
+  );
+  const lifecycleNote = (model) => {
+    const lifecycle = entryById.get(model)?.lifecycle;
+    if (!lifecycle) return '';
+    const date = lifecycle.deprecation_date
+      ? ` until ${lifecycle.deprecation_date}`
+      : '';
+    const replacement = lifecycle.replacement
+      ? ` ${c.dim}-> ${lifecycle.replacement}${c.reset}`
+      : '';
+    if (lifecycle.status === 'deprecated') {
+      return `  ${c.yellow}[deprecated${date}]${c.reset}${replacement}`;
+    }
+    if (lifecycle.status === 'retired') {
+      return `  ${c.red}[retired${date}]${c.reset}${replacement}`;
+    }
+    return '';
+  };
   console.log(`\n  ${c.bold}Available models${c.reset}\n`);
   for (const model of models) {
     const suffix =
       model === selectedModel ? ` ${c.dim}(default)${c.reset}` : '';
-    console.log(`  ${c.cyan}${model}${c.reset}${suffix}`);
+    console.log(
+      `  ${c.cyan}${model}${c.reset}${suffix}${lifecycleNote(model)}`,
+    );
+  }
+  const selectedLifecycle = entryById.get(selectedModel)?.lifecycle;
+  if (selectedLifecycle?.status === 'deprecated') {
+    const when = selectedLifecycle.deprecation_date
+      ? ` on ${selectedLifecycle.deprecation_date}`
+      : '';
+    const to = selectedLifecycle.replacement
+      ? ` Migrate to ${selectedLifecycle.replacement}.`
+      : '';
+    console.error(
+      `\n  ${c.yellow}Selected model ${selectedModel} is deprecated${when}.${to}${c.reset}`,
+    );
+  } else if (selectedLifecycle?.status === 'retired') {
+    console.error(
+      `\n  ${c.yellow}Selected model ${selectedModel} is retired and may stop serving without notice.${c.reset}`,
+    );
   }
   if (options.source === 'public' && options.hasApiKey) {
     console.error(`\n  ${c.dim}${PUBLIC_CATALOG_FALLBACK_MESSAGE}${c.reset}`);

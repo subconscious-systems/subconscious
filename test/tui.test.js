@@ -172,6 +172,7 @@ test('remote TUI patches do not overlap', async () => {
     disableUpdateCheck: true,
     resolveCatalog: async () => ({
       models: ['subconscious/live'],
+      defaultModels: ['subconscious/live'],
       source: 'available',
       error: null,
     }),
@@ -238,6 +239,7 @@ test('runTui streams catalog and session patches after the TUI starts', async ()
     disableUpdateCheck: true,
     resolveCatalog: async () => ({
       models: ['subconscious/live'],
+      defaultModels: ['subconscious/live'],
       source: 'available',
       error: null,
     }),
@@ -282,7 +284,12 @@ test('runTui aborts leftover remote work when the TUI exits first', async () => 
         catalogCalls += 1;
         const timer = setTimeout(
           () =>
-            resolve({ models: ['too-late'], source: 'available', error: null }),
+            resolve({
+              models: ['too-late'],
+              defaultModels: ['too-late'],
+              source: 'available',
+              error: null,
+            }),
           10_000,
         );
         signal.addEventListener(
@@ -340,6 +347,7 @@ test('runTui starts the TUI before any remote work', async () => {
       events.push('catalog');
       return {
         models: ['subconscious/live'],
+        defaultModels: ['subconscious/live'],
         source: 'available',
         error: null,
       };

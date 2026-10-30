@@ -327,6 +327,7 @@ export function runbookEnv(
   profile,
   agent,
   models = PACKAGED_MODELS,
+  entries = [],
 ) {
   const ctx = buildContext(apiKey, model, profile);
   const extraDirs = [binDir, ...candidateBinDirs()].filter(Boolean);
@@ -343,6 +344,7 @@ export function runbookEnv(
       ...(keyName ? { [keyName]: apiKey } : {}),
       MODEL: model,
       SUBCONSCIOUS_MODELS: models.join('\n'),
+      SUBC_MODEL_METADATA: JSON.stringify(entries),
       ...(claude
         ? {
             SUBC_CLAUDE_SETTINGS: JSON.stringify(
@@ -378,7 +380,11 @@ async function resolvedModelsForLaunch(profile, apiKey, selectedModel) {
 }
 
 export function selectLaunchModel(requestedModel, modelSource, catalog) {
-  const first = catalog.models[0] || requestedModel || DEFAULTS.model;
+  const first =
+    catalog.defaultModels?.[0] ||
+    catalog.models[0] ||
+    requestedModel ||
+    DEFAULTS.model;
   if (modelSource === 'catalog' || !requestedModel) {
     return first;
   }
@@ -427,7 +433,15 @@ async function runRunbookSetup(agent, argv, profile) {
   // Setup scripts read no strict-choice setting; only the model list matters.
   const env = resolveInputs(
     agent,
-    runbookEnv(apiKey, model, undefined, profile, agent, catalog.models),
+    runbookEnv(
+      apiKey,
+      model,
+      undefined,
+      profile,
+      agent,
+      catalog.defaultModels,
+      catalog.entries,
+    ),
     {},
     { strict: false },
   );
@@ -542,7 +556,15 @@ async function launchAgent(agent, argv, profile, headless) {
   (headless ? console.error : console.log)(
     `  ${c.dim}Launching ${c.reset}${c.bold}${agent.name}${c.reset} ${c.dim}on Subconscious ${c.reset}${c.dim}(${model})${c.reset}\n`,
   );
-  const env = runbookEnv(apiKey, model, binDir, profile, agent, catalog.models);
+  const env = runbookEnv(
+    apiKey,
+    model,
+    binDir,
+    profile,
+    agent,
+    catalog.defaultModels,
+    catalog.entries,
+  );
   // The headless endpoint is the one endpoint for every harness, Claude too.
   const launchEnv = headless ? { ...env, CLAUDE_GATEWAY_URL: '' } : env;
   const plan = launchPlan(agent, { env: launchEnv, ...headlessParts(rest) });
