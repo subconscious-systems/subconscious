@@ -303,7 +303,11 @@ export async function resolveModelCatalog({
       return liveCatalog(discovered.models, selectedModel, 'public');
     } catch (publicError) {
       if (isAbortError(publicError) || signal?.aborted) throw publicError;
-      return packagedCatalog(selectedModel, fallbackModels, catalogError ?? publicError);
+      return packagedCatalog(
+        selectedModel,
+        fallbackModels,
+        catalogError ?? publicError,
+      );
     }
   }
 
