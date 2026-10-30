@@ -16,9 +16,17 @@ import {
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-opencode-test-'));
 const fakeOpenCode = path.join(testDir, 'opencode');
+const capturedArgs = path.join(testDir, 'argv.txt');
 await fs.writeFile(
   fakeOpenCode,
-  '#!/bin/sh\nprintf \'%s\' "$OPENCODE_CONFIG_CONTENT"\n',
+  '#!/bin/sh\n' +
+    // Recording the argv is optional: tests that only care about the config
+    // do not set CAPTURED_ARGS, and the stub must not fail them.
+    '[ -n "$CAPTURED_ARGS" ] && : > "$CAPTURED_ARGS"\n' +
+    'for arg in "$@"; do\n' +
+    '  [ -n "$CAPTURED_ARGS" ] && printf \'%s\\n\' "$arg" >> "$CAPTURED_ARGS"\n' +
+    'done\n' +
+    'printf \'%s\' "$OPENCODE_CONFIG_CONTENT"\n',
   {
     mode: 0o755,
   },
@@ -58,7 +66,6 @@ test('OpenCode launch replaces the Subconscious catalog on every startup', () =>
     config.provider[OPENCODE_PROVIDER_ID].name,
     OPENCODE_PROVIDER_NAME,
   );
-  assert.deepEqual(config.provider[OPENCODE_PROVIDER_ID].whitelist, models);
   assert.equal(
     config.provider[OPENCODE_PROVIDER_ID].options.modelsDiscovery.enabled,
     false,
@@ -91,7 +98,7 @@ test('OpenCode launch replaces the Subconscious catalog on every startup', () =>
     config.provider[OPENCODE_PROVIDER_ID].models,
   )) {
     const vision = id === 'subconscious/deepseek-v4.1-flash-marathon';
-    assert.equal(model.attachment, vision ? true : undefined, id);
+    assert.equal('attachment' in model, false, id);
     assert.deepEqual(
       model.modalities,
       vision ? { input: ['text', 'image'], output: ['text'] } : undefined,
@@ -117,9 +124,9 @@ test('OpenCode enables vision for an explicitly selected model missing from the 
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(result.stdout);
   assert.equal(config.model, `${OPENCODE_PROVIDER_ID}/${model}`);
-  assert.equal(
-    config.provider[OPENCODE_PROVIDER_ID].models[model].attachment,
-    true,
+  assert.deepEqual(
+    config.provider[OPENCODE_PROVIDER_ID].models[model].modalities,
+    { input: ['text', 'image'], output: ['text'] },
   );
 });
 
@@ -170,8 +177,8 @@ test('OpenCode model display names are capitalized from the id', () => {
 });
 
 // OpenCode resends every screenshot each turn; the plugin trims the upload to
-// the newest images. Loaded by path, nothing written.
-test('OpenCode launch loads the image window plugin', async () => {
+// the newest images. Loaded from a directory by path, nothing written.
+test('OpenCode launch loads the Subconscious plugin directory', async () => {
   const result = runSync(
     launchCommand('opencode', {
       env: {
@@ -185,7 +192,57 @@ test('OpenCode launch loads the image window plugin', async () => {
   );
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(result.stdout);
-  assert.equal(config.plugin.length, 1);
-  assert.match(config.plugin[0], /opencode\/subconscious-image-window\.ts$/);
-  await fs.access(config.plugin[0]);
+  assert.equal(config.plugins.length, 1);
+  assert.match(config.plugins[0], /opencode\/plugin$/);
+  // OpenCode 2.x loads plugins from directories and skips single files.
+  const stat = await fs.stat(config.plugins[0]);
+  assert.ok(stat.isDirectory());
+  await fs.access(path.join(config.plugins[0], 'server.ts'));
+});
+
+// OpenCode's long-lived background service keeps the model registry it started
+// with, so the per-launch provider config only ever reaches a private server.
+// run.sh puts --standalone in the one place each command form accepts it.
+test('OpenCode always launches on a private server', async () => {
+  const baseEnv = {
+    ...process.env,
+    PATH: `${testDir}:${process.env.PATH}`,
+    GATEWAY_URL: 'https://gateway.example',
+    API_KEY: 'sk-test',
+    MODEL: 'subconscious/glm-5.3-marathon',
+    CAPTURED_ARGS: capturedArgs,
+  };
+  const launch = (args, prompt) =>
+    runSync(launchCommand('opencode', { env: baseEnv, args, prompt }));
+  const launched = async (args, prompt) => {
+    const result = launch(args, prompt);
+    assert.equal(result.status, 0, result.stderr);
+    return (await fs.readFile(capturedArgs, 'utf8')).split('\n').slice(0, -1);
+  };
+
+  // The stub records "$@", so the binary name is not part of each list.
+  // The TUI takes the flag on the root command.
+  assert.deepEqual(await launched([]), ['--standalone']);
+  assert.deepEqual(await launched(['--auto']), ['--standalone', '--auto']);
+  // The run subcommand takes it after the subcommand word, wherever the word
+  // came from: subc's own headless template or a pass-through argument.
+  assert.deepEqual(await launched([], 'summarize'), ['run', '--standalone']);
+  assert.deepEqual(await launched(['run', 'fix it']), [
+    'run',
+    '--standalone',
+    'fix it',
+  ]);
+  // An explicit private or shared server is the caller's choice.
+  assert.deepEqual(await launched(['--standalone']), ['--standalone']);
+  assert.deepEqual(await launched(['--server', 'http://x']), [
+    '--server',
+    'http://x',
+  ]);
+  assert.deepEqual(await launched(['run', '--standalone', 'x']), [
+    'run',
+    '--standalone',
+    'x',
+  ]);
+  // Subcommands that take no --standalone at the root position pass through.
+  assert.deepEqual(await launched(['models']), ['models']);
 });

@@ -9,6 +9,7 @@
  * nothing usable.
  */
 
+import { catalogEntriesFromMetadata } from './model-capabilities.js';
 import { proxyAwareFetch } from './network.js';
 
 const MODEL_ID_PATTERN = /^[-A-Za-z0-9._:/+]+$/;
@@ -249,14 +250,18 @@ export async function resolveModelCatalog({
   timeoutMs = DEFAULT_MODEL_FETCH_TIMEOUT_MS,
   signal,
 }) {
-  // A caller that names its catalog (a benchmark run, a CI job) needs the same
-  // models on every launch, whatever the gateway lists that day.
+  // The pinned path serves a caller that names its catalog (a benchmark run,
+  // a CI job) and, in practice, a subc launched from inside a subc-launched
+  // agent, which exports SUBCONSCIOUS_MODELS. Pinning fixes the ids, not
+  // their descriptions: metadata inherited from the parent launch keeps
+  // per-model limits and modalities correct, and without it the pinned ids
+  // fall back to the packaged registry.
   const pinned = pinnedModels?.split(/\r?\n/).filter((id) => id.trim());
   if (pinned?.length) {
     return {
       models: normalizeModelIds(pinned, selectedModel),
       defaultModels: normalizeModelIds(pinned, selectedModel),
-      entries: [],
+      entries: catalogEntriesFromMetadata(process.env.SUBC_MODEL_METADATA),
       source: 'pinned',
       error: null,
     };

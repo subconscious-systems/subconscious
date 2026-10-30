@@ -23,12 +23,13 @@
   },
   "runbook": {
     "mode": "launch",
+    "script": "run.sh",
     "setup_script": "install.sh",
     "setup_actions": ["status", "uninstall"]
   },
   "help": {
     "usage": "subc [-p NAME] opencode [help|status|uninstall] [OpenCode arguments...]",
-    "behavior": "Launches OpenCode with an ephemeral provider containing every Subconscious model. Persistent files are leftover-only: subc opencode uninstall.",
+    "behavior": "Launches OpenCode on a private per-launch server with an ephemeral provider containing every Subconscious model. Persistent files are leftover-only: subc opencode uninstall.",
     "options": [
       ["help", "Show this help"],
       ["status", "Inspect leftover OpenCode Subconscious config"],
@@ -44,7 +45,7 @@
   "prerequisites": [],
   "launch": {
     "argv": ["opencode", "{args}"],
-    "headless_argv": ["opencode", "run", "{args}"],
+    "headless_argv": ["opencode", "run", "--standalone", "{args}"],
     "headless_stdin": "{prompt}",
     "headless_platforms": ["darwin", "linux"],
     "resume": ["--session", "{sessionId}"],
@@ -98,7 +99,7 @@
       "name": "OPENCODE_CONFIG_CONTENT",
       "lifetime": "launch",
       "value": "{opencodeConfig}",
-      "description": "Provider, models, limits and image-window plugin, built for every catalog model."
+      "description": "Provider, models, limits, and the Subconscious plugin, built for every catalog model. It reaches a private server, never a shared background service, so run.sh launches standalone."
     },
     {
       "kind": "file",
