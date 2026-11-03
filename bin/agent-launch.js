@@ -69,7 +69,7 @@ export function takeFlags(agent, args, { skip = [] } = {}) {
       values[input.name] = input.flag_value;
     } else if (equals > 0) {
       values[input.name] = arg.slice(equals + 1);
-    } else if (i + 1 < args.length) {
+    } else if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
       values[input.name] = args[++i];
     } else {
       throw new Error(`${name} requires a value`);
@@ -108,9 +108,33 @@ export function resolveInputs(
     if (value !== undefined) resolved[input.name] = String(value);
   }
   for (const input of agentInputs(agent)) {
-    if (!strict || !input.strict) continue;
+    if (!strict) continue;
+    const source =
+      input.name in flagged ? input.flag || input.name : input.name;
+    if (input.type === 'integer' && resolved[input.name] !== undefined) {
+      const text = String(resolved[input.name]).trim();
+      const number = Number(text);
+      if (!/^-?\d+$/.test(text) || !Number.isSafeInteger(number)) {
+        throw new Error(
+          input.min === 1
+            ? `${source} must be a positive integer`
+            : `${source} must be a safe decimal integer`,
+        );
+      }
+      if (input.min !== undefined && number < input.min) {
+        throw new Error(
+          input.min === 1
+            ? `${source} must be a positive integer`
+            : `${source} must be an integer >= ${input.min}`,
+        );
+      }
+      if (input.max !== undefined && number > input.max) {
+        throw new Error(`${source} must be an integer <= ${input.max}`);
+      }
+      resolved[input.name] = String(number);
+    }
+    if (!input.strict) continue;
     if (input.choices.includes(resolved[input.name])) continue;
-    const source = input.name in flagged ? input.flag : input.name;
     throw new Error(`${source} must be one of: ${input.choices.join(', ')}`);
   }
   return resolved;
