@@ -1,5 +1,12 @@
 # Changelog
 
+## [8.0.1](https://github.com/subconscious-systems/subconscious/compare/v8.0.0...v8.0.1) (2026-11-03)
+
+
+### Bug fixes
+
+* **opencode:** launch on a private server and load a v2 plugin ([a834183](https://github.com/subconscious-systems/subconscious/commit/a8341834e4400cd9c47545585d7b4e71a44781a3))
+
 ## [8.0.0](https://github.com/subconscious-systems/subconscious/compare/v7.0.0...v8.0.0) (2026-10-30)
 
 
