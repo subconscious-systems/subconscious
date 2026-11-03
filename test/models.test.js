@@ -400,6 +400,41 @@ test('a pinned catalog wins over discovery and is never fetched', async () => {
   assert.equal(isLiveModelSource(catalog.source), false);
 });
 
+test('a pinned catalog keeps the metadata inherited from the parent launch', async () => {
+  // A subc launched inside a subc-launched agent inherits both
+  // SUBCONSCIOUS_MODELS and SUBC_MODEL_METADATA; pinning fixes the ids, not
+  // their limits and modalities.
+  const previous = process.env.SUBC_MODEL_METADATA;
+  process.env.SUBC_MODEL_METADATA = JSON.stringify([
+    {
+      id: 'subconscious/a',
+      limits: { context_length: 100, max_output_tokens: 5 },
+      modalities: { input: ['text', 'image'], output: ['text'] },
+    },
+  ]);
+  try {
+    const catalog = await resolveModelCatalog({
+      baseUrl: 'https://gateway.example',
+      apiKey: 'key',
+      selectedModel: 'subconscious/a',
+      pinnedModels: 'subconscious/a\nsubconscious/b\n',
+      fetchImpl: async () => {
+        throw new Error('a pinned catalog must not fetch');
+      },
+    });
+    assert.equal(catalog.source, 'pinned');
+    assert.equal(catalog.entries.length, 1);
+    assert.equal(catalog.entries[0].id, 'subconscious/a');
+    assert.deepEqual(catalog.entries[0].modalities, {
+      input: ['text', 'image'],
+      output: ['text'],
+    });
+  } finally {
+    if (previous === undefined) delete process.env.SUBC_MODEL_METADATA;
+    else process.env.SUBC_MODEL_METADATA = previous;
+  }
+});
+
 test('a blank pinned catalog still discovers', async () => {
   const catalog = await resolveModelCatalog({
     baseUrl: 'https://gateway.example',

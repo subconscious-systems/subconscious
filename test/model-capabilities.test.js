@@ -33,7 +33,7 @@ test('vision capabilities match only the exact gateway model ID', () => {
     OPENCODE_OUTPUT_LIMIT: '100',
   });
   const model = config.provider.subconscious.models[visionModel];
-  assert.equal(model.attachment, true);
+  assert.equal('attachment' in model, false);
   assert.deepEqual(model.modalities, {
     input: ['text', 'image'],
     output: ['text'],
@@ -108,8 +108,11 @@ test('opencode config takes per-model limits and vision from catalog metadata', 
   });
   const one = config.provider.subconscious.models['subconscious/one'];
   assert.deepEqual(one.limit, { context: 200000, output: 32000 });
-  assert.equal(one.attachment, true);
+  assert.deepEqual(one.modalities, {
+    input: ['text', 'image'],
+    output: ['text'],
+  });
   const two = config.provider.subconscious.models['subconscious/two'];
   assert.deepEqual(two.limit, { context: 1000, output: 100 });
-  assert.equal(two.attachment, undefined);
+  assert.equal('modalities' in two, false);
 });

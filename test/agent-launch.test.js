@@ -233,7 +233,10 @@ test('every headless agent runs exactly this argv and stdin', () => {
       ],
       stdin: 'ignore',
     },
-    opencode: { argv: ['opencode', 'run', '--x'], stdin: 'pipe' },
+    opencode: {
+      argv: ['opencode', 'run', '--standalone', '--x'],
+      stdin: 'pipe',
+    },
     pi: {
       argv: [
         'pi',

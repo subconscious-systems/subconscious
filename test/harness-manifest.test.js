@@ -81,7 +81,7 @@ test('the OpenCode config entry is the document the launch builds', () => {
     output: 65536,
   });
   assert.equal(provider.options.baseURL, '{baseUrl}/v1');
-  assert.match(entry.value.plugin[0], /^<runbook>\/opencode\//);
+  assert.match(entry.value.plugins[0], /^<runbook>\/opencode\/plugin$/);
 });
 
 test('the fields bench-runner reads are present for every harness', () => {

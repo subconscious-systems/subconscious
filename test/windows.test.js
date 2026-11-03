@@ -435,7 +435,7 @@ for (const selectedVision of [true, false])
     for (const [id, model] of Object.entries(
       ocConfig.provider.subconscious.models,
     )) {
-      assert.equal(model.attachment, id === visionModel ? true : undefined, id);
+      assert.equal('attachment' in model, false, id);
       assert.deepEqual(
         model.modalities,
         id === visionModel
@@ -1009,8 +1009,11 @@ test('Windows OpenCode launch loads the image window plugin', async () => {
     MODEL: 'subconscious/deepseek-v4.1-flash-marathon',
   });
   const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT);
-  assert.equal(config.plugin.length, 1);
-  await fs.access(config.plugin[0]);
+  assert.equal(config.plugins.length, 1);
+  // OpenCode 2.x loads plugins from directories and skips single files.
+  const stat = await fs.stat(config.plugins[0]);
+  assert.ok(stat.isDirectory());
+  await fs.access(path.join(config.plugins[0], 'server.ts'));
 });
 
 test('runWindows writes input to the child stdin and mirrors its exit code', async (t) => {

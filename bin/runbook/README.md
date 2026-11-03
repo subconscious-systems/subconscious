@@ -8,7 +8,7 @@ the default gateway, model capabilities, and the settings every agent uses
 
 | Agent | Launch | Setup |
 | --- | --- | --- |
-| `opencode` | binary | `install.sh` (leftover status/uninstall) |
+| `opencode` | `run.sh` | `install.sh` (leftover status/uninstall) |
 | `claude-code` | binary | `install.sh` (leftover status/uninstall) |
 | `codex` | `run.sh` | `install.sh` (hooks) |
 | `pi` | `run.sh` | `install.sh` (provider and extensions) |
