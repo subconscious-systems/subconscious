@@ -5,7 +5,9 @@
  *  1. CLI asks the platform for a device code and a short user code.
  *  2. Opens {platformUrl}/cli/device?code=... in any browser.
  *  3. Polls the platform until the signed-in browser approves the code.
- *  4. Saves the key to ~/.subconscious/config.json and a runbook profile.
+ *  4. The platform mints a new key for this machine. It is saved to the macOS
+ *     Keychain, or to the 0600 ~/.subconscious/config.json where there is
+ *     no Keychain, and the runbook profile is created without it.
  *
  * Override SUBCONSCIOUS_URL env var for local development
  * (e.g. http://localhost:3000). Production defaults to platform.subconscious.dev.
@@ -16,6 +18,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { c } from './colors.js';
+import { createCredentialStore } from './credential-store.js';
 import {
   describeFetchError,
   proxyAwareFetch,
@@ -80,14 +83,23 @@ async function saveConfig(config) {
   await fs.chmod(configFile(), 0o600);
 }
 
-export async function getApiKey(profile) {
+const defaultCredentialStore = () => createCredentialStore();
+
+export async function getApiKey(
+  profile,
+  { credentialStore = defaultCredentialStore() } = {},
+) {
   const envKey = process.env.SUBCONSCIOUS_API_KEY?.trim();
   if (envKey) return { key: envKey, source: 'SUBCONSCIOUS_API_KEY env var' };
 
   const profileKey = profile?.values?.API_KEY?.trim();
   if (profileKey) return { key: profileKey, source: profile.path };
 
-  if (profile?.name && profile.name !== DEFAULT_PROFILE) return null;
+  const profileName = profile?.name || DEFAULT_PROFILE;
+  const storedKey = await credentialStore.read(profileName);
+  if (storedKey) return { key: storedKey, source: credentialStore.label };
+
+  if (profileName !== DEFAULT_PROFILE) return null;
 
   const config = await loadConfig();
   if (config.subconscious_api_key) {
@@ -138,8 +150,11 @@ export async function registerDeviceLogin(
   platformUrl,
   fetchImpl = proxyAwareFetch,
 ) {
+  // The hostname only names the key the platform mints for this machine.
   const res = await fetchImpl(`${platformUrl}/api/cli/device/register`, {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ hostname: os.hostname() }),
     signal: AbortSignal.timeout(8000),
   });
   const data = await res.json().catch(() => ({}));
@@ -208,21 +223,81 @@ function printLoginFailure(platformUrl, error) {
   if (proxy) console.error(`  ${c.dim}${proxy}${c.reset}`);
 }
 
-async function saveLoginKey(profileName, token) {
+/**
+ * Saves a key to the credential store when there is one, clearing any older
+ * plaintext copy, else to the 0600 config file (default profile) or profile.
+ *
+ * @returns - the profile, and the label of the store that holds the key
+ *   (null when it went to a file).
+ */
+async function saveLoginKey(profileName, token, credentialStore) {
+  if (await credentialStore.write(profileName, token)) {
+    if (profileName === DEFAULT_PROFILE) {
+      const config = await loadConfig();
+      if (config.subconscious_api_key) {
+        delete config.subconscious_api_key;
+        await saveConfig(config);
+      }
+    }
+    const profile = await ensureProfile(profileName, '');
+    return { profile, storedIn: credentialStore.label };
+  }
   if (profileName === DEFAULT_PROFILE) {
     const config = await loadConfig();
     config.subconscious_api_key = token;
     await saveConfig(config);
   }
-  return ensureProfile(profileName, token);
+  return { profile: await ensureProfile(profileName, token), storedIn: null };
+}
+
+function printKeyLocation(profileName, storedIn, credentialStore) {
+  if (storedIn) {
+    console.log(`  ${c.dim}Stored in ${storedIn}.${c.reset}`);
+    return;
+  }
+  if (credentialStore.label) {
+    console.log(
+      `  ${c.yellow}Could not use the ${credentialStore.label}; saved to a file only you can read.${c.reset}`,
+    );
+  }
+  if (profileName === DEFAULT_PROFILE) {
+    console.log(`  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`);
+  }
+}
+
+/** Asks the platform whether a stored key still works. Unknown counts as valid. */
+async function storedKeyRejected(platformUrl, key, fetchImpl) {
+  try {
+    const res = await fetchImpl(`${platformUrl}/api/cli/whoami`, {
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.status === 401;
+  } catch {
+    return false;
+  }
 }
 
 export async function loginCommand(_argv = [], options = {}) {
   const profileName = options.profileName || DEFAULT_PROFILE;
-  const existing = await getApiKey(options.profile);
+  const credentialStore = options.credentialStore || defaultCredentialStore();
   const fetchImpl = options.fetchImpl || proxyAwareFetch;
+  const platformUrl = getPlatformUrl(options.profile);
+  const existing = await getApiKey(
+    options.profile ?? { name: profileName, values: {} },
+    { credentialStore },
+  );
 
-  if (existing) {
+  // A revoked or expired key (CLI keys unused for 30 days are revoked) should
+  // not block a fresh login.
+  if (
+    existing &&
+    (await storedKeyRejected(platformUrl, existing.key, fetchImpl))
+  ) {
+    console.log(
+      `\n  ${c.yellow}Your saved key is no longer valid. Logging in again.${c.reset}`,
+    );
+  } else if (existing) {
     const profile = await ensureProfile(profileName, existing.key);
     const logout =
       profileName === DEFAULT_PROFILE
@@ -244,7 +319,6 @@ export async function loginCommand(_argv = [], options = {}) {
   );
   console.log();
 
-  const platformUrl = getPlatformUrl(options.profile);
   let registered;
   try {
     registered = await registerDeviceLogin(platformUrl, fetchImpl);
@@ -290,15 +364,20 @@ export async function loginCommand(_argv = [], options = {}) {
       if (polled.status === 'approved') {
         clearInterval(spinner);
         process.stdout.write(`\r${' '.repeat(50)}\r`);
-        const profile = await saveLoginKey(profileName, polled.key);
+        const { profile, storedIn } = await saveLoginKey(
+          profileName,
+          polled.key,
+          credentialStore,
+        );
         const masked = `${polled.key.slice(0, 8)}...${polled.key.slice(-4)}`;
         console.log(`  ${c.green}${c.bold}✓ Logged in successfully!${c.reset}`);
-        console.log(`  ${c.dim}Key: ${masked}${c.reset}`);
-        if (profileName === DEFAULT_PROFILE) {
-          console.log(
-            `  ${c.dim}Saved to ~/.subconscious/config.json${c.reset}`,
-          );
-        }
+        console.log(
+          `  ${c.dim}Created a new key for this machine: ${masked}${c.reset}`,
+        );
+        printKeyLocation(profileName, storedIn, credentialStore);
+        console.log(
+          `  ${c.dim}Login keys unused for 30 days are revoked automatically.${c.reset}`,
+        );
         console.log(`  ${c.dim}Runbook profile: ${profile.path}${c.reset}`);
         console.log(
           `  ${c.dim}Launch a terminal agent with ${c.reset}${c.cyan}subc claude${c.reset}${c.dim}, or set up VS Code Copilot with ${c.reset}${c.cyan}subc copilot install${c.reset}${c.dim}.${c.reset}`,
@@ -339,19 +418,19 @@ export async function updateApiKeyCommand(argv = [], options = {}) {
 
   const key = argv[0].trim();
   const profileName = options.profileName || DEFAULT_PROFILE;
-  const profile = await ensureProfile(profileName, key);
-
-  if (profileName === DEFAULT_PROFILE) {
-    const config = await loadConfig();
-    config.subconscious_api_key = key;
-    await saveConfig(config);
-  }
+  const credentialStore = options.credentialStore || defaultCredentialStore();
+  const { profile, storedIn } = await saveLoginKey(
+    profileName,
+    key,
+    credentialStore,
+  );
 
   const masked =
     key.length <= 12 ? '********' : `${key.slice(0, 8)}...${key.slice(-4)}`;
   console.log(`\n  ${c.green}${c.bold}✓ API key updated.${c.reset}`);
   console.log(`  ${c.dim}Profile: ${profile.path}${c.reset}`);
   console.log(`  ${c.dim}Key:     ${masked}${c.reset}`);
+  printKeyLocation(profileName, storedIn, credentialStore);
   if (process.env.SUBCONSCIOUS_API_KEY?.trim()) {
     console.log(
       `\n  ${c.yellow}SUBCONSCIOUS_API_KEY is set and will override this saved key.${c.reset}`,
@@ -362,12 +441,14 @@ export async function updateApiKeyCommand(argv = [], options = {}) {
 
 export async function logoutCommand(_argv = [], options = {}) {
   const profileName = options.profileName || DEFAULT_PROFILE;
+  const credentialStore = options.credentialStore || defaultCredentialStore();
   const config = await loadConfig();
+  const clearedStore = await credentialStore.remove(profileName);
   const clearedProfile = await clearProfileApiKey(profileName);
   const clearSavedConfig =
     profileName === DEFAULT_PROFILE && config.subconscious_api_key;
 
-  if (!clearSavedConfig && !clearedProfile) {
+  if (!clearSavedConfig && !clearedProfile && !clearedStore) {
     console.log(`\n  ${c.dim}Not logged in.${c.reset}\n`);
     return;
   }
