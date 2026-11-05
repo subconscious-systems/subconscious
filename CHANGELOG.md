@@ -1,5 +1,12 @@
 # Changelog
 
+## [8.0.2](https://github.com/subconscious-systems/subconscious/compare/v8.0.1...v8.0.2) (2026-11-05)
+
+
+### Bug fixes
+
+* drop Claude Code's mutating attribution header on gateway launches ([#179](https://github.com/subconscious-systems/subconscious/issues/179)) ([b39b9c8](https://github.com/subconscious-systems/subconscious/commit/b39b9c85115cae618e74a9f33e3c301a624add08))
+
 ## [8.0.1](https://github.com/subconscious-systems/subconscious/compare/v8.0.0...v8.0.1) (2026-11-03)
 
 
