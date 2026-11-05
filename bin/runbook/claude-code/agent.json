@@ -183,6 +183,12 @@
       "description": "Disables non-essential network traffic."
     },
     {
+      "name": "CLAUDE_CODE_ATTRIBUTION_HEADER",
+      "value": "0",
+      "override": ["CLAUDE_CODE_ATTRIBUTION_HEADER"],
+      "description": "Drops the per-request billing-attribution system block. Its value changes every request, so it mutates the cached prompt prefix and collapses the gateway prompt cache on long sessions."
+    },
+    {
       "name": "ENABLE_CLAUDEAI_MCP_SERVERS",
       "value": "false",
       "description": "Disables claude.ai connectors, which need subscription OAuth and cannot run against the gateway."

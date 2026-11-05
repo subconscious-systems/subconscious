@@ -126,6 +126,16 @@ test('env entries take the first set override, else their value', () => {
   assert.equal(env.OTEL_EXPORTER_OTLP_HEADERS, 'x-api-key=sk-claude');
 });
 
+test('claude-code drops the mutating attribution header, unless the user keeps it', () => {
+  const on = resolveAgentEnv(claude, resolveInputs(claude, { ...base }));
+  assert.equal(on.CLAUDE_CODE_ATTRIBUTION_HEADER, '0');
+  const kept = resolveAgentEnv(
+    claude,
+    resolveInputs(claude, { ...base, CLAUDE_CODE_ATTRIBUTION_HEADER: '1' }),
+  );
+  assert.equal(kept.CLAUDE_CODE_ATTRIBUTION_HEADER, '1');
+});
+
 test('config overrides follow their conditions', () => {
   const names = (env) =>
     configArgs(codex, resolveInputs(codex, { ...base, ...env }))
