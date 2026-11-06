@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -807,7 +808,32 @@ func normalizeBaseURL(raw string) (string, error) {
 	if parsed.RawQuery != "" || parsed.Fragment != "" {
 		return "", errors.New("The URL cannot contain a query string or fragment.")
 	}
+	if err := rejectPrivateHost(parsed.Hostname()); err != nil {
+		return "", err
+	}
 	return strings.TrimRight(value, "/"), nil
+}
+
+// rejectPrivateHost blocks gateway hosts that resolve to loopback, private,
+// link-local, or otherwise non-public addresses to mitigate SSRF against
+// internal services and cloud metadata endpoints (e.g. 169.254.169.254).
+func rejectPrivateHost(host string) error {
+	ips := []net.IP{}
+	if ip := net.ParseIP(host); ip != nil {
+		ips = append(ips, ip)
+	} else {
+		resolved, err := net.LookupIP(host)
+		if err != nil {
+			return errors.New("Could not resolve the gateway host.")
+		}
+		ips = resolved
+	}
+	for _, ip := range ips {
+		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() || ip.IsUnspecified() {
+			return errors.New("The gateway URL cannot point to a private or internal address.")
+		}
+	}
+	return nil
 }
 
 func updateProfileValue(path, key, value string) error {
