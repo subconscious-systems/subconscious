@@ -57,7 +57,7 @@ uninstall_config() {
     tmp="$(mktemp)"
     jq '
       del(.provider.subconscious, .provider["subconscious-cli"])
-      | if ((.model // "") | tostring | startswith("subconscious/")) then del(.model) else . end
+      | if ((.model // "") | tostring | (startswith("subconscious/") or startswith("subconscious-cli/"))) then del(.model) else . end
     ' "$OPENCODE_CONFIG" >"$tmp"
     mv "$tmp" "$OPENCODE_CONFIG"
     echo "Removed Subconscious provider from $OPENCODE_CONFIG"
