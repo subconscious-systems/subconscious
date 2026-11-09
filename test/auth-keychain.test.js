@@ -4,9 +4,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const authModule = fileURLToPath(new URL('../bin/auth.js', import.meta.url));
+// A file:// URL: Windows rejects bare absolute paths in an ESM import.
+const authModule = pathToFileURL(
+  fileURLToPath(new URL('../bin/auth.js', import.meta.url)),
+).href;
 
 // A Keychain stand-in the child process shares through a JSON file, so each
 // test can see what login stored without touching the real Keychain.
@@ -121,7 +124,10 @@ test('login falls back to the 0600 config file when the Keychain refuses the wri
     (await readJson(configFile)).subconscious_api_key,
     'sk-gw-file1234.k',
   );
-  assert.equal((await fs.stat(configFile)).mode & 0o777, 0o600);
+  // POSIX permission bits do not exist on Windows.
+  if (process.platform !== 'win32') {
+    assert.equal((await fs.stat(configFile)).mode & 0o777, 0o600);
+  }
   assert.match(result.stdout, /Could not use the macOS Keychain/);
   await fs.rm(dir, { recursive: true, force: true });
 });
