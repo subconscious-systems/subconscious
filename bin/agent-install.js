@@ -146,6 +146,11 @@ function printInstallAdvice(agent) {
   );
 }
 
+/** The directory that holds the agent's binary, or null when it is missing. */
+export function locateAgent(agent) {
+  return resolveBinPath(agentBinary(agent), preferredBinDirsForAgent(agent));
+}
+
 /**
  * Return the directory that holds the agent's binary. subc never installs a
  * third-party agent: when the binary is missing it prints how to install it
@@ -153,7 +158,7 @@ function printInstallAdvice(agent) {
  */
 export async function ensureInstalled(agent) {
   const bin = agentBinary(agent);
-  const existing = await resolveBinPath(bin, preferredBinDirsForAgent(agent));
+  const existing = await locateAgent(agent);
   if (existing) return existing;
 
   console.error(

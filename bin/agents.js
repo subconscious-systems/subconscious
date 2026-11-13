@@ -150,6 +150,11 @@ function buildContext(apiKey, model, profile) {
   return { apiKey, model, baseUrl };
 }
 
+/** The gateway a launch with this profile uses, as runbookEnv resolves it. */
+export function launchGatewayUrl(profile) {
+  return buildContext(undefined, undefined, profile).baseUrl;
+}
+
 /**
  * Pull a `--model <value>` / `--model=<value>` flag out of the passthrough
  * args (so it sets the Subconscious model rather than reaching the agent).

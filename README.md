@@ -178,6 +178,46 @@ The packaged integrations live in `bin/runbook`.
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
+## T3 Code
+
+`subc t3 install` adds a provider named "Subconscious (Codex)" to T3 Code. T3 Code then runs Codex on your hosted Subconscious models. The integration has these limits:
+
+- It supports macOS and Linux. On Windows, `subc t3` fails with an error.
+- It supports Codex only, and the default profile only.
+- It needs the T3 Code settings file, `~/.t3/userdata/settings.json` (or `$T3CODE_HOME/userdata/settings.json`). Open T3 Code once to create it.
+
+```bash
+subc t3 install --dry-run   # run every check and print the plan
+subc t3 install
+subc t3 status              # needs no network and no key
+subc t3 uninstall
+```
+
+Install checks Codex, the default profile's saved key, and the live key-scoped model catalog before it changes anything. Then it does three things in order:
+
+1. It writes `~/.subconscious/bin/subc-t3-codex`, a launcher that pins this Node, this subc package, and the Codex binary that install found.
+2. It sets up the compaction hooks in `~/.subconscious/t3/codex/default`, a Codex home that only this provider uses.
+3. It adds the `subconscious-codex` entry to the T3 Code settings, with that launcher as the binary and that directory as the Codex home.
+
+If step 2 fails, the T3 Code settings stay unchanged. If step 3 fails, install says that the launcher and hooks stay in place, and `subc t3 uninstall` removes them. Before each change, install copies the settings file to `~/.subconscious/t3/backups/`. It refuses settings that are malformed or in the old `providers` format, settings under a managed policy, and a `subconscious-codex` provider that subc did not write. A second install repairs the subc entry and changes nothing else. T3 Code reloads its settings by itself; subc never restarts it.
+
+Each Codex session reads the default profile again, so a new key, gateway, or model takes effect at the next launch. T3 Code also starts Codex to probe it. The launcher handles each Codex command in one of three ways:
+
+- `app-server` and `exec` get the same Codex config as `subc codex`, from the default profile only. The launcher ignores `SUBC_*`, `SUBCONSCIOUS_*`, and `CODEX_API_KEY` in the T3 Code environment. If the key-scoped catalog cannot be read, Codex does not start. There is no fallback to the public or packaged model list.
+- `--version`, help, `mcp list`, and `mcp get` run the real Codex unchanged. They read no profile, make no request, and touch no hooks.
+- Every other Codex command fails with an error.
+
+Node computes the launch, and then the launcher `exec`s, so the process that T3 Code started becomes Codex. The model catalog is one file, `~/.subconscious/t3/codex/catalog/model-catalog.json`. The launcher replaces it only when its content changes.
+
+Limits of this first version:
+
+- The Codex home of the provider is separate from `~/.codex`, so its threads stay apart from your other Codex sessions. Your usual Codex skills, MCP servers, and plugins do not carry over. Codex apps and plugins stay off unless the default profile sets `CODEX_EXTERNAL_TOOLS=true`.
+- Codex can write its own `config.toml` and databases in that home. Codex 0.167.2 also creates `~/.codex/tmp`, even when `CODEX_HOME` points elsewhere. subc does not change `~/.codex/config.toml`.
+- The compaction hooks run only after you trust them with `/hooks` in Codex. T3 Code has no step to trust them, so they do nothing until then. The hook env file in that home holds the profile's key, with mode 600.
+- The launcher pins the Node and Codex paths from install time. If you move or upgrade either one, `subc t3 status` reports the launcher as broken or stale. Run `subc t3 install` again.
+
+`subc t3 uninstall` removes the `subconscious-codex` entry, the hooks, the launcher, and the catalog. It keeps the T3 Code threads, the other providers, and the Codex home of the provider with its sessions.
+
 ## Headless runs
 
 `subc <agent> headless PROMPT [args...]` runs one task without a terminal UI and exits with the agent's status. It works for `claude`, `codex`, `opencode`, `pi`, and `dsh`, and uses the same setup as an interactive launch. It never prompts: there is no update check, a missing agent fails with its install command, stdin is not read, and stdout carries only the agent's own output. Remaining arguments go to the agent, for example `subc claude headless "fix the failing test" --output-format stream-json --verbose`. subc reads `-p`/`--profile` and `--model` itself; put agent options with those names after `--`.

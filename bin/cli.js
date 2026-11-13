@@ -51,6 +51,7 @@ import {
   validateProfileName,
 } from './profiles.js';
 import { sessionsCommand } from './sessions.js';
+import { printT3Help, t3Command } from './t3.js';
 import { runTui } from './tui.js';
 import { showUpdateNotice } from './update-check.js';
 import { upgradeCommand } from './upgrade.js';
@@ -74,6 +75,8 @@ const OFFLINE_COMMANDS = new Set([
 ]);
 
 function needsNetwork(args) {
+  // subc t3 status and uninstall must work offline.
+  if (args[0] === 't3') return args[1] === 'install';
   return !OFFLINE_COMMANDS.has(args[0]) && !isHelpArg(args[1]);
 }
 
@@ -113,6 +116,9 @@ function printHelp() {
 ${agents}
     ${c.cyan}harness-manifest${c.reset}  Print how each agent is installed and launched (JSON)
 
+  ${c.bold}Hosts${c.reset}
+    ${c.cyan}t3${c.reset}           Add a Subconscious (Codex) provider to T3 Code (macOS, Linux)
+
   ${c.bold}Options${c.reset}
     ${c.dim}--model <id>${c.reset}   Model to use (profile MODEL, or first live catalog model if UNSET)
     ${c.dim}-p, --profile${c.reset}  Select a profile (default: default)
@@ -139,6 +145,7 @@ ${agents}
     ${c.dim}$${c.reset} subc pi install
     ${c.dim}$${c.reset} subc harness-manifest --json
     ${c.dim}$${c.reset} subc codex headless "fix the failing test"
+    ${c.dim}$${c.reset} subc t3 install --dry-run
     ${c.dim}$${c.reset} subc -p staging codex
 
   ${c.bold}Network${c.reset}
@@ -412,6 +419,13 @@ async function main() {
     if (systemCaEnabled && (await ensureSystemCa())) return;
   }
 
+  // T3 Code is a host, not an agent. It skips the update check, so status
+  // and uninstall make no request and install output stays predictable.
+  if (command === 't3') {
+    process.exitCode = await t3Command(args.slice(1), { profileName });
+    return;
+  }
+
   const launchTui =
     !command &&
     process.stdin.isTTY === true &&
@@ -473,6 +487,10 @@ async function main() {
     if (args[1] === 'cursor') {
       printRetiredCursor();
       process.exitCode = 1;
+      return;
+    }
+    if (args[1] === 't3') {
+      printT3Help();
       return;
     }
     const agent = resolveAgent(args[1]);
