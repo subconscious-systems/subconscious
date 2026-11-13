@@ -1,0 +1,207 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { after, before, test } from 'node:test';
+import { fileURLToPath } from 'node:url';
+import { agentById } from '../bin/agent-data.js';
+import { launchPlan } from '../bin/agent-launch.js';
+import { launchCommand, runSync } from './helpers/agent-command.js';
+import { fakeGateway, run } from './helpers/t3-sandbox.js';
+
+const skip = process.platform === 'win32';
+const HOOK = fileURLToPath(
+  new URL('../bin/runbook/codex/hook.sh', import.meta.url),
+);
+const TOOLS = ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin'];
+
+let gateway;
+let other;
+let root;
+
+before(async () => {
+  if (skip) return;
+  gateway = await fakeGateway();
+  other = await fakeGateway();
+  root = await fs.realpath(
+    await fs.mkdtemp(path.join(os.tmpdir(), 'subc-codex-hook-')),
+  );
+});
+
+after(async () => {
+  await gateway?.close();
+  await other?.close();
+  if (root) await fs.rm(root, { recursive: true, force: true });
+});
+
+/** A HOME whose env file names `other` and its key, as an older launch left it. */
+async function hookHome(name) {
+  const home = path.join(root, name);
+  await fs.mkdir(path.join(home, '.codex'), { recursive: true });
+  await fs.writeFile(
+    path.join(home, '.codex', 'subconscious-hooks.env'),
+    `export SUBCONSCIOUS_GATEWAY_URL='${other.url}'\nexport SUBCONSCIOUS_API_KEY='sk-env-file'\n`,
+    { mode: 0o600 },
+  );
+  return home;
+}
+
+function fireHook(home, env) {
+  return run('bash', [HOOK], {
+    env: { PATH: TOOLS.join(path.delimiter), HOME: home, ...env },
+    input: JSON.stringify({
+      hook_event_name: 'PreCompact',
+      session_id: 'thr_hooktest',
+      turn_id: 'turn_1',
+    }),
+  });
+}
+
+const hookPosts = (server) =>
+  server.requests.filter((request) => request.url === '/v1/agent-hooks');
+
+test('the hook sends nothing for a Codex session subc did not start', {
+  skip,
+}, async () => {
+  const home = await hookHome('plain-codex');
+  const result = await fireHook(home, {
+    SUBCONSCIOUS_API_KEY: 'sk-launch',
+    SUBCONSCIOUS_GATEWAY_URL: gateway.url,
+  });
+  assert.equal(result.code, 0);
+  assert.equal(result.stdout, '');
+  assert.deepEqual(hookPosts(gateway), []);
+  assert.deepEqual(hookPosts(other), []);
+});
+
+test("the hook reports with the launch's key and gateway, not the env file", {
+  skip,
+}, async () => {
+  const home = await hookHome('launched');
+  const result = await fireHook(home, {
+    SUBCONSCIOUS_CODEX_LAUNCH: 'subc',
+    SUBCONSCIOUS_API_KEY: 'sk-launch',
+    SUBCONSCIOUS_GATEWAY_URL: gateway.url,
+  });
+  assert.equal(result.code, 0);
+  const posts = hookPosts(gateway);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].authorization, 'Bearer sk-launch');
+  assert.equal(JSON.parse(posts[0].body).conversation_id, 'thr_hooktest');
+  assert.deepEqual(hookPosts(other), []);
+});
+
+test('the hook falls back to the env file when the launch gave no key', {
+  skip,
+}, async () => {
+  const home = await hookHome('env-file');
+  const before = hookPosts(other).length;
+  const result = await fireHook(home, { SUBCONSCIOUS_CODEX_LAUNCH: 'subc' });
+  assert.equal(result.code, 0);
+  const posts = hookPosts(other).slice(before);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].authorization, 'Bearer sk-env-file');
+});
+
+test('every subc Codex launch marks itself for the hook', () => {
+  const agent = agentById('codex');
+  const env = {
+    GATEWAY_URL: 'https://gateway.example',
+    API_KEY: 'sk-test',
+    MODEL: 'subconscious/glm-5.3-marathon',
+  };
+  for (const prompt of [undefined, 'task']) {
+    const plan = launchPlan(agent, { env, prompt });
+    assert.equal(plan.env.SUBCONSCIOUS_CODEX_LAUNCH, 'subc');
+  }
+});
+
+// A fake codex that saves its env, one NAME=VALUE per line, and its argv.
+const FAKE = `#!/bin/sh
+env > "$CAPTURED_ENV"
+printf '%s\\n' "$@" > "$CAPTURED_ARGS"
+`;
+
+async function runbookBox(name) {
+  const dir = path.join(root, name);
+  const bin = path.join(dir, 'bin');
+  const tmp = path.join(dir, 'tmp');
+  await fs.mkdir(bin, { recursive: true });
+  await fs.mkdir(tmp, { recursive: true });
+  await fs.writeFile(path.join(bin, 'codex'), FAKE, { mode: 0o755 });
+  const env = {
+    PATH: [bin, ...TOOLS].join(path.delimiter),
+    HOME: dir,
+    TMPDIR: tmp,
+    GATEWAY_URL: 'https://gateway.example',
+    API_KEY: 'sk-test',
+    MODEL: 'subconscious/glm-5.3-marathon',
+    CODEX_DIR: path.join(dir, '.codex'),
+    CAPTURED_ENV: path.join(dir, 'env.txt'),
+    CAPTURED_ARGS: path.join(dir, 'args.txt'),
+  };
+  const launch = (extra = {}) => {
+    const result = runSync(
+      launchCommand('codex', { env: { ...env, ...extra } }),
+    );
+    assert.equal(result.status, 0, result.stderr);
+  };
+  const captured = async () => ({
+    env: (await fs.readFile(env.CAPTURED_ENV, 'utf8')).split('\n'),
+    args: (await fs.readFile(env.CAPTURED_ARGS, 'utf8')).split('\n'),
+  });
+  return { dir, tmp, env, launch, captured };
+}
+
+test('an ordinary launch still merges hooks and writes a temp catalog', {
+  skip,
+}, async () => {
+  const box = await runbookBox('ordinary');
+  box.launch();
+  await fs.access(path.join(box.env.CODEX_DIR, 'hooks.json'));
+  const { args, env } = await box.captured();
+  const catalog = args
+    .find((arg) => arg.startsWith('model_catalog_json='))
+    .slice('model_catalog_json='.length);
+  // macOS mktemp -t ignores TMPDIR, so the file is in the user temp dir.
+  try {
+    assert.match(path.basename(catalog), /^codex-model-catalog\./);
+    await fs.access(catalog);
+  } finally {
+    await fs.rm(catalog, { force: true });
+  }
+  assert.ok(env.includes('SUBCONSCIOUS_CODEX_LAUNCH=subc'));
+});
+
+test('a protocol launch writes no hooks and reuses one catalog file', {
+  skip,
+}, async () => {
+  const box = await runbookBox('protocol');
+  const catalogDir = path.join(box.dir, 'catalog');
+  await fs.mkdir(catalogDir, { mode: 0o700 });
+  const catalog = path.join(catalogDir, 'model-catalog.json');
+  const protocol = {
+    SUBC_CODEX_PROTOCOL_LAUNCH: '1',
+    SUBC_CODEX_CATALOG_FILE: catalog,
+  };
+  box.launch(protocol);
+  const first = await fs.stat(catalog);
+  assert.equal(first.mode & 0o777, 0o600);
+  box.launch(protocol);
+  assert.equal((await fs.stat(catalog)).mtimeMs, first.mtimeMs);
+  assert.deepEqual(await fs.readdir(catalogDir), ['model-catalog.json']);
+  await assert.rejects(fs.access(box.env.CODEX_DIR));
+  assert.deepEqual(await fs.readdir(box.tmp), []);
+  const { env, args } = await box.captured();
+  assert.ok(args.includes(`model_catalog_json=${catalog}`));
+  assert.ok(!env.some((line) => line.startsWith('SUBC_CODEX_')), env.join(' '));
+  assert.ok(env.includes('SUBCONSCIOUS_CODEX_LAUNCH=subc'));
+  const models = JSON.parse(await fs.readFile(catalog, 'utf8')).models;
+  assert.equal(models[0].slug, 'subconscious/glm-5.3-marathon');
+
+  // A changed model list replaces the file in place.
+  box.launch({ ...protocol, MODEL: 'subconscious/other-model' });
+  const replaced = JSON.parse(await fs.readFile(catalog, 'utf8')).models;
+  assert.equal(replaced[0].slug, 'subconscious/other-model');
+  assert.deepEqual(await fs.readdir(catalogDir), ['model-catalog.json']);
+});

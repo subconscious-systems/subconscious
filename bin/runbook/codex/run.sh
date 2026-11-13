@@ -77,6 +77,33 @@ EOF
   } >"$catalog_file"
 }
 
+# Replace CATALOG_FILE only when its content changes. The temp file sits in
+# the same directory, so the rename is atomic and a reader never sees half a
+# catalog.
+replace_model_catalog() {
+  local catalog_file="$1" next
+  next="$(mktemp "$(dirname "$catalog_file")/.catalog.XXXXXX")"
+  chmod 600 "$next"
+  write_model_catalog "$next"
+  if cmp -s "$next" "$catalog_file"; then
+    rm -f "$next"
+  else
+    mv -f "$next" "$catalog_file"
+  fi
+}
+
+# A protocol launch is one a host such as T3 Code starts many times to probe
+# Codex (`subc t3`). It sets SUBC_CODEX_PROTOCOL_LAUNCH=1 and
+# SUBC_CODEX_CATALOG_FILE. It must not rewrite hooks on each probe, because
+# `subc t3 install` set them up once, and it reuses one catalog file instead of
+# a new temp file per probe. Every other launch leaves both unset.
+if [[ "${SUBC_CODEX_PROTOCOL_LAUNCH:-}" == "1" ]]; then
+  CATALOG_FILE="${SUBC_CODEX_CATALOG_FILE:?protocol launches need SUBC_CODEX_CATALOG_FILE}"
+  unset SUBC_CODEX_PROTOCOL_LAUNCH SUBC_CODEX_CATALOG_FILE
+  replace_model_catalog "$CATALOG_FILE"
+  subc_exec "{tempFile}" "$CATALOG_FILE" -- "$@"
+fi
+
 # The hooks library writes its env file from these two.
 API_KEY="$SUBCONSCIOUS_API_KEY"
 GATEWAY_URL="$SUBCONSCIOUS_GATEWAY_URL"

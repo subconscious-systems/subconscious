@@ -338,6 +338,11 @@ gateway with a larger tool limit. It also defaults reasoning effort to `max`,
 which is the highest effort accepted by the Subconscious models; override it
 with `subc codex --reasoning-effort high` when desired.
 
+The Codex compaction hook reports only for Codex sessions that subc started.
+subc sets `SUBCONSCIOUS_CODEX_LAUNCH` on each Codex launch, and the hook then
+uses the key and gateway of that launch. A plain `codex` session that reads the
+same `~/.codex/hooks.json` sends nothing.
+
 Persistent writes are merge/unmerge only. They never replace a user's
 `config.toml`, `opencode.json`, `models.json`, `hooks.json`, or VS Code
 provider list. Remove Subconscious files with the matching uninstall command:
