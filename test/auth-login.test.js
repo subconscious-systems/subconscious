@@ -71,7 +71,12 @@ test('loginCommand saves the polled key', async () => {
     });
   `;
   const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
-    env: { ...process.env, SUBC_CONFIG_DIR: dir, SUBCONSCIOUS_API_KEY: '' },
+    env: {
+      ...process.env,
+      SUBC_CONFIG_DIR: dir,
+      SUBCONSCIOUS_API_KEY: '',
+      SUBC_CREDENTIAL_STORE: 'file',
+    },
   });
   let stderr = '';
   child.stderr.on('data', (chunk) => {

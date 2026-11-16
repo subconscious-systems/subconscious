@@ -175,7 +175,8 @@ Usage:
   subc -p NAME logout
   subc logout help
 
-Remove the selected profile's saved API key. Non-secret settings are kept.
+Revoke the selected profile's login key on Subconscious, then remove the saved
+key. Keys not created by subc login stay active. Non-secret settings are kept.
 `,
   whoami: `
 Usage:
