@@ -122,8 +122,18 @@ PAYLOAD="$(jq -n \
   }'
 )"
 
-curl -sS -m 2 \
-  -H "Authorization: Bearer ${API_KEY}" \
+# The key goes to curl as a config file on stdin, never in argv, where any
+# local user could read it with ps. A key with a quote, a backslash or a line
+# break cannot be written safely into that config line, so send nothing.
+case "$API_KEY" in
+  *[\"\\$'\n'$'\r']*)
+    echo "subconscious codex hook: the API key contains a character the hook cannot send" >&2
+    fail_open
+    ;;
+esac
+
+printf 'header = "Authorization: Bearer %s"\n' "$API_KEY" | curl -sS -m 2 \
+  --config - \
   -H "Content-Type: application/json" \
   -H "x-subconscious-client: codex" \
   -d "$PAYLOAD" \

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { accessSync, constants } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -272,7 +273,7 @@ async function oldInstall(name, command) {
   return { codexDir, hookDst, hooksJson };
 }
 
-function ensureHooks(codexDir) {
+function ensureHooks(codexDir, env = {}) {
   return run(
     'bash',
     ['-c', `source "${HOOKS_LIB}" && codex_ensure_hooks best-effort`],
@@ -284,6 +285,7 @@ function ensureHooks(codexDir) {
         HOOK_SRC: HOOK,
         GATEWAY_URL: 'https://gateway.example',
         API_KEY: 'sk-test',
+        ...env,
       },
     },
   );
@@ -322,4 +324,89 @@ test('an entry with an old hook path is fixed in place', {
   assert.equal(hooks.PostCompact.length, 1);
   assert.equal(hooks.PostCompact[0].hooks[0].command, box.hookDst);
   assert.match(result.stdout, /type \/hooks inside Codex once/);
+});
+
+test('an entry with an old hook path is fixed when everything else is current', {
+  skip,
+}, async () => {
+  const box = await oldInstall('stale');
+  assert.equal((await ensureHooks(box.codexDir)).code, 0);
+  // Everything is current now. Point both entries at a path that is gone.
+  const stale = '/old/home/.codex/subconscious-hook.sh';
+  const text = await fs.readFile(box.hooksJson, 'utf8');
+  await fs.writeFile(box.hooksJson, text.split(box.hookDst).join(stale));
+  const result = await ensureHooks(box.codexDir);
+  assert.equal(result.code, 0, result.stderr);
+  const { hooks } = JSON.parse(await fs.readFile(box.hooksJson, 'utf8'));
+  assert.equal(hooks.PreCompact[0].hooks[0].command, box.hookDst);
+  assert.equal(hooks.PreCompact[1].hooks[0].command, '/usr/local/bin/my-hook');
+  assert.equal(hooks.PostCompact[0].hooks[0].command, box.hookDst);
+});
+
+/**
+ * A PATH whose grep, curl, cat and jq log their argv to `log`, then run the
+ * real tool. Any of them that gets the key in argv shows it to ps.
+ */
+async function argvSpies(name) {
+  const dir = path.join(root, name);
+  await fs.mkdir(dir, { recursive: true });
+  const log = path.join(dir, 'argv.log');
+  for (const tool of ['grep', 'curl', 'cat', 'jq']) {
+    const real = TOOLS.map((bin) => path.join(bin, tool)).find((file) => {
+      try {
+        accessSync(file, constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (!real) continue;
+    await fs.writeFile(
+      path.join(dir, tool),
+      `#!/bin/bash\nprintf '%s\\n' "${tool} $*" >>'${log}'\nexec '${real}' "$@"\n`,
+      { mode: 0o755 },
+    );
+  }
+  return { log, PATH: [dir, ...TOOLS].join(path.delimiter) };
+}
+
+test('the key never appears in the argv of a process', { skip }, async () => {
+  const key = 'sk-argv-secret-0123';
+  const spies = await argvSpies('argv-spies');
+  const box = await oldInstall('argv');
+  for (let i = 0; i < 2; i++) {
+    const result = await ensureHooks(box.codexDir, {
+      PATH: spies.PATH,
+      API_KEY: key,
+      GATEWAY_URL: gateway.url,
+    });
+    assert.equal(result.code, 0, result.stderr);
+  }
+  const before = hookPosts(gateway).length;
+  const fired = await fireHook(path.dirname(box.codexDir), {
+    PATH: spies.PATH,
+    SUBCONSCIOUS_CODEX_LAUNCH: 'subc',
+    SUBCONSCIOUS_API_KEY: key,
+    SUBCONSCIOUS_GATEWAY_URL: gateway.url,
+  });
+  assert.equal(fired.code, 0, fired.stderr);
+  const posts = hookPosts(gateway).slice(before);
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].authorization, `Bearer ${key}`);
+  const log = await fs.readFile(spies.log, 'utf8');
+  assert.match(log, /^curl /m, 'the spies saw curl run');
+  assert.ok(!log.includes(key), `key in argv:\n${log}`);
+});
+
+test('the hook sends nothing for a key it cannot quote', { skip }, async () => {
+  const home = await hookHome('bad-key');
+  const before = hookPosts(gateway).length;
+  const result = await fireHook(home, {
+    SUBCONSCIOUS_CODEX_LAUNCH: 'subc',
+    SUBCONSCIOUS_API_KEY: 'sk-"injected',
+    SUBCONSCIOUS_GATEWAY_URL: gateway.url,
+  });
+  assert.equal(result.code, 0);
+  assert.match(result.stderr, /cannot send/);
+  assert.equal(hookPosts(gateway).length, before);
 });
