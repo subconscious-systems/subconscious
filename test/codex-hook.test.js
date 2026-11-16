@@ -103,6 +103,27 @@ test('the hook falls back to the env file when the launch gave no key', {
   assert.equal(posts[0].authorization, 'Bearer sk-env-file');
 });
 
+test('a session with its own Codex home keeps its hook log there', {
+  skip,
+}, async () => {
+  const home = await hookHome('dedicated');
+  const codexHome = path.join(home, 'dedicated-codex');
+  await fs.mkdir(codexHome);
+  const result = await fireHook(home, {
+    SUBCONSCIOUS_CODEX_LAUNCH: 'subc',
+    SUBCONSCIOUS_API_KEY: 'sk-launch',
+    SUBCONSCIOUS_GATEWAY_URL: gateway.url,
+    CODEX_HOME: codexHome,
+  });
+  assert.equal(result.code, 0);
+  await fs.access(
+    path.join(codexHome, 'subconscious-hook-logs', 'thr_hooktest.log'),
+  );
+  await assert.rejects(
+    fs.access(path.join(home, '.codex', 'subconscious-hook-logs')),
+  );
+});
+
 test('every subc Codex launch marks itself for the hook', () => {
   const agent = agentById('codex');
   const env = {

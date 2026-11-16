@@ -29,6 +29,11 @@ if [[ -z "${SUBCONSCIOUS_CODEX_LAUNCH:-}" ]]; then
   fail_open
 fi
 
+# The Codex home of this session. Ordinary subc launches leave CODEX_HOME
+# unset, so this is ~/.codex. A host that gives Codex its own home, such as
+# `subc t3`, keeps the env file and the logs of this hook in that home.
+CODEX_DIR="${CODEX_HOME:-${HOME}/.codex}"
+
 # The launch that started this session already gave Codex its key and gateway.
 # Use that pair first, so a session started on one profile never reports with
 # the key another launch saved to the env file.
@@ -36,15 +41,15 @@ if [[ -n "${SUBCONSCIOUS_API_KEY:-}" ]]; then
   GATEWAY_URL="${SUBCONSCIOUS_GATEWAY_URL:-}"
   API_KEY="$SUBCONSCIOUS_API_KEY"
 else
-  CONFIG="${SUBCONSCIOUS_HOOKS_ENV:-${HOME}/.codex/subconscious-hooks.env}"
+  CONFIG="${SUBCONSCIOUS_HOOKS_ENV:-${CODEX_DIR}/subconscious-hooks.env}"
   if [[ -f "$CONFIG" ]]; then
     # shellcheck disable=SC1090
     source "$CONFIG"
   fi
   # Older overwrite-style setup also wrote subconscious.env; keep reading it.
-  if [[ -f "${HOME}/.codex/subconscious.env" ]]; then
+  if [[ -f "${CODEX_DIR}/subconscious.env" ]]; then
     # shellcheck disable=SC1090
-    source "${HOME}/.codex/subconscious.env"
+    source "${CODEX_DIR}/subconscious.env"
   fi
   GATEWAY_URL="${SUBCONSCIOUS_GATEWAY_URL:-}"
   API_KEY="${SUBCONSCIOUS_API_KEY:-}"
@@ -68,7 +73,7 @@ if [[ -z "$INPUT" ]]; then
 fi
 
 # Local fire-log for capture/debug (never blocks).
-FIRE_LOG_DIR="${SUBCONSCIOUS_CODEX_HOOK_LOG_DIR:-${HOME}/.codex/subconscious-hook-logs}"
+FIRE_LOG_DIR="${SUBCONSCIOUS_CODEX_HOOK_LOG_DIR:-${CODEX_DIR}/subconscious-hook-logs}"
 mkdir -p "$FIRE_LOG_DIR" 2>/dev/null || true
 
 HOOK_EVENT="$(printf '%s' "$INPUT" | jq -r '.hook_event_name // empty' 2>/dev/null || true)"
