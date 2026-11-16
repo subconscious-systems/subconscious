@@ -205,3 +205,100 @@ test('a protocol launch writes no hooks and reuses one catalog file', {
   assert.equal(replaced[0].slug, 'subconscious/other-model');
   assert.deepEqual(await fs.readdir(catalogDir), ['model-catalog.json']);
 });
+
+const HOOKS_LIB = fileURLToPath(
+  new URL('../bin/runbook/codex/hooks-lib.sh', import.meta.url),
+);
+
+/**
+ * A ~/.codex as an older subc left it: the previous hook script, and a
+ * hooks.json whose PreCompact has subc's group and then one of the user's.
+ */
+async function oldInstall(name, command) {
+  const codexDir = path.join(root, name, '.codex');
+  await fs.mkdir(codexDir, { recursive: true });
+  const hookDst = path.join(codexDir, 'subconscious-hook.sh');
+  await fs.writeFile(hookDst, '#!/usr/bin/env bash\n# previous hook\n', {
+    mode: 0o755,
+  });
+  const ours = (statusMessage) => ({
+    hooks: [
+      {
+        type: 'command',
+        command: command ?? hookDst,
+        timeout: 3,
+        statusMessage,
+      },
+    ],
+  });
+  const hooksJson = path.join(codexDir, 'hooks.json');
+  await fs.writeFile(
+    hooksJson,
+    `${JSON.stringify(
+      {
+        hooks: {
+          PreCompact: [
+            ours('Reporting compaction start'),
+            { hooks: [{ type: 'command', command: '/usr/local/bin/my-hook' }] },
+          ],
+          PostCompact: [ours('Reporting compaction end')],
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return { codexDir, hookDst, hooksJson };
+}
+
+function ensureHooks(codexDir) {
+  return run(
+    'bash',
+    ['-c', `source "${HOOKS_LIB}" && codex_ensure_hooks best-effort`],
+    {
+      env: {
+        PATH: TOOLS.join(path.delimiter),
+        HOME: path.dirname(codexDir),
+        CODEX_DIR: codexDir,
+        HOOK_SRC: HOOK,
+        GATEWAY_URL: 'https://gateway.example',
+        API_KEY: 'sk-test',
+      },
+    },
+  );
+}
+
+test('a new hook script leaves hooks.json and its trust unchanged', {
+  skip,
+}, async () => {
+  const box = await oldInstall('upgrade');
+  const before = await fs.readFile(box.hooksJson);
+  const result = await ensureHooks(box.codexDir);
+  assert.equal(result.code, 0, result.stderr);
+  // Codex keys trust on each entry's position and hashes the entry, so the
+  // file must not move or change.
+  assert.deepEqual(await fs.readFile(box.hooksJson), before);
+  assert.deepEqual(await fs.readFile(box.hookDst), await fs.readFile(HOOK));
+  assert.doesNotMatch(result.stdout, /trust/);
+  const envFile = path.join(box.codexDir, 'subconscious-hooks.env');
+  assert.match(await fs.readFile(envFile, 'utf8'), /sk-test/);
+});
+
+test('an entry with an old hook path is fixed in place', {
+  skip,
+}, async () => {
+  const box = await oldInstall(
+    'moved',
+    '/old/home/.codex/subconscious-hook.sh',
+  );
+  const result = await ensureHooks(box.codexDir);
+  assert.equal(result.code, 0, result.stderr);
+  const { hooks } = JSON.parse(await fs.readFile(box.hooksJson, 'utf8'));
+  assert.equal(hooks.PreCompact.length, 2);
+  assert.equal(hooks.PreCompact[0].hooks[0].command, box.hookDst);
+  // The user's hook keeps its position, so it keeps its trust.
+  assert.equal(hooks.PreCompact[1].hooks[0].command, '/usr/local/bin/my-hook');
+  assert.equal(hooks.PostCompact.length, 1);
+  assert.equal(hooks.PostCompact[0].hooks[0].command, box.hookDst);
+  assert.match(result.stdout, /type \/hooks inside Codex once/);
+});

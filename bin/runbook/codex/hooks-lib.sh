@@ -85,10 +85,36 @@ codex_hooks_current() {
   grep -q "SUBCONSCIOUS_GATEWAY_URL='${GATEWAY_URL%/}'" "$HOOKS_ENV_FILE" || return 1
   grep -q "SUBCONSCIOUS_API_KEY='${API_KEY}'" "$HOOKS_ENV_FILE" || return 1
   # Our entry present under both compaction events, and exactly once each.
-  jq -e --arg m "$MARKER" '
-    def ours: [ .[]?.hooks[]? | select((.command // "") | tostring | contains($m)) ] | length;
-    (.hooks.PreCompact | ours) == 1 and (.hooks.PostCompact | ours) == 1
+  codex_hook_entries_once
+}
+
+# True when our entry is under both compaction events exactly once. With an
+# argument, each of those entries must also run that command.
+codex_hook_entries_once() {
+  jq -e --arg m "$MARKER" --arg cmd "${1:-}" '
+    def ours: [ .[]?.hooks[]? | select((.command // "") | tostring | contains($m)) ];
+    [.hooks.PreCompact, .hooks.PostCompact]
+    | all(ours | length == 1 and ($cmd == "" or .[0].command == $cmd))
   ' "$HOOKS_JSON" >/dev/null 2>&1
+}
+
+# Point our existing entries at $HOOK_DST where they are, so every other
+# group and hook keeps its position in hooks.json.
+codex_set_hook_commands() {
+  local tmp
+  tmp="$(mktemp)"
+  jq --arg marker "$MARKER" --arg cmd "$HOOK_DST" '
+    def point:
+      map(.hooks = ((.hooks // []) | map(
+        if ((.command // "") | tostring | contains($marker)) then .command = $cmd else . end
+      )));
+    .hooks.PreCompact |= point
+    | .hooks.PostCompact |= point
+  ' "$HOOKS_JSON" >"$tmp" || {
+    rm -f "$tmp"
+    return 1
+  }
+  mv "$tmp" "$HOOKS_JSON"
 }
 
 # codex_ensure_hooks [strict|best-effort]
@@ -129,9 +155,26 @@ codex_ensure_hooks() {
   fi
   codex_write_hook_script
   codex_write_hooks_env
+  # Codex trusts a hook by the hash of its hooks.json entry, and the key of
+  # that trust is the entry's position. A new hook script or a new key changes
+  # neither, so when our entries are already in place hooks.json stays byte
+  # for byte as it is, and every hook keeps the trust it has.
+  if codex_hook_entries_once "$HOOK_DST"; then
+    return 0
+  fi
   # run.sh calls this behind `|| true`, which turns off `set -e` in here, so a
   # failed merge has to be caught by hand or it reports success.
-  if ! codex_strip_hook_entries || ! codex_append_hook_groups; then
+  if codex_hook_entries_once; then
+    # Our entries run another path. Fix them in place, so a hook of the user's
+    # that follows ours keeps its position and its trust.
+    if ! codex_set_hook_commands; then
+      echo "warning: could not update Subconscious hooks in ${HOOKS_JSON}; leaving your hooks unchanged" >&2
+      if [[ "$mode" == "strict" ]]; then
+        return 1
+      fi
+      return 0
+    fi
+  elif ! codex_strip_hook_entries || ! codex_append_hook_groups; then
     echo "warning: could not merge Subconscious hooks into ${HOOKS_JSON}; leaving your hooks unchanged" >&2
     if [[ "$mode" == "strict" ]]; then
       return 1
