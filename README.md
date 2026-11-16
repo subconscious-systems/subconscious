@@ -203,7 +203,7 @@ If step 2 fails, the T3 Code settings stay unchanged. If step 3 fails, install s
 
 Each Codex session reads the default profile again, so a new key, gateway, or model takes effect at the next launch. T3 Code also starts Codex to probe it. The launcher handles each Codex command in one of three ways:
 
-- `app-server` and `exec` get the same Codex config as `subc codex`, from the default profile only. The launcher ignores `SUBC_*`, `SUBCONSCIOUS_*`, and `CODEX_API_KEY` in the T3 Code environment. If the key-scoped catalog cannot be read, Codex does not start. There is no fallback to the public or packaged model list.
+- `app-server` and `exec` get the same Codex config as `subc codex`, from the default profile only. The launcher ignores `SUBC_*`, `SUBCONSCIOUS_*`, and the Codex inputs that `subc codex` reads (such as `CODEX_EXTERNAL_TOOLS` and `CODEX_REASONING_EFFORT`) in the T3 Code environment. Codex gets no `CODEX_API_KEY`, because the provider reads its key from `SUBCONSCIOUS_API_KEY`. If the key-scoped catalog cannot be read, Codex does not start. There is no fallback to the public or packaged model list.
 - `--version`, help, `mcp list`, and `mcp get` run the real Codex unchanged. They read no profile, make no request, and touch no hooks.
 - Every other Codex command fails with an error.
 

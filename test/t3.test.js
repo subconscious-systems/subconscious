@@ -190,7 +190,9 @@ test('an app-server launch uses only the default profile and the live catalog', 
 
   const { env } = record;
   assert.equal(env.SUBCONSCIOUS_API_KEY, GOOD_KEY);
-  assert.equal(env.CODEX_API_KEY, GOOD_KEY);
+  // The provider reads SUBCONSCIOUS_API_KEY. Codex's OpenAI credential
+  // stays empty, so a launch switched back to OpenAI has no key to send.
+  assert.equal(env.CODEX_API_KEY, undefined);
   assert.equal(env.SUBCONSCIOUS_GATEWAY_URL, gateway.url);
   assert.equal(env.SUBCONSCIOUS_MODELS, MODELS.join('\n'));
   assert.equal(env.SUBCONSCIOUS_CODEX_LAUNCH, 'subc');
@@ -381,6 +383,37 @@ test('install ignores inherited keys and gateways', { skip }, async () => {
   });
   assert.equal(result.code, 1);
   assert.match(result.stderr, /no saved API key/);
+});
+
+test("T3 Code's environment cannot tune Codex past the profile", {
+  skip,
+}, async () => {
+  const sandbox = installed;
+  const log = logFile(sandbox, 't3-tuning');
+  const result = await launch(sandbox, ['app-server'], {
+    log,
+    env: {
+      CODEX_API_KEY: 'sk-openai-from-t3',
+      CODEX_EXTERNAL_TOOLS: 'true',
+      CODEX_REASONING_EFFORT: 'low',
+      CODEX_CONTEXT_WINDOW: '1234',
+      MAX_CONCURRENT_SUBAGENTS: '99',
+    },
+  });
+  assert.equal(result.code, 0, result.stderr);
+  const [record] = await readRecords(log);
+  assert.ok(record.args.includes('features.apps=false'));
+  assert.ok(record.args.includes('features.plugins=false'));
+  assert.ok(record.args.includes('apps._default.enabled=false'));
+  assert.ok(!record.args.includes('model_reasoning_effort=low'));
+  assert.ok(
+    !record.args.includes('agents.max_concurrent_threads_per_session=99'),
+  );
+  assert.ok(
+    record.catalog.models.every((model) => model.context_window !== 1234),
+  );
+  assert.equal(record.env.CODEX_API_KEY, undefined);
+  assert.notEqual(record.env.CODEX_EXTERNAL_TOOLS, 'true');
 });
 
 test('each launch reads the default profile again', { skip }, async () => {
