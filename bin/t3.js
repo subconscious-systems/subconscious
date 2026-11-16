@@ -181,7 +181,18 @@ async function hookStatus(codexHome) {
     readable: true,
     script: await exists(path.join(codexHome, HOOK_MARKER)),
     envFile: await exists(path.join(codexHome, 'subconscious-hooks.env')),
+    envMode: null,
   };
+  if (status.envFile) {
+    try {
+      const stat = await fs.stat(
+        path.join(codexHome, 'subconscious-hooks.env'),
+      );
+      status.envMode = stat.mode & 0o777;
+    } catch {
+      // Removed since the check above.
+    }
+  }
   const text = await readText(hooksJson);
   if (text === null) return status;
   try {
@@ -346,7 +357,7 @@ async function install({ dryRun }) {
   await writeLauncher(paths.launcher, script);
   if (runHookScript(paths, 'install', launch) !== 0)
     return failWith(
-      `Could not set up the compaction hooks in ${paths.codexHome}. T3 Code settings were not changed.`,
+      `Could not set up the compaction hooks in ${paths.codexHome}. T3 Code settings were not changed. The launcher ${paths.launcher} stays; subc t3 uninstall removes it.`,
     );
   await writeState(paths, {
     schema: 1,
@@ -442,7 +453,7 @@ async function status() {
   const hookState = !hooks.readable
     ? `${hooks.hooksJson} is not valid JSON`
     : hooks.entries
-      ? `${hooks.entries} entries${hooks.script ? '' : ', hook script missing'}${hooks.envFile ? ', env file present (mode 600)' : ''}`
+      ? `${hooks.entries} entries${hooks.script ? '' : ', hook script missing'}${hooks.envFile ? `, env file present (mode ${hooks.envMode?.toString(8) ?? 'unknown'}${hooks.envMode !== null && hooks.envMode & 0o077 ? ', readable by others' : ''})` : ''}`
       : 'not installed';
   line(
     'Hooks',
@@ -467,7 +478,10 @@ async function uninstall() {
         : `T3 Code has no ${T3_INSTANCE_ID} provider from subc.`,
     );
   } catch (error) {
-    problems.push(`T3 Code settings were not changed: ${error.message}`);
+    problems.push(
+      `T3 Code settings were not changed: ${error.message}`,
+      `T3 Code still lists ${T3_DISPLAY_NAME}, and it fails to start until you remove it in T3 Code, or fix the settings and run subc t3 uninstall again.`,
+    );
   }
   const report = await inspectT3(target);
   if (report.duplicates.length)

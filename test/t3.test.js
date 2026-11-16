@@ -527,7 +527,7 @@ test('status and uninstall work offline, without a key or valid settings', {
   assert.equal(status.code, 0, status.stderr);
   assert.match(status.stdout, /subconscious-codex: installed/);
   assert.match(status.stdout, /subc-t3-codex: current/);
-  assert.match(status.stdout, /2 entries/);
+  assert.match(status.stdout, /2 entries, env file present \(mode 600\)/);
 
   const result = await subc(sandbox, ['t3', 'uninstall']);
   assert.equal(result.code, 0, result.stderr);
@@ -555,6 +555,23 @@ test('status and uninstall work offline, without a key or valid settings', {
   assert.match(after.stdout, /subc-t3-codex: missing/);
 });
 
+test('uninstall says the provider stays when settings cannot change', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  await fs.writeFile(
+    path.join(sandbox.t3Home, 'userdata', 'server-runtime.json'),
+    JSON.stringify({ managedPolicy: { locked: true } }),
+  );
+  const result = await subc(sandbox, ['t3', 'uninstall']);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /managed policy/);
+  assert.match(
+    result.stderr,
+    /T3 Code still lists Subconscious \(Codex\), and it fails to start/,
+  );
+});
+
 test('install stops before T3 settings when hook setup fails', {
   skip,
 }, async () => {
@@ -565,6 +582,10 @@ test('install stops before T3 settings when hook setup fails', {
   const result = await subc(sandbox, ['t3', 'install']);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /T3 Code settings were not changed/);
+  assert.match(
+    result.stderr,
+    /launcher .* stays; subc t3 uninstall removes it/,
+  );
   assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), settings);
 });
 
