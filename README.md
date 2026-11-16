@@ -212,7 +212,7 @@ Node computes the launch, and then the launcher `exec`s, so the process that T3 
 Limits of this first version:
 
 - The Codex home of the provider is separate from `~/.codex`, so its threads stay apart from your other Codex sessions. Your usual Codex skills, MCP servers, and plugins do not carry over. Codex apps and plugins stay off unless the default profile sets `CODEX_EXTERNAL_TOOLS=true`.
-- Codex can write its own `config.toml` and databases in that home. Codex 0.167.2 also creates `~/.codex/tmp`, even when `CODEX_HOME` points elsewhere. subc does not change `~/.codex/config.toml`.
+- Codex can write its own `config.toml` and databases in that home. subc does not write to `~/.codex`. It runs `codex --version` with a throwaway `CODEX_HOME`, so even that check leaves `~/.codex` alone.
 - The compaction hooks run only after you trust them with `/hooks` in Codex. T3 Code has no step to trust them, so they do nothing until then. The hook env file in that home holds the profile's key, with mode 600.
 - The launcher pins the Node and Codex paths from install time. If you move or upgrade either one, `subc t3 status` reports the launcher as broken or stale. Run `subc t3 install` again.
 

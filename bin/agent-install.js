@@ -201,6 +201,7 @@ export function readClaudeVersion(bin, binDir, options = {}) {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
         ...process.env,
+        ...options.env,
         PATH: augmentPath(
           [binDir, ...candidateBinDirs()].filter(Boolean),
           binDir,

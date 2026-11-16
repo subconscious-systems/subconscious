@@ -9,7 +9,8 @@ export const CLI = fileURLToPath(new URL('../../bin/cli.js', import.meta.url));
 export const GOOD_KEY = 'sk-sandbox-good-0123456789';
 export const MODELS = ['subconscious/sandbox-a', 'subconscious/sandbox-b'];
 
-// A fake codex: --version prints a version; anything else records its argv,
+// A fake codex: --version creates CODEX_HOME/tmp, as the real Codex does on
+// every start, and prints a version; anything else records its argv,
 // env, stdin, and the catalog it was given, then prints one JSON line so a
 // test can check that stdout carries nothing else. FAKE_CODEX_SLEEP keeps it
 // alive in the same process, as a real app-server would be.
@@ -17,6 +18,8 @@ const FAKE_CODEX = `#!/usr/bin/env node
 const fs = require('fs');
 const args = process.argv.slice(2);
 if (args[0] === '--version') {
+  const home = process.env.CODEX_HOME || require('path').join(require('os').homedir(), '.codex');
+  fs.mkdirSync(require('path').join(home, 'tmp'), { recursive: true });
   process.stdout.write('codex-cli 0.167.2\\n');
   process.exit(0);
 }

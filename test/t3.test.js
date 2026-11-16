@@ -285,6 +285,9 @@ test('capability probes run the real Codex unchanged, offline', {
     ['exec', '--help'],
   ];
   const requests = gateway.requests.length;
+  // Codex itself creates CODEX_HOME/tmp on every start. That is the
+  // provider's own home, so it is not a write by subc.
+  await fs.mkdir(path.join(sandbox.codexHome, 'tmp'), { recursive: true });
   const before = await snapshot(sandbox.subc);
   for (const args of probes) {
     const log = logFile(sandbox, `probe-${args.join('-').replace(/\W/g, '')}`);

@@ -258,7 +258,17 @@ async function locateCodex() {
     throw new T3LaunchError(
       `Codex CLI is not installed. Install it with npm i -g ${agent.install.package}, then retry.`,
     );
-  const version = readClaudeVersion('codex', binDir);
+  // Codex writes helper files under CODEX_HOME/tmp on every start, even for
+  // --version. A throwaway home keeps the check, and a dry run, off ~/.codex.
+  const probeHome = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-t3-codex-'));
+  let version;
+  try {
+    version = readClaudeVersion('codex', binDir, {
+      env: { CODEX_HOME: probeHome },
+    });
+  } finally {
+    await fs.rm(probeHome, { recursive: true, force: true });
+  }
   if (!version)
     throw new T3LaunchError(
       `Could not read the version of ${path.join(binDir, 'codex')}.`,
