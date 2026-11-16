@@ -333,7 +333,7 @@ test('an entry T3 drops during its reload is written again', {
   assert.ok((await box.read()).providerInstances[T3_INSTANCE_ID]);
 });
 
-test('concurrent writes are never overwritten with older content', {
+test('a write that lands before the compare is kept and retried', {
   skip,
 }, async () => {
   const box = await t3Home({ ...BASE, counter: 0 });
@@ -397,4 +397,39 @@ test('backups are pruned to the last ten', { skip }, async () => {
     await removeT3Provider(box.target, { backupDir: box.backupDir });
   }
   assert.equal((await fs.readdir(box.backupDir)).length, 10);
+});
+
+test('a ~ path or a symlink to the launcher counts as the launcher', {
+  skip,
+}, async () => {
+  const box = await t3Home(BASE);
+  const home = path.join(box.root, 'home');
+  const launcher = path.join(home, '.subconscious', 'bin', 'subc-t3-codex');
+  await fs.mkdir(path.dirname(launcher), { recursive: true });
+  await fs.writeFile(launcher, '#!/bin/sh\n', { mode: 0o755 });
+  const link = path.join(box.root, 'link-to-launcher');
+  await fs.symlink(launcher, link);
+  const target = { ...box.target, launcherPath: launcher };
+  const previousHome = process.env.HOME;
+  process.env.HOME = home;
+  try {
+    await fs.writeFile(
+      box.file,
+      JSON.stringify({
+        ...BASE,
+        providerInstances: {
+          [T3_INSTANCE_ID]: ours(
+            {},
+            { binaryPath: '~/.subconscious/bin/subc-t3-codex' },
+          ),
+          'my-subc': ours({}, { binaryPath: link }),
+        },
+      }),
+    );
+    const report = await inspectT3(target);
+    assert.equal(report.entry, 'owned');
+    assert.deepEqual(report.duplicates, ['my-subc']);
+  } finally {
+    process.env.HOME = previousHome;
+  }
 });

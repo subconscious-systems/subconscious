@@ -14,6 +14,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
+import { realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -153,11 +154,26 @@ function parseSettings(text) {
   return { settings };
 }
 
+// T3 Code expands a leading ~ in binaryPath, and a symlink to the launcher
+// runs the launcher, so both count as the same file.
+function canonicalPath(file) {
+  const expanded =
+    file === '~' || file.startsWith('~/')
+      ? path.join(os.homedir(), file.slice(1))
+      : file;
+  const resolved = path.resolve(expanded);
+  try {
+    return realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 function sameFile(left, right) {
   return (
     typeof left === 'string' &&
     typeof right === 'string' &&
-    path.resolve(left) === path.resolve(right)
+    canonicalPath(left) === canonicalPath(right)
   );
 }
 
@@ -328,9 +344,14 @@ async function backup(text, backupDir) {
 }
 
 /**
- * Replace the file only while it still holds `expected`. The new text goes to
- * a temp file beside the target with the target's mode, and a rename puts it
- * in place, so T3 never reads half a file.
+ * Replace the file when it still holds `expected`. The new text goes to a
+ * temp file beside the target with the target's mode, and a rename puts it in
+ * place, so T3 never reads half a file.
+ *
+ * The check and the rename are two steps. A T3 Code save that lands between
+ * them is lost. T3 Code takes no lock that subc could share, so this only
+ * keeps the window small: the compare runs right before the rename. T3 Code
+ * saves only when the user changes a setting.
  */
 async function replaceIfUnchanged(target, mode, expected, next) {
   const temp = path.join(
