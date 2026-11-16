@@ -10,6 +10,7 @@ import {
   resolveAgentEnv,
   resolveInputs,
 } from '../bin/agent-launch.js';
+import { restartWithCallerEnv } from '../bin/t3-launch.js';
 import {
   fakeGateway,
   GOOD_KEY,
@@ -725,4 +726,56 @@ test('install from a package path with spaces pins that adapter', {
   assert.equal(started.code, 0, started.stderr);
   const [record] = await readRecords(log);
   assert.equal(record.args.at(-1), 'app-server');
+});
+
+test('a failed SYSTEM_CA restart isolates the env again before the launch', async () => {
+  const original = {
+    PATH: '/usr/bin',
+    SUBCONSCIOUS_API_KEY: 'sk-inherited-evil',
+    SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9/evil',
+    CODEX_API_KEY: 'sk-codex-evil',
+  };
+  const configDir = path.join(ROOT, 'no-such-config');
+  for (const ran of [true, false]) {
+    const env = { PATH: '/usr/bin' };
+    let seen;
+    const restarted = await restartWithCallerEnv({
+      env,
+      original,
+      configDir,
+      restart: async () => {
+        seen = { ...env };
+        return ran;
+      },
+    });
+    assert.equal(restarted, ran);
+    // The child gets the caller's env and isolates it itself.
+    assert.deepEqual(seen, original);
+    if (ran) continue;
+    assert.deepEqual(env, { PATH: '/usr/bin', SUBC_CONFIG_DIR: configDir });
+  }
+});
+
+test('status flags hook entries that run another path, and install fixes them', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const hooksJson = path.join(sandbox.codexHome, 'hooks.json');
+  const hookScript = path.join(sandbox.codexHome, 'subconscious-hook.sh');
+  const text = await fs.readFile(hooksJson, 'utf8');
+  await fs.writeFile(
+    hooksJson,
+    text.split(hookScript).join('/old/home/.codex/subconscious-hook.sh'),
+  );
+  const stale = await subc(sandbox, ['t3', 'status']);
+  assert.equal(stale.code, 0, stale.stderr);
+  assert.match(stale.stdout, /2 entries, 2 run another path/);
+
+  const result = await subc(sandbox, ['t3', 'install']);
+  assert.equal(result.code, 0, result.stderr);
+  const hooks = JSON.parse(await fs.readFile(hooksJson, 'utf8')).hooks;
+  for (const event of ['PreCompact', 'PostCompact'])
+    assert.equal(hooks[event][0].hooks[0].command, hookScript);
+  const fixed = await subc(sandbox, ['t3', 'status']);
+  assert.doesNotMatch(fixed.stdout, /run another path/);
 });

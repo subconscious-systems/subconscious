@@ -178,6 +178,9 @@ async function hookStatus(codexHome) {
   const status = {
     hooksJson,
     entries: 0,
+    // Our entries whose command is not this home's hook script, such as a
+    // path copied from ~/.codex. Codex cannot run them.
+    stale: 0,
     readable: true,
     script: await exists(path.join(codexHome, HOOK_MARKER)),
     envFile: await exists(path.join(codexHome, 'subconscious-hooks.env')),
@@ -195,14 +198,18 @@ async function hookStatus(codexHome) {
   }
   const text = await readText(hooksJson);
   if (text === null) return status;
+  const hookScript = path.join(codexHome, HOOK_MARKER);
   try {
     const hooks = JSON.parse(text)?.hooks ?? {};
     for (const groups of Object.values(hooks)) {
       if (!Array.isArray(groups)) continue;
       for (const group of groups)
-        for (const hook of group?.hooks ?? [])
-          if (String(hook?.command ?? '').includes(HOOK_MARKER))
-            status.entries++;
+        for (const hook of group?.hooks ?? []) {
+          const command = String(hook?.command ?? '');
+          if (!command.includes(HOOK_MARKER)) continue;
+          status.entries++;
+          if (command !== hookScript) status.stale++;
+        }
     }
   } catch {
     status.readable = false;
@@ -453,7 +460,7 @@ async function status() {
   const hookState = !hooks.readable
     ? `${hooks.hooksJson} is not valid JSON`
     : hooks.entries
-      ? `${hooks.entries} entries${hooks.script ? '' : ', hook script missing'}${hooks.envFile ? `, env file present (mode ${hooks.envMode?.toString(8) ?? 'unknown'}${hooks.envMode !== null && hooks.envMode & 0o077 ? ', readable by others' : ''})` : ''}`
+      ? `${hooks.entries} entries${hooks.stale ? `, ${hooks.stale} run another path (run subc t3 install to fix)` : ''}${hooks.script ? '' : ', hook script missing'}${hooks.envFile ? `, env file present (mode ${hooks.envMode?.toString(8) ?? 'unknown'}${hooks.envMode !== null && hooks.envMode & 0o077 ? ', readable by others' : ''})` : ''}`
       : 'not installed';
   line(
     'Hooks',

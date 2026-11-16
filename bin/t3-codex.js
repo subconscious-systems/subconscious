@@ -184,10 +184,13 @@ async function configuredPlan(own) {
   const systemCa = profiles.systemCaEnabledFor(profile);
   if (network.refuseUnsupportedSystemCa(systemCa, profile.path)) return null;
   if (systemCa && !process.execArgv.includes('--use-system-ca')) {
-    // The child recomputes everything, so it must see the caller's env.
-    for (const name of Object.keys(process.env)) delete process.env[name];
-    Object.assign(process.env, original);
-    if (await network.ensureSystemCa({ interactive: false })) return null;
+    const restarted = await launch.restartWithCallerEnv({
+      env: process.env,
+      original,
+      configDir: own.configDir,
+      restart: () => network.ensureSystemCa({ interactive: false }),
+    });
+    if (restarted) return null;
   }
   const resolved = await launch.resolveT3Launch();
   const plan = await launch.t3CodexPlan({

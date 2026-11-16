@@ -65,6 +65,28 @@ export function isolateLaunchEnv(env, configDir) {
   return env;
 }
 
+/**
+ * Run `restart` (the SYSTEM_CA re-exec) with the caller's original env, since
+ * the child recomputes everything and isolates its own env. True when the
+ * child ran. When the restart fails, this process continues the launch, so
+ * the env is isolated again first: the caller's SUBCONSCIOUS_* and CODEX_*
+ * variables must not steer it.
+ */
+export async function restartWithCallerEnv({
+  env,
+  original,
+  configDir,
+  restart,
+}) {
+  for (const name of Object.keys(env)) delete env[name];
+  Object.assign(env, original);
+  if (await restart()) return true;
+  for (const name of Object.keys(env)) delete env[name];
+  Object.assign(env, original);
+  isolateLaunchEnv(env, configDir);
+  return false;
+}
+
 function gatewayOrigin(baseUrl) {
   try {
     return new URL(baseUrl).origin;
