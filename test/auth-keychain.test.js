@@ -166,7 +166,15 @@ test('login keeps a stored key the platform still accepts', async () => {
   await fs.rm(dir, { recursive: true, force: true });
 });
 
-test('logout removes the Keychain item', async () => {
+// A platform stand-in for POST /api/cli/logout that records the bearer key.
+const logoutFetch = (status, body = { revoked: true }) => `
+  async (url, init) => {
+    globalThis.logoutCalls = [...(globalThis.logoutCalls ?? []), { url: String(url), auth: init.headers.Authorization }];
+    return { ok: ${status} >= 200 && ${status} < 300, status: ${status}, json: async () => (${JSON.stringify(body)}) };
+  }
+`;
+
+async function logoutWith(fetchSource) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-kc-out-'));
   const store = path.join(dir, 'fake-keychain.json');
   await fs.writeFile(store, JSON.stringify({ default: 'sk-gw-current1.k' }));
@@ -174,13 +182,57 @@ test('logout removes the Keychain item', async () => {
     dir,
     `${FAKE_STORE(store)}
     import { logoutCommand } from ${JSON.stringify(authModule)};
-    await logoutCommand([], { profileName: 'default', credentialStore });
+    process.env.SUBCONSCIOUS_URL = 'https://platform.test';
+    await logoutCommand([], { profileName: 'default', credentialStore, fetchImpl: ${fetchSource} });
+    console.log('CALLS=' + JSON.stringify(globalThis.logoutCalls ?? []));
   `,
   );
-  assert.equal(result.code, 0, result.stderr);
-  assert.deepEqual(await readJson(store), {});
-  assert.match(result.stdout, /Logged out/);
+  const keychain = await readJson(store);
   await fs.rm(dir, { recursive: true, force: true });
+  return { ...result, keychain };
+}
+
+test('logout revokes the login key, then removes the Keychain item', async () => {
+  const result = await logoutWith(logoutFetch(200));
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.keychain, {});
+  assert.match(result.stdout, /Logged out/);
+  assert.match(result.stdout, /Revoked this machine's login key/);
+  assert.match(
+    result.stdout,
+    /CALLS=\[\{"url":"https:\/\/platform.test\/api\/cli\/logout","auth":"Bearer sk-gw-current1.k"\}\]/,
+  );
+});
+
+test('logout still clears the Keychain when the revoke fails', async () => {
+  const result = await logoutWith(
+    `async () => { throw new Error('getaddrinfo ENOTFOUND platform.test'); }`,
+  );
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.keychain, {});
+  assert.match(result.stdout, /Logged out/);
+  assert.match(
+    result.stdout,
+    /Could not revoke the key \(getaddrinfo ENOTFOUND/,
+  );
+  assert.match(result.stdout, /https:\/\/platform.test\/api-keys/);
+});
+
+test('logout says a key not made by subc login stays active', async () => {
+  const result = await logoutWith(
+    logoutFetch(409, { revoked: false, error: 'not_cli_key' }),
+  );
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.keychain, {});
+  assert.match(result.stdout, /not created by subc login, so it stays active/);
+});
+
+test('logout reports a platform error without claiming a revoke', async () => {
+  const result = await logoutWith(logoutFetch(502, { revoked: false }));
+  assert.equal(result.code, 0, result.stderr);
+  assert.deepEqual(result.keychain, {});
+  assert.match(result.stdout, /Could not revoke the key \(HTTP 502\)/);
+  assert.doesNotMatch(result.stdout, /Revoked this machine/);
 });
 
 test('update-key stores a pasted key in the Keychain too', async () => {

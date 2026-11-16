@@ -439,10 +439,69 @@ export async function updateApiKeyCommand(argv = [], options = {}) {
   console.log();
 }
 
+/**
+ * Asks the platform to revoke a saved key before logout forgets it. Only keys
+ * minted by `subc login` are revoked; the platform leaves any other key alone.
+ * @returns {Promise<'revoked' | 'already_revoked' | 'not_cli_key' | {failed: string}>}
+ */
+async function revokeSavedKey(platformUrl, key, fetchImpl) {
+  try {
+    const res = await fetchImpl(`${platformUrl}/api/cli/logout`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}` },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.status === 409) return 'not_cli_key';
+    if (!res.ok) return { failed: `HTTP ${res.status}` };
+    const body = await res.json().catch(() => ({}));
+    return body.revoked ? 'revoked' : 'already_revoked';
+  } catch (error) {
+    return { failed: describeFetchError(error) };
+  }
+}
+
+function printRevocation(revocation, platformUrl) {
+  if (revocation === 'revoked') {
+    console.log(`  ${c.green}✓${c.reset} Revoked this machine's login key.`);
+  } else if (revocation === 'not_cli_key') {
+    console.log(
+      `  ${c.dim}This key was not created by subc login, so it stays active. Manage it at ${platformUrl}/api-keys.${c.reset}`,
+    );
+  } else if (revocation?.failed) {
+    console.log(
+      `  ${c.yellow}Could not revoke the key (${revocation.failed}). It stays active until you delete it at ${platformUrl}/api-keys, or until it goes 30 days unused.${c.reset}`,
+    );
+  }
+}
+
+/** The key logout will forget. An env var key is not saved, so it is left out. */
+async function savedKey(profile, profileName, credentialStore, config) {
+  const fromProfile = profile?.values?.API_KEY?.trim();
+  if (fromProfile) return fromProfile;
+  const fromStore = await credentialStore.read(profileName);
+  if (fromStore) return fromStore;
+  return profileName === DEFAULT_PROFILE ? config.subconscious_api_key : null;
+}
+
 export async function logoutCommand(_argv = [], options = {}) {
   const profileName = options.profileName || DEFAULT_PROFILE;
   const credentialStore = options.credentialStore || defaultCredentialStore();
+  const fetchImpl = options.fetchImpl || proxyAwareFetch;
+  const platformUrl = getPlatformUrl(options.profile);
   const config = await loadConfig();
+
+  // Revoke first, while the key is still at hand. Logout finishes locally
+  // either way, so a network failure never leaves the user logged in.
+  const key = await savedKey(
+    options.profile,
+    profileName,
+    credentialStore,
+    config,
+  );
+  const revocation = key
+    ? await revokeSavedKey(platformUrl, key, fetchImpl)
+    : null;
+
   const clearedStore = await credentialStore.remove(profileName);
   const clearedProfile = await clearProfileApiKey(profileName);
   const clearSavedConfig =
@@ -459,8 +518,10 @@ export async function logoutCommand(_argv = [], options = {}) {
   }
 
   console.log(
-    `\n  ${c.green}✓${c.reset} Logged out of profile '${profileName}'.${c.reset}\n`,
+    `\n  ${c.green}✓${c.reset} Logged out of profile '${profileName}'.${c.reset}`,
   );
+  printRevocation(revocation, platformUrl);
+  console.log();
 }
 
 export async function whoamiCommand(_argv = [], options = {}) {
