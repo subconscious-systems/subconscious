@@ -1,5 +1,12 @@
 # Changelog
 
+## [8.1.0](https://github.com/subconscious-systems/subconscious/compare/v8.0.2...v8.1.0) (2026-11-16)
+
+
+### Features
+
+* API key security v2 (Keychain login storage, per-machine keys) ([#178](https://github.com/subconscious-systems/subconscious/issues/178)) ([c4ca2a8](https://github.com/subconscious-systems/subconscious/commit/c4ca2a8298ef90ae9ea52550e4e1986ec4c9a220))
+
 ## [8.0.2](https://github.com/subconscious-systems/subconscious/compare/v8.0.1...v8.0.2) (2026-11-05)
 
 
