@@ -157,7 +157,7 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
     codexDir,
     subc,
     launcher: path.join(subc, 'bin', 'subc-t3-codex'),
-    codexHome: path.join(subc, 't3', 'codex', 'default'),
+    codexHome: codexDir,
     catalogDir: path.join(subc, 't3', 'codex', 'catalog'),
     state: path.join(subc, 't3', 'state.json'),
   };

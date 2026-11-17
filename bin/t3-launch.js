@@ -30,7 +30,9 @@ export function t3Paths(configDir) {
     root,
     state: path.join(root, 'state.json'),
     backups: path.join(root, 'backups'),
-    codexHome: path.join(root, 'codex', 'default'),
+    // The same Codex home that plain `subc codex` uses, so T3 Code sessions
+    // get the user's own AGENTS.md, skills, and MCP servers.
+    codexHome: path.join(os.homedir(), '.codex'),
     catalogDir: path.join(root, 'codex', 'catalog'),
     catalogFile: path.join(root, 'codex', 'catalog', 'model-catalog.json'),
   };

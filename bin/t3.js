@@ -4,8 +4,8 @@
  *
  * T3 Code is a host for Codex, so this is not another coding agent. Install
  * checks Codex, the default profile's key, and the live key-scoped catalog,
- * then writes a launcher, sets up compaction hooks once in a Codex home that
- * only this provider uses, and adds one entry to T3's settings. Every launch
+ * then writes a launcher, sets up the compaction hooks in ~/.codex the way
+ * `subc codex` does, and adds one entry to T3's settings. Every launch
  * reads the default profile again, so a new key or model needs no reinstall.
  */
 
@@ -61,8 +61,9 @@ Codex only, and with the default profile only.
                      compaction hooks, and add the provider to T3 Code.
   install --dry-run  Run every check and print the plan. Change nothing.
   status             Show what is installed. Needs no network or key.
-  uninstall          Remove the provider, the hooks, and the launcher.
-                     T3 Code threads and the provider's Codex home stay.
+  uninstall          Remove the provider and the launcher. The compaction
+                     hooks in ~/.codex stay, because subc codex uses them.
+                     T3 Code threads stay.
 
 How it works:
   T3 Code runs ~/.subconscious/bin/subc-t3-codex as the Codex binary. Each
@@ -70,15 +71,16 @@ How it works:
   at the next launch. If the key-scoped catalog cannot be read, Codex does not
   start; there is no fallback to the public or packaged model list.
 
-  The provider uses its own Codex home, ~/.subconscious/t3/codex/default, so
-  its threads and settings stay apart from ~/.codex. Your usual Codex skills,
-  MCP servers, and plugins do not carry over, and Codex apps and plugins stay
-  off unless CODEX_EXTERNAL_TOOLS=true is in the default profile. Codex may
-  write its own config.toml in that home.
+  The provider uses ~/.codex, the same Codex home as subc codex, so your
+  AGENTS.md, skills, and MCP servers carry over. subc never edits your
+  config.toml; its -c overrides route each session to Subconscious. Codex
+  apps and plugins stay off unless CODEX_EXTERNAL_TOOLS=true is in the
+  default profile. Plain codex does not resume Subconscious sessions.
 
-  The compaction hooks live in that home too. Codex runs them only after you
-  trust them with /hooks, and they report only for Codex sessions that subc
-  started. The hook env file there holds the profile's key, mode 600.
+  The compaction hooks are the same ~/.codex/hooks.json entries that subc
+  codex writes. Codex runs them only after you trust them with /hooks, and
+  they report only for Codex sessions that subc started. The hook env file
+  holds the profile's key, mode 600.
 
   T3 Code reloads its settings on its own; subc never restarts it.
 `);
@@ -179,7 +181,7 @@ async function hookStatus(codexHome) {
     hooksJson,
     entries: 0,
     // Our entries whose command is not this home's hook script, such as a
-    // path copied from ~/.codex. Codex cannot run them.
+    // path left by an older install. Codex cannot run them.
     stale: 0,
     readable: true,
     script: await exists(path.join(codexHome, HOOK_MARKER)),
@@ -218,7 +220,7 @@ async function hookStatus(codexHome) {
 }
 
 /**
- * Run the Codex hook installer against the provider's own Codex home. The
+ * Run the Codex hook installer against the provider's Codex home. The
  * env is built here rather than inherited, so nothing in the caller's env can
  * redirect the hooks file, and the key travels in the env, never in argv.
  */
@@ -343,7 +345,7 @@ async function install({ dryRun }) {
   line('Settings', report.settingsPath);
   line('Launcher', paths.launcher);
   line('Codex', `${codex.path} (${codex.version})`);
-  line('Codex home', `${paths.codexHome} (not shared with ~/.codex)`);
+  line('Codex home', `${paths.codexHome} (shared with subc codex)`);
   line(
     'Model',
     `${launch.model} from the default profile, read again at each launch`,
@@ -352,7 +354,10 @@ async function install({ dryRun }) {
     'Catalog',
     `${launch.catalog.models.length} models, key-scoped, from ${new URL(launch.baseUrl).origin}`,
   );
-  line('Hooks', 'compaction hooks in that Codex home, inert until trusted');
+  line(
+    'Hooks',
+    'compaction hooks in that Codex home, as subc codex sets them up, inert until trusted',
+  );
   console.log('');
   if (dryRun) {
     console.log(`  ${c.dim}Dry run: nothing was changed.${c.reset}\n`);
@@ -360,7 +365,9 @@ async function install({ dryRun }) {
   }
 
   await privateDir(paths.root);
-  await privateDir(paths.codexHome);
+  // ~/.codex belongs to the user and Codex, so subc creates it if needed but
+  // never changes its mode.
+  await fs.mkdir(paths.codexHome, { recursive: true });
   await writeLauncher(paths.launcher, script);
   if (runHookScript(paths, 'install', launch) !== 0)
     return failWith(
@@ -496,16 +503,8 @@ async function uninstall() {
       `Provider ${report.duplicates.join(', ')} still points at the launcher. Remove it in T3 Code.`,
     );
 
-  const before = await hookStatus(paths.codexHome);
-  if (before.entries || before.script || before.envFile) {
-    runHookScript(paths, 'uninstall');
-    const after = await hookStatus(paths.codexHome);
-    if (after.entries || after.script || after.envFile)
-      problems.push(
-        `Could not remove every hook file from ${paths.codexHome}. Check ${after.hooksJson}.`,
-      );
-    else done.push(`Removed the compaction hooks from ${paths.codexHome}.`);
-  }
+  // The hooks in ~/.codex also serve plain `subc codex`, so they stay.
+  const hooks = await hookStatus(paths.codexHome);
 
   const launcher = await readLauncher(paths.launcher);
   if (launcher.state === 'present') {
@@ -519,9 +518,9 @@ async function uninstall() {
 
   console.log('');
   for (const message of done) console.log(`  ${message}`);
-  if (await exists(paths.codexHome))
+  if (hooks.entries || hooks.script || hooks.envFile)
     console.log(
-      `  ${c.dim}Kept ${paths.codexHome}, which holds this provider's Codex threads. Delete it yourself if you no longer need them.${c.reset}`,
+      `  ${c.dim}Kept the compaction hooks in ${paths.codexHome}, because subc codex uses them too.${c.reset}`,
     );
   if (problems.length) return failWith(problems);
   console.log(

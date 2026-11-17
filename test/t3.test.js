@@ -77,7 +77,7 @@ test('install --dry-run checks everything and writes nothing', {
   assert.ok(gateway.requests.length > requests, 'the live catalog was read');
 });
 
-test('install adds the provider, the launcher, and hooks in a dedicated Codex home', {
+test('install adds the provider, the launcher, and hooks in ~/.codex', {
   skip,
 }, async () => {
   const sandbox = installed;
@@ -101,7 +101,7 @@ test('install adds the provider, the launcher, and hooks in a dedicated Codex ho
   });
   assert.equal((await fs.stat(sandbox.settingsPath)).mode & 0o777, 0o644);
   assert.equal((await fs.stat(sandbox.launcher)).mode & 0o777, 0o755);
-  assert.equal((await fs.stat(sandbox.codexHome)).mode & 0o777, 0o700);
+  assert.equal(sandbox.codexHome, sandbox.codexDir, 'the shared Codex home');
 
   const hooks = JSON.parse(
     await fs.readFile(path.join(sandbox.codexHome, 'hooks.json'), 'utf8'),
@@ -121,8 +121,13 @@ test('install adds the provider, the launcher, and hooks in a dedicated Codex ho
   assert.ok(!(await fs.readFile(sandbox.launcher, 'utf8')).includes(GOOD_KEY));
   assert.ok(!text.includes(GOOD_KEY), 'no key in T3 settings');
 
-  // The ordinary Codex home is left exactly as it was.
-  assert.deepEqual(await fs.readdir(sandbox.codexDir), ['config.toml']);
+  // subc adds only its hook files to ~/.codex. The user's config is kept.
+  assert.deepEqual((await fs.readdir(sandbox.codexDir)).sort(), [
+    'config.toml',
+    'hooks.json',
+    'subconscious-hook.sh',
+    'subconscious-hooks.env',
+  ]);
   assert.equal(
     await fs.readFile(path.join(sandbox.codexDir, 'config.toml'), 'utf8'),
     'model = "gpt-user"\n[mcp_servers.user]\ncommand = "user-mcp"\n',
@@ -539,15 +544,18 @@ test('status and uninstall work offline, without a key or valid settings', {
   await assert.rejects(fs.access(sandbox.launcher));
   await assert.rejects(fs.access(sandbox.state));
   await assert.rejects(fs.access(sandbox.catalogDir));
+  // The hooks in ~/.codex also serve plain `subc codex`, so they stay.
   const hooks = JSON.parse(
     await fs.readFile(path.join(sandbox.codexHome, 'hooks.json'), 'utf8'),
   );
-  assert.ok(!JSON.stringify(hooks).includes('subconscious-hook.sh'));
+  assert.ok(JSON.stringify(hooks).includes('subconscious-hook.sh'));
   for (const name of ['subconscious-hook.sh', 'subconscious-hooks.env'])
-    await assert.rejects(fs.access(path.join(sandbox.codexHome, name)));
-  // The provider's own Codex threads stay.
-  await fs.access(sandbox.codexHome);
-  assert.match(result.stdout, /Kept .*holds this provider's Codex threads/);
+    await fs.access(path.join(sandbox.codexHome, name));
+  assert.equal(
+    await fs.readFile(path.join(sandbox.codexDir, 'config.toml'), 'utf8'),
+    'model = "gpt-user"\n[mcp_servers.user]\ncommand = "user-mcp"\n',
+  );
+  assert.match(result.stdout, /Kept the compaction hooks in .*subc codex/);
 
   const again = await subc(sandbox, ['t3', 'uninstall']);
   assert.equal(again.code, 0, again.stderr);
@@ -667,9 +675,9 @@ test('help explains the scope and limits', { skip }, async () => {
     assert.match(result.stdout, /Codex only/);
     assert.match(result.stdout, /default profile only/);
     assert.match(result.stdout, /macOS and Linux/);
-    assert.match(result.stdout, /own Codex home/);
+    assert.match(result.stdout, /same Codex home as subc codex/);
     assert.match(result.stdout, /\/hooks/);
-    assert.match(result.stdout, /do not carry over/);
+    assert.match(result.stdout, /never edits your\s+config\.toml/);
   }
   const top = await subc(sandbox, ['help']);
   assert.match(top.stdout, /t3 .*T3 Code/);
