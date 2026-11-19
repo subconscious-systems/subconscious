@@ -55,8 +55,9 @@
 # There is no PostCompact; the next UserPromptSubmit closes the window so the
 # summarization LLM turn between them is billed as compaction. Manual compact
 # does not fire PreCompact (accepted gap). The gateway fingerprints prompts and
-# chains turns; subagents need no extra hooks. The x-subconscious-client:
-# copilot header (hook script + model requestHeaders) classifies the traffic.
+# chains turns. It does not track subagents, so they need no hooks. The
+# x-subconscious-client: copilot header (hook script + model requestHeaders)
+# classifies the traffic.
 # hooks: https://code.visualstudio.com/docs/copilot/customization/hooks
 # PreCompact: https://code.visualstudio.com/docs/agents/reference/hooks-reference#precompact
 # ─────────────────────────────────────────────────────────────────────────────

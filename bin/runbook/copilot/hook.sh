@@ -19,9 +19,8 @@
 # Known gap: PreCompact does not fire for manual compact. Auto-compact only.
 #
 # Deliberately NOT registered: SessionStart / SubagentStart / SubagentStop /
-# Stop / PreToolUse / PostToolUse. UserPromptSubmit already fires for subagent
-# prompts, and subagents are correlated gateway-side from the parent's
-# runSubagent tool call.
+# Stop / PreToolUse / PostToolUse. The gateway does not track subagents, so a
+# subagent's requests are ordinary requests and need no hook of their own.
 
 set -u
 

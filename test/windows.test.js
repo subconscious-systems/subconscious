@@ -286,7 +286,7 @@ test('native child status is preserved and signal listeners are removed', async 
   assert.equal(process.listenerCount('SIGINT'), before);
 });
 
-test('Windows Claude launch retains model, subagent, telemetry and picker settings', async () => {
+test('Windows Claude launch retains model, subagent and picker settings', async () => {
   const launch = await windowsLaunch(
     'claude-code',
     [
@@ -320,10 +320,7 @@ test('Windows Claude launch retains model, subagent, telemetry and picker settin
   assert.equal(launch.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '750000');
   assert.equal(launch.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, '2500000');
   assert.equal(launch.env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
-  assert.equal(
-    launch.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-    'https://gateway.example/v1/logs',
-  );
+  assert.equal(launch.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, undefined);
   const equals = await windowsLaunch(
     'claude-code',
     [

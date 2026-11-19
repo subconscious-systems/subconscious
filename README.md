@@ -172,7 +172,7 @@ The packaged integrations live in `bin/runbook`.
 | Command | Behavior |
 | --- | --- |
 | `subc opencode` | Launch OpenCode with the runbook provider, client header, and context/output limits |
-| `subc claude` | Launch Claude Code with the runbook environment, context limits, subagent limits, and OTEL usage reporting |
+| `subc claude` | Launch Claude Code with the runbook environment, context limits, and subagent limits |
 | `subc codex` | Launch Codex with the runbook provider, temporary model catalog, and surgically merged compaction hooks |
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
