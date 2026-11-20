@@ -41,7 +41,10 @@
     ],
     "args": ["ARGS...", "Pass arguments directly to OpenCode"]
   },
-  "sessions": { "key": "opencode", "portable": true },
+  "sessions": {
+    "key": "opencode",
+    "portable": true
+  },
   "prerequisites": [],
   "launch": {
     "argv": ["opencode", "{args}"],
@@ -85,7 +88,7 @@
     {
       "name": "SUBCONSCIOUS_GATEWAY_URL",
       "value": "{baseUrl}",
-      "description": "Gateway origin for the compaction plugin, when one is installed."
+      "description": "Gateway origin. No subc-installed file reads it; it matches the launch env of the other agents."
     },
     {
       "name": "OPENCODE_CONFIG_CONTENT",
@@ -99,7 +102,7 @@
       "name": "OPENCODE_CONFIG_CONTENT",
       "lifetime": "launch",
       "value": "{opencodeConfig}",
-      "description": "Provider, models, limits, and the Subconscious plugin, built for every catalog model. It reaches a private server, never a shared background service, so run.sh launches standalone."
+      "description": "Provider, models, limits, and the Subconscious image window plugin, built for every catalog model. It reaches a private server, never a shared background service, so run.sh launches standalone."
     },
     {
       "kind": "file",
@@ -146,15 +149,7 @@
       "verified": false,
       "note": "OPENCODE_CONFIG_CONTENT carries no mcp block. Whether OpenCode merges user MCP config with it is not confirmed here."
     },
-    "headers": [
-      {
-        "name": "x-subconscious-client",
-        "value": "opencode",
-        "on": "model requests",
-        "set_by_subc": true,
-        "verified": true
-      }
-    ],
+    "headers": [],
     "hooks": []
   }
 }

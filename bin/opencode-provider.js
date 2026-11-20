@@ -88,7 +88,6 @@ export function buildOpenCodeConfig({
         options: {
           baseURL: `${baseUrl}/v1`,
           apiKey: '{env:SUBCONSCIOUS_API_KEY}',
-          headers: { 'x-subconscious-client': 'opencode' },
           modelsDiscovery: { enabled: false },
         },
         models: buildOpenCodeModels(modelIds, { context, output, entries }),
