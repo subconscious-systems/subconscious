@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ── Subconscious API Gateway — GitHub Copilot in VS Code setup ────────────────
-# Point GitHub Copilot Chat in VS Code at your gateway and install hooks for
-# conversation correlation.
+# Point GitHub Copilot Chat in VS Code at your gateway and install the prompt
+# hook that chains Copilot turns into one conversation.
 #
 # Quick start:
 #   ./install.sh                        # reads GATEWAY_URL + API_KEY from ../.env
@@ -11,7 +11,7 @@
 #
 # `install` is the default subcommand. It does two things:
 #   1. Writes a Custom Endpoint provider into VS Code's chatLanguageModels.json
-#   2. Installs VS Code agent hooks (~/.copilot/hooks/) for conversation correlation
+#   2. Installs a VS Code UserPromptSubmit hook (~/.copilot/hooks/)
 #
 # The API key for the model provider is NOT passed on the command line — VS Code
 # requires it to be entered through its UI (the script writes a stable
@@ -48,18 +48,18 @@
 #     }
 #   ]
 #
-# And installs VS Code agent hooks (~/.copilot/hooks/) that POST to
+# And installs a VS Code agent hook (~/.copilot/hooks/) that POSTs to
 # /v1/agent-hooks:
-#   UserPromptSubmit -> conversation_ensure (+ compaction end if pending)
-#   PreCompact       -> conversation_compaction phase start
-# There is no PostCompact; the next UserPromptSubmit closes the window so the
-# summarization LLM turn between them is billed as compaction. Manual compact
-# does not fire PreCompact (accepted gap). The gateway fingerprints prompts and
-# chains turns. It does not track subagents, so they need no hooks. The
+#   UserPromptSubmit -> conversation_ensure
+# The gateway fingerprints prompts and chains turns. It does not track
+# compactions or subagents, so they need no hooks. The
 # x-subconscious-client: copilot header (hook script + model requestHeaders)
 # classifies the traffic.
+#
+# Older versions also registered a PreCompact hook and kept pending-compaction
+# markers in ~/.copilot/subconscious-compact-pending. install rewrites the
+# hooks file without PreCompact and deletes that directory.
 # hooks: https://code.visualstudio.com/docs/copilot/customization/hooks
-# PreCompact: https://code.visualstudio.com/docs/agents/reference/hooks-reference#precompact
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -91,7 +91,8 @@ HOOKS_DIR="${COPILOT_DIR}/hooks"
 HOOK_DST="${HOOKS_DIR}/subconscious-hook.sh"
 HOOKS_JSON="${HOOKS_DIR}/subconscious-hooks.json"
 ENV_FILE="${COPILOT_DIR}/subconscious-hooks.env"
-MARKER="subconscious-hook.sh"
+# Pending-compaction markers written by the PreCompact hook of older versions.
+LEGACY_PENDING_DIR="${COPILOT_DIR}/subconscious-compact-pending"
 
 usage() {
   cat <<'EOF'
@@ -102,7 +103,9 @@ Usage:
 
 `install` is the default subcommand. It writes a "Subconscious Gateway"
 Custom Endpoint provider into VS Code's user-wide chatLanguageModels.json
-AND installs VS Code agent hooks for conversation correlation.
+AND installs a VS Code UserPromptSubmit hook that chains Copilot turns into
+one conversation. It also removes the PreCompact hook and the pending-compaction
+markers that older versions installed.
 
 The API key for the model provider is NOT passed on the command line — VS Code
 requires it to be entered through its UI (the script writes a stable
@@ -369,9 +372,13 @@ write_hooks_json() {
     "$HOOKS_TEMPLATE" >"$HOOKS_JSON"
 }
 
+remove_legacy_compaction() {
+  rm -rf "$LEGACY_PENDING_DIR"
+}
+
 uninstall_hooks() {
   rm -f "$HOOK_DST" "$HOOKS_JSON" "$ENV_FILE"
-  rm -rf "${COPILOT_DIR}/subconscious-compact-pending"
+  remove_legacy_compaction
 }
 
 hooks_status() {
@@ -436,7 +443,8 @@ case "$COMMAND" in
     install_hook_script
     write_hooks_env
     write_hooks_json
-    echo "Installed Subconscious Copilot hooks into $COPILOT_DIR"
+    remove_legacy_compaction
+    echo "Installed Subconscious Copilot prompt hook into $COPILOT_DIR"
     echo ""
     echo "IMPORTANT: VS Code requires the model API key to be stored in its"
     echo "secret store — a plaintext key in the JSON is silently dropped."
@@ -447,7 +455,7 @@ case "$COMMAND" in
     echo "  3. Find 'Subconscious Gateway' → click the key icon to set the API key."
     echo "  4. Paste your gateway API key (sk-gw-...)."
     echo ""
-    echo "The hooks use a separate API key from ~/.copilot/subconscious-hooks.env."
+    echo "The hook uses a separate API key from ~/.copilot/subconscious-hooks.env."
     echo "Both keys can be the same gateway API key."
     echo ""
     echo "After restart, choose a Subconscious model from the model picker."

@@ -5,13 +5,24 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { AGENTS } from '../bin/agent-data.js';
-import { launchCommand, runSync } from './helpers/agent-command.js';
+import {
+  launchCommand,
+  runSync,
+  setupCommand,
+} from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-codex-test-'));
 const fakeCodex = path.join(testDir, 'codex');
 const capturedCatalog = path.join(testDir, 'catalog.json');
 
 const capturedArgs = path.join(testDir, 'args.txt');
+const setupEnv = {
+  ...process.env,
+  HOME: testDir,
+  GATEWAY_URL: 'https://gateway.example',
+  API_KEY: 'sk-test',
+  MODEL: 'subconscious/glm-5.3-marathon',
+};
 
 await fs.writeFile(
   fakeCodex,
@@ -281,38 +292,105 @@ test('status and uninstall still run when a saved setting is invalid', () => {
     }
 });
 
-test('Codex launch adds its hooks next to the ones already in hooks.json', async () => {
-  const codexDir = path.join(testDir, 'codex-merge');
-  const hooksJson = path.join(codexDir, 'hooks.json');
-  const userGroup = {
-    hooks: [{ type: 'command', command: '/usr/local/bin/guard.sh' }],
-  };
-  await fs.mkdir(codexDir, { recursive: true });
+// What older subc versions left in ~/.codex: two hook groups merged into the
+// user's hooks.json, the hook script, its env file, and its log directory.
+async function writeOldInstall(codexDir, userHooks) {
+  const script = path.join(codexDir, 'subconscious-hook.sh');
+  const ours = (statusMessage) => ({
+    hooks: [{ type: 'command', command: script, timeout: 3, statusMessage }],
+  });
+  await fs.mkdir(path.join(codexDir, 'subconscious-hook-logs'), {
+    recursive: true,
+  });
   await fs.writeFile(
-    hooksJson,
-    JSON.stringify({ hooks: { PreToolUse: [userGroup] } }),
+    path.join(codexDir, 'hooks.json'),
+    JSON.stringify({
+      hooks: {
+        ...userHooks,
+        PreCompact: [
+          ...(userHooks.PreCompact ?? []),
+          ours('Reporting compaction start'),
+        ],
+        PostCompact: [ours('Reporting compaction end')],
+      },
+    }),
   );
+  await fs.writeFile(script, '#!/bin/sh\n', { mode: 0o755 });
+  await fs.writeFile(path.join(codexDir, 'subconscious-hooks.env'), 'x=1\n');
+  await fs.writeFile(
+    path.join(codexDir, 'subconscious-hook-logs', 's.log'),
+    'x\n',
+  );
+}
+
+const userGroup = (command) => ({ hooks: [{ type: 'command', command }] });
+
+test('a fresh Codex launch and install write nothing to the Codex directory', async () => {
+  const codexDir = path.join(testDir, 'codex-fresh');
+  await captureCatalog({ CODEX_DIR: codexDir });
+  const result = runSync(
+    setupCommand('codex', ['install'], { ...setupEnv, CODEX_DIR: codexDir }),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  await assert.rejects(fs.access(codexDir));
+});
+
+for (const how of ['launch', 'install', 'uninstall'])
+  test(`Codex ${how} removes old Subconscious hooks and keeps the user's`, async () => {
+    const codexDir = path.join(testDir, `codex-old-${how}`);
+    const user = {
+      PreToolUse: [userGroup('/usr/local/bin/guard.sh')],
+      PreCompact: [userGroup('/usr/local/bin/my-compact.sh')],
+    };
+    await writeOldInstall(codexDir, user);
+
+    if (how === 'launch') await captureCatalog({ CODEX_DIR: codexDir });
+    else {
+      const result = runSync(
+        setupCommand('codex', [how], { ...setupEnv, CODEX_DIR: codexDir }),
+      );
+      assert.equal(result.status, 0, result.stderr);
+    }
+
+    const document = JSON.parse(
+      await fs.readFile(path.join(codexDir, 'hooks.json'), 'utf8'),
+    );
+    assert.deepEqual(document, { hooks: user });
+    assert.deepEqual(await fs.readdir(codexDir), ['hooks.json']);
+  });
+
+test('Codex launch does not rewrite a hooks.json without Subconscious hooks', async () => {
+  const codexDir = path.join(testDir, 'codex-untouched');
+  const hooksJson = path.join(codexDir, 'hooks.json');
+  const original = '{ "hooks": {"Stop": [] } }\n';
+  await fs.mkdir(codexDir, { recursive: true });
+  await fs.writeFile(hooksJson, original);
 
   await captureCatalog({ CODEX_DIR: codexDir });
 
-  const { hooks } = JSON.parse(await fs.readFile(hooksJson, 'utf8'));
-  assert.deepEqual(hooks.PreToolUse, [userGroup]);
-  for (const event of ['PreCompact', 'PostCompact']) {
-    assert.equal(hooks[event].length, 1, event);
-    assert.ok(
-      hooks[event][0].hooks[0].command.endsWith('subconscious-hook.sh'),
-      event,
-    );
-  }
+  assert.equal(await fs.readFile(hooksJson, 'utf8'), original);
 });
 
-test('Codex launch leaves a hooks.json it cannot merge into unchanged', async () => {
-  // Valid JSON, but the merge cannot walk a string where it expects a list of
-  // hook groups. The launch merges best-effort, so jq failing used to leave
-  // its empty output in place of the user's file.
-  const codexDir = path.join(testDir, 'codex-unmergeable');
+test('Codex status reports old Subconscious hooks until they are removed', async () => {
+  const codexDir = path.join(testDir, 'codex-status');
+  await writeOldInstall(codexDir, {});
+  const status = () =>
+    runSync(
+      setupCommand('codex', ['status'], { ...setupEnv, CODEX_DIR: codexDir }),
+    ).stdout;
+  assert.match(status(), /old Subconscious hooks: present/);
+  runSync(
+    setupCommand('codex', ['uninstall'], { ...setupEnv, CODEX_DIR: codexDir }),
+  );
+  assert.match(status(), /old Subconscious hooks: none/);
+});
+
+test('Codex launch leaves a hooks.json it cannot parse unchanged', async () => {
+  // Our marker is in the file, but it is not JSON. The launch cleans up
+  // best-effort, so it must keep the user's file rather than replace it.
+  const codexDir = path.join(testDir, 'codex-unparseable');
   const hooksJson = path.join(codexDir, 'hooks.json');
-  const original = '{"hooks":{"Stop":"/usr/local/bin/notify.sh"}}\n';
+  const original = '{"hooks":{"Stop":"subconscious-hook.sh"\n';
   await fs.mkdir(codexDir, { recursive: true });
   await fs.writeFile(hooksJson, original);
 

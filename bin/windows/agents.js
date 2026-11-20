@@ -139,7 +139,7 @@ export async function runWindowsAgent(agent, argv, dependencies) {
       await windowsSetup('codex', 'install', [], env, { log: () => {} });
     } catch (error) {
       console.error(
-        `Could not refresh Codex hooks (launch will continue): ${error.message}`,
+        `Could not remove old Codex hooks (launch will continue): ${error.message}`,
       );
     }
   }

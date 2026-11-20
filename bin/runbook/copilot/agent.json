@@ -3,7 +3,7 @@
   "command": "copilot",
   "aliases": ["vscode", "vs-code"],
   "name": "GitHub Copilot (VS Code)",
-  "description": "Install the VS Code custom endpoint and Copilot conversation/compaction hooks.",
+  "description": "Install the VS Code custom endpoint and the Copilot prompt hook.",
   "protocol": "openai",
   "homepage": "https://code.visualstudio.com/docs/copilot/overview",
   "install": {
@@ -23,17 +23,28 @@
   },
   "help": {
     "usage": "subc [-p NAME] copilot [help|install|status|uninstall]",
-    "behavior": "Manages the VS Code model provider and Copilot correlation hooks.",
+    "behavior": "Manages the VS Code model provider and the Copilot UserPromptSubmit hook that chains turns into one conversation.",
     "options": [
       ["help", "Show this help"],
-      ["install", "Install or update the provider and hooks (default action)"],
-      ["status", "Inspect the installed provider and hooks"],
-      ["uninstall", "Remove the Subconscious provider and hooks"]
+      [
+        "install",
+        "Install or update the provider and prompt hook (default action)"
+      ],
+      ["status", "Inspect the installed provider and prompt hook"],
+      ["uninstall", "Remove the Subconscious provider and prompt hook"]
     ]
   },
   "prerequisites": [
-    { "command": "jq", "needed_for": "install", "required": true },
-    { "command": "curl", "needed_for": "install", "required": true }
+    {
+      "command": "jq",
+      "needed_for": "install",
+      "required": true
+    },
+    {
+      "command": "curl",
+      "needed_for": "install",
+      "required": true
+    }
   ],
   "launch": null,
   "inputs": [
@@ -91,7 +102,7 @@
       "kind": "file",
       "path": "~/.copilot/hooks/subconscious-hooks.json",
       "lifetime": "persistent",
-      "description": "UserPromptSubmit and PreCompact hooks."
+      "description": "UserPromptSubmit hook. install rewrites this file, which drops the PreCompact hook older versions registered, and deletes ~/.copilot/subconscious-compact-pending."
     },
     {
       "kind": "file",
@@ -104,12 +115,6 @@
       "path": "~/.copilot/subconscious-hooks.env",
       "lifetime": "persistent",
       "description": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600)."
-    },
-    {
-      "kind": "dir",
-      "path": "~/.copilot/subconscious-compact-pending",
-      "lifetime": "persistent",
-      "description": "Pending-compaction markers written by the hook."
     }
   ],
   "capabilities": {
@@ -167,15 +172,7 @@
     "hooks": [
       {
         "event": "UserPromptSubmit",
-        "posts": "conversation_ensure, plus conversation_compaction phase=end when one is pending",
-        "endpoint": "{baseUrl}/v1/agent-hooks",
-        "config": "~/.copilot/hooks/subconscious-hooks.json",
-        "installed_by": ["install"],
-        "verified": true
-      },
-      {
-        "event": "PreCompact",
-        "posts": "conversation_compaction phase=start",
+        "posts": "conversation_ensure",
         "endpoint": "{baseUrl}/v1/agent-hooks",
         "config": "~/.copilot/hooks/subconscious-hooks.json",
         "installed_by": ["install"],
