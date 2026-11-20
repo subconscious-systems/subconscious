@@ -153,6 +153,45 @@ test('OpenCode uninstall removes only the Subconscious provider left by older se
   assert.deepEqual(config, { provider: { other: { models: { keep: {} } } } });
 });
 
+test('OpenCode uninstall removes the old compaction plugin and env file, and keeps the user', async () => {
+  const home = await fs.mkdtemp(path.join(testDir, 'uninstall-plugin-'));
+  const plugins = path.join(home, '.config', 'opencode', 'plugins');
+  await fs.mkdir(plugins, { recursive: true });
+  await fs.mkdir(path.join(home, '.opencode'));
+  await fs.writeFile(path.join(plugins, 'subconscious-compaction.ts'), '');
+  await fs.writeFile(path.join(plugins, 'mine.ts'), '');
+  await fs.writeFile(path.join(home, '.opencode', 'subconscious.env'), '');
+  const result = runSync(
+    setupCommand('opencode', ['uninstall'], {
+      ...process.env,
+      HOME: home,
+      XDG_CONFIG_HOME: path.join(home, '.config'),
+    }),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(await fs.readdir(plugins), ['mine.ts']);
+  assert.deepEqual(await fs.readdir(path.join(home, '.opencode')), []);
+});
+
+test('OpenCode launch sets no x-subconscious-client header', () => {
+  const result = runSync(
+    launchCommand('opencode', {
+      env: {
+        ...process.env,
+        PATH: `${testDir}:${process.env.PATH}`,
+        GATEWAY_URL: 'https://gateway.example',
+        API_KEY: 'sk-test',
+        MODEL: 'subconscious/glm-5.3-marathon',
+      },
+    }),
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const { options } = JSON.parse(result.stdout).provider.subconscious;
+  assert.equal(options.headers, undefined);
+  assert.equal(options.baseURL, 'https://gateway.example/v1');
+  assert.equal(options.apiKey, '{env:SUBCONSCIOUS_API_KEY}');
+});
+
 test('OpenCode model display names are capitalized from the id', () => {
   assert.equal(
     opencodeModelDisplayName('subconscious/glm-5.3-marathon'),

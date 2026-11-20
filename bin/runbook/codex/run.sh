@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Write the temporary Codex model catalog and merge the compaction hooks, then
-# start the codex argv subc built. Nothing is written to ~/.codex/config.toml.
+# Write the temporary Codex model catalog, remove the hooks that older subc
+# versions installed, then start the codex argv subc built. Nothing is written
+# to ~/.codex/config.toml.
 #
 # This needs a gateway that round-trips Codex's namespaced tools. Codex sends
 # them as `type: "namespace"` and resolves an incoming call by namespace plus
@@ -77,19 +78,13 @@ EOF
   } >"$catalog_file"
 }
 
-# The hooks library writes its env file from these two.
-API_KEY="$SUBCONSCIOUS_API_KEY"
-GATEWAY_URL="$SUBCONSCIOUS_GATEWAY_URL"
-
-# Merge compaction hooks without replacing ~/.codex/hooks.json or config.toml.
-# `codex_ensure_hooks` returns early when they are already current, so a launch
-# that changes nothing writes nothing: Codex decides what counts as a new hook
-# from what is on disk, and rewriting an identical one reset the trust the user
-# had already granted.
-HOOK_SRC="${SCRIPT_DIR}/hook.sh"
-# shellcheck source=hooks-lib.sh
-source "${SCRIPT_DIR}/hooks-lib.sh"
-codex_ensure_hooks best-effort >&2 || true
+# Remove the compaction hooks older subc versions merged into hooks.json.
+# This writes nothing when none are left.
+# shellcheck source=legacy-hooks.sh
+source "${SCRIPT_DIR}/legacy-hooks.sh"
+if codex_has_legacy_hooks; then
+  codex_remove_legacy_hooks quiet >&2 || true
+fi
 
 # Without a catalog Codex prints "model metadata not found", and a catalog
 # cannot be passed with -c. Codex replaces this shell, so the file outlives it.

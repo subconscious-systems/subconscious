@@ -10,9 +10,9 @@ the default gateway, model capabilities, and the settings every agent uses
 | --- | --- | --- |
 | `opencode` | `run.sh` | `install.sh` (leftover status/uninstall) |
 | `claude-code` | binary | `install.sh` (leftover status/uninstall) |
-| `codex` | `run.sh` | `install.sh` (hooks) |
+| `codex` | `run.sh` | `install.sh` (removes hooks from older versions) |
 | `pi` | `run.sh` | `install.sh` (provider and extensions) |
-| `copilot` | none | `install.sh` (provider and hooks) |
+| `copilot` | none | `install.sh` (provider and prompt hook) |
 | `deepseek-harness` | `run.sh` | none |
 
 ## What `agent.json` holds and who reads it

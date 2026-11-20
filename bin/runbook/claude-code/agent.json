@@ -3,7 +3,7 @@
   "command": "claude",
   "aliases": ["claude-code", "claudecode"],
   "name": "Claude Code",
-  "description": "Run Claude Code on your hosted Subconscious model with gateway env, context limits, and telemetry.",
+  "description": "Run Claude Code on your hosted Subconscious model with gateway env and context limits.",
   "protocol": "anthropic",
   "homepage": "https://docs.anthropic.com/en/docs/claude-code",
   "install": {
@@ -171,12 +171,6 @@
       "description": "Subagent nesting depth."
     },
     {
-      "name": "CLAUDE_CODE_ENABLE_TELEMETRY",
-      "value": "1",
-      "override": ["CLAUDE_CODE_ENABLE_TELEMETRY"],
-      "description": "Enables OTEL api_request logs, which the gateway uses for purpose attribution (https://code.claude.com/docs/en/monitoring-usage#api-request-event)."
-    },
-    {
       "name": "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
       "value": "1",
       "override": ["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"],
@@ -192,40 +186,6 @@
       "name": "ENABLE_CLAUDEAI_MCP_SERVERS",
       "value": "false",
       "description": "Disables claude.ai connectors, which need subscription OAuth and cannot run against the gateway."
-    },
-    {
-      "name": "OTEL_LOGS_EXPORTER",
-      "value": "otlp",
-      "override": ["OTEL_LOGS_EXPORTER"],
-      "description": "Log exporter. OTEL_TRACES_EXPORTER and OTEL_METRICS_EXPORTER are never set: Claude's telemetry init can abort on an exporter type it does not know."
-    },
-    {
-      "name": "OTEL_EXPORTER_OTLP_PROTOCOL",
-      "value": "http/json",
-      "override": ["OTEL_EXPORTER_OTLP_PROTOCOL"],
-      "description": "OTLP protocol."
-    },
-    {
-      "name": "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT",
-      "value": "${ANTHROPIC_BASE_URL}/v1/logs",
-      "description": "Gateway log endpoint."
-    },
-    {
-      "name": "OTEL_EXPORTER_OTLP_HEADERS",
-      "value": "x-api-key={apiKey}",
-      "description": "Credential on log export."
-    },
-    {
-      "name": "OTEL_EXPORTER_OTLP_TIMEOUT",
-      "value": "2000",
-      "override": ["OTEL_EXPORTER_OTLP_TIMEOUT"],
-      "description": "Export timeout in ms."
-    },
-    {
-      "name": "OTEL_LOGS_EXPORT_INTERVAL",
-      "value": "2000",
-      "override": ["OTEL_LOGS_EXPORT_INTERVAL"],
-      "description": "Export interval in ms."
     }
   ],
   "config": [
@@ -288,13 +248,6 @@
       "note": "subc adds no MCP servers. It disables claude.ai connectors with ENABLE_CLAUDEAI_MCP_SERVERS=false. User MCP config is left alone."
     },
     "headers": [
-      {
-        "name": "x-api-key",
-        "value": "{apiKey}",
-        "on": "OTLP log export to {baseUrl}/v1/logs",
-        "set_by_subc": true,
-        "verified": true
-      },
       {
         "name": "x-claude-code-session-id",
         "value": "session ID",

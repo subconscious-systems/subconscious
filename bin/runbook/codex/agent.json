@@ -3,7 +3,7 @@
   "command": "codex",
   "aliases": [],
   "name": "Codex CLI",
-  "description": "Run Codex on your hosted Subconscious model with a temporary provider catalog and compaction hooks.",
+  "description": "Run Codex on your hosted Subconscious model with a temporary provider catalog.",
   "protocol": "openai",
   "homepage": "https://developers.openai.com/codex",
   "install": {
@@ -29,15 +29,12 @@
   },
   "help": {
     "usage": "subc [-p NAME] codex [help|install|status|uninstall] [Codex arguments...]",
-    "behavior": "Launches Codex with a temporary Subconscious provider catalog. Compaction hooks are merged into ~/.codex/hooks.json on first launch and removed with subc codex uninstall; Codex will not run them until you trust them with /hooks once.",
+    "behavior": "Launches Codex with a temporary Subconscious provider catalog and writes nothing persistent. install and uninstall remove the compaction hooks that older subc versions merged into ~/.codex/hooks.json and keep your own hooks.",
     "options": [
       ["help", "Show this help"],
-      [
-        "install",
-        "Install the Subconscious compaction hooks (then trust with /hooks)"
-      ],
-      ["status", "Inspect the installed compaction hooks"],
-      ["uninstall", "Remove only the Subconscious Codex hooks"],
+      ["install", "Remove hooks that older subc versions installed"],
+      ["status", "Show whether old Subconscious hooks remain"],
+      ["uninstall", "Remove hooks that older subc versions installed"],
       ["--model MODEL", "Override the profile model for this launch"]
     ],
     "args": ["-- ARGS...", "Pass remaining arguments to Codex"]
@@ -49,15 +46,9 @@
   "prerequisites": [
     {
       "command": "jq",
-      "needed_for": "hooks",
+      "needed_for": "legacy hook cleanup",
       "required": false,
-      "note": "Without jq a launch skips the hooks with a warning, and subc codex install fails."
-    },
-    {
-      "command": "curl",
-      "needed_for": "hooks",
-      "required": false,
-      "note": "Without curl the hook exits without reporting."
+      "note": "Only needed to strip hooks an older subc merged into ~/.codex/hooks.json. Without jq that file is left unchanged with a warning."
     }
   ],
   "launch": {
@@ -76,7 +67,7 @@
     "handoff": ["{prompt}"],
     "config_flag": "-c",
     "persistent_setup": true,
-    "note": "Each launch merges the compaction hooks into ~/.codex/hooks.json when they are missing or stale (best effort). The root -c overrides also apply to codex exec."
+    "note": "Each launch removes compaction hooks that older subc versions merged into ~/.codex/hooks.json, and writes nothing when none are left. The root -c overrides also apply to codex exec."
   },
   "inputs": [
     {
@@ -195,7 +186,7 @@
     {
       "name": "SUBCONSCIOUS_GATEWAY_URL",
       "value": "{baseUrl}",
-      "description": "Gateway origin for the hook environment."
+      "description": "Gateway origin. No subc-installed file reads it; it matches the launch env of the other agents."
     }
   ],
   "config": [
@@ -359,30 +350,6 @@
         "multi_agent_version": "${CODEX_MULTI_AGENT_VERSION}"
       },
       "description": "One entry per catalog model, written by the runbook. Image input is advertised only for vision models. Left in the temp directory: the runbook execs codex, so its exit trap never runs."
-    },
-    {
-      "kind": "file",
-      "path": "~/.codex/hooks.json",
-      "lifetime": "persistent",
-      "description": "PreCompact and PostCompact entries are merged in; other entries are kept."
-    },
-    {
-      "kind": "file",
-      "path": "~/.codex/subconscious-hook.sh",
-      "lifetime": "persistent",
-      "description": "Hook script."
-    },
-    {
-      "kind": "file",
-      "path": "~/.codex/subconscious-hooks.env",
-      "lifetime": "persistent",
-      "description": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the hook (mode 600)."
-    },
-    {
-      "kind": "dir",
-      "path": "~/.codex/subconscious-hook-logs",
-      "lifetime": "persistent",
-      "description": "Hook fire log, one file per session."
     }
   ],
   "capabilities": {
@@ -422,41 +389,7 @@
       "verified": false,
       "note": "subc adds no MCP servers. User MCP config in ~/.codex/config.toml is left alone."
     },
-    "headers": [
-      {
-        "name": "x-subconscious-client",
-        "value": "codex",
-        "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
-        "set_by_subc": true,
-        "verified": true,
-        "note": "Model requests carry no subc-set header."
-      },
-      {
-        "name": "Authorization",
-        "value": "Bearer {apiKey}",
-        "on": "hook POSTs to {baseUrl}/v1/agent-hooks",
-        "set_by_subc": true,
-        "verified": true
-      }
-    ],
-    "hooks": [
-      {
-        "event": "PreCompact",
-        "posts": "conversation_compaction phase=start",
-        "endpoint": "{baseUrl}/v1/agent-hooks",
-        "config": "~/.codex/hooks.json",
-        "installed_by": ["launch", "install"],
-        "verified": true,
-        "note": "Per install.sh help: Codex runs hooks only once trusted with /hooks, and codex exec needs --dangerously-bypass-hook-trust, which subc never passes."
-      },
-      {
-        "event": "PostCompact",
-        "posts": "conversation_compaction phase=end",
-        "endpoint": "{baseUrl}/v1/agent-hooks",
-        "config": "~/.codex/hooks.json",
-        "installed_by": ["launch", "install"],
-        "verified": true
-      }
-    ]
+    "headers": [],
+    "hooks": []
   }
 }

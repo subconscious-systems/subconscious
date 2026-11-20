@@ -153,13 +153,13 @@ and the native TUI use Windows paths and processes. Profile editing defaults to
 Notepad, honors `VISUAL`/`EDITOR`, and supports `code`/`code-insiders` with `--wait`.
 The existing profile location remains `%USERPROFILE%\.subconscious`.
 
-Copilot, Codex, and Pi setup use native JSON merges and Node hooks. Other
-providers and hooks are preserved; malformed configuration is left unchanged.
-Hook credentials are stored in `subconscious-windows.json` within the agent's
-user directory; treat that file as a secret. Copilot's model provider still uses
+Copilot and Pi setup use native JSON merges, and Copilot gets a Node prompt
+hook. Other providers and hooks are preserved; malformed configuration is left
+unchanged. Copilot's hook credentials are stored in
+`%USERPROFILE%\.copilot\subconscious-windows.json`; treat that file as a secret. Copilot's model provider still uses
 VS Code's secret store and prompts for its key. Its configuration goes under
 `%APPDATA%\Code\User` (or Code - Insiders/VSCodium). Rerun install after moving
-your Node installation, because hooks record the absolute Node executable path.
+your Node installation, because the hook records the absolute Node executable path.
 
 Run `npm run test:windows` from the repository root for the separate Windows suite. The
 Windows CI job also builds/tests the Go TUI. Existing Unix tests and runbooks
@@ -171,11 +171,11 @@ The packaged integrations live in `bin/runbook`.
 
 | Command | Behavior |
 | --- | --- |
-| `subc opencode` | Launch OpenCode with the runbook provider, client header, and context/output limits |
-| `subc claude` | Launch Claude Code with the runbook environment, context limits, subagent limits, and OTEL usage reporting |
-| `subc codex` | Launch Codex with the runbook provider, temporary model catalog, and surgically merged compaction hooks |
+| `subc opencode` | Launch OpenCode with the runbook provider, image window plugin, and context/output limits |
+| `subc claude` | Launch Claude Code with the runbook environment, context limits, and subagent limits |
+| `subc codex` | Launch Codex with the runbook provider and a temporary model catalog |
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
-| `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
+| `subc copilot install` | Install/update the VS Code custom endpoint and the Copilot prompt hook |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
 ## Headless runs
@@ -291,7 +291,7 @@ Coding agents resend every screenshot on every turn, so a long computer-use or s
 
 | Agent | How subc applies it |
 | --- | --- |
-| OpenCode | A plugin loaded from the launch config (`bin/runbook/opencode/subconscious-image-window.ts`) that gives the provider a trimming `fetch`. |
+| OpenCode | A plugin loaded from the launch config (`bin/runbook/opencode/plugin/server.ts`) that rewrites each request body before upload. |
 | Pi | An extension installed with the provider (`bin/runbook/image-window/index.ts`, on `before_provider_request`). |
 
 The rule is in `bin/runbook/image-window/window.js`. `SUBCONSCIOUS_IMAGE_WINDOW_SOFT_MIB` and `SUBCONSCIOUS_IMAGE_WINDOW_HARD_MIB` change the two limits (defaults 25 and 30). Text-only models are left alone, and a request the integrations do not recognize is sent unchanged.
@@ -366,8 +366,21 @@ Manage Language Models UI. The install scripts print the relevant next steps.
 Its Custom Endpoint provider uses the Messages API at `/v1/messages` by
 default; rerun `subc copilot install` to migrate an older Chat Completions entry.
 
-The runbook scripts require Bash. Copilot, Pi, and Codex hook merge
-also require `jq`. Copilot and Codex hooks also require `curl`.
+The runbook scripts require Bash. Copilot and Pi setup also require `jq`, and
+the Copilot hook also requires `curl`.
+
+### Removing hooks from older versions
+
+Older versions also installed compaction reporting: Codex `PreCompact` and
+`PostCompact` hooks in `~/.codex/hooks.json`, a Copilot `PreCompact` hook, and
+a Pi compaction extension, each with its own env file. subc no longer installs
+them. `subc codex install`, `subc codex uninstall`, and every `subc codex`
+launch strip only the Subconscious entries from `hooks.json` and delete the
+hook script, its env file, and its log directory. `subc copilot install`
+rewrites the Copilot hooks file without `PreCompact` and deletes
+`~/.copilot/subconscious-compact-pending`. `subc pi install`, which every
+`subc pi` launch runs, deletes `subconscious-compaction.ts` and
+`subconscious.env`. The Windows setup does the same with its own files.
 
 `subc dsh` defaults to the DeepSeek Harness Web UI. It injects an ephemeral
 Cordis overlay containing the active gateway URL, selected model, token limits,
