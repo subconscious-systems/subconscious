@@ -157,8 +157,11 @@ OpenCode (beta):
     minutes.
   - Keep the provider's Server URL and Server password empty in T3 Code.
     Status reports either one as drift.
-  - When T3 Code's server dies, the launcher stops the helper within about
-    10 s.
+  - When T3 Code's server dies, the launcher's watchdog sends SIGTERM to
+    the helper's process group, then SIGKILL 5 s later, so the helper is
+    gone within about 10 s. The watchdog needs ps, so install refuses
+    this provider on a system without it, such as a Linux image without
+    procps.
 
 Limits for all providers:
   - T3 Code writes thread titles and commit messages with its own text
@@ -438,6 +441,24 @@ function checkLauncherShell() {
     );
 }
 
+/**
+ * Check that the watchdog can read a parent PID here. The watchdog runs
+ * `ps -o ppid= -p PID`, and some Linux images, such as debian:bookworm-slim,
+ * ship no ps. Without it, the watchdog cannot tell when T3 Code's server
+ * dies, so a helper with the key could outlive it.
+ */
+function checkWatchdogTools() {
+  const result = spawnSync('bash', ['-c', 'ps -o ppid= -p $$ | tr -d " "'], {
+    encoding: 'utf8',
+    env: { PATH: process.env.PATH ?? '', LC_ALL: 'C' },
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  if (result.status !== 0 || !/^\d+\n?$/.test(result.stdout ?? ''))
+    throw new T3LaunchError(
+      'This system cannot run the helper watchdog, because "ps -o ppid= -p $$" failed. Install procps (for example, apt install procps), then retry.',
+    );
+}
+
 function describeEntry(report) {
   if (report.entry === 'absent') return 'add';
   if (report.drift.length) return `repair ${report.drift.join(', ')}`;
@@ -447,6 +468,7 @@ function describeEntry(report) {
 /** Run every check for one provider. Changes nothing. */
 async function prepare(paths, item) {
   const { provider, agent, binDir } = item;
+  if (provider.watchdog) checkWatchdogTools();
   item.binary = await checkBinary(provider, agent, binDir);
   isolateLaunchEnv(process.env, paths.configDir, provider);
   item.launch = await resolveT3Launch({ agentId: provider.agentId });

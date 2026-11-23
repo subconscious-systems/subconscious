@@ -786,6 +786,109 @@ test('the watchdog stops the helper within 10 s after its parent is SIGKILLed', 
   assert.ok(Date.now() - started < 10_000);
 });
 
+/**
+ * A PATH like the sandbox one, but with no `ps`: every command in /usr/bin
+ * and /bin is linked into one folder, except ps.
+ */
+async function pathWithoutPs(sandbox) {
+  const dir = path.join(sandbox.root, 'no ps bin');
+  await fs.mkdir(dir, { recursive: true });
+  for (const source of ['/usr/bin', '/bin'])
+    for (const name of await fs.readdir(source)) {
+      if (name === 'ps') continue;
+      await fs
+        .symlink(path.join(source, name), path.join(dir, name))
+        .catch((error) => {
+          if (error.code !== 'EEXIST') throw error;
+        });
+    }
+  return [sandbox.bin, path.join(sandbox.root, 'node bin'), dir].join(
+    path.delimiter,
+  );
+}
+
+test('without ps, the watchdog keeps a healthy helper and install refuses', {
+  skip,
+  timeout: 30_000,
+}, async () => {
+  const sandbox = installed;
+  const PATH = await pathWithoutPs(sandbox);
+  const log = logFile(sandbox, 'no-ps');
+  const started = Date.now();
+  const result = await launch(sandbox, SERVE_ARGS, {
+    log,
+    env: { PATH, FAKE_OPENCODE_SLEEP: '5000' },
+  });
+  // The fake exits 0 on SIGTERM too, so the time shows who stopped it.
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(
+    Date.now() - started >= 4900,
+    'the helper ran its full 5 s while its parent lived',
+  );
+
+  const fresh = await box();
+  const before = await snapshot(fresh.home);
+  const refused = await subc(
+    fresh,
+    ['t3', 'install', '--provider', 'opencode'],
+    {
+      PATH: await pathWithoutPs(fresh),
+    },
+  );
+  assert.equal(refused.code, 1);
+  assert.match(refused.stderr, /ps -o ppid= -p \$\$" failed\. Install procps/);
+  assert.deepEqual(await snapshot(fresh.home), before);
+});
+
+test('the watchdog sends SIGKILL to a helper group that ignores SIGTERM', {
+  skip,
+  timeout: 40_000,
+}, async () => {
+  const sandbox = installed;
+  const log = logFile(sandbox, 'watchdog-kill');
+  // A Node process plays the T3 Code server. Like T3 Code, it spawns the
+  // helper detached, so the helper leads its own process group.
+  const server = spawn(
+    process.execPath,
+    [
+      '-e',
+      `require('child_process').spawn(process.argv[1], process.argv.slice(2), { detached: true, stdio: 'ignore' }); setInterval(() => {}, 1000);`,
+      sandbox.opencodeLauncher,
+      ...SERVE_ARGS,
+    ],
+    {
+      env: sandbox.openCodeT3Env({
+        FAKE_OPENCODE_LOG: log,
+        FAKE_OPENCODE_SLEEP: '60000',
+        FAKE_OPENCODE_IGNORE_TERM: '1',
+        FAKE_OPENCODE_CHILD: '1',
+      }),
+      stdio: 'ignore',
+    },
+  );
+  const records = await waitFor(async () => {
+    const found = await readRecords(log);
+    return found.length ? found : null;
+  }, 10_000);
+  assert.ok(records, 'the helper started');
+  const { pid, childPid } = records[0];
+  assert.ok(childPid, 'the helper started a child');
+  const group = () => processes().filter((entry) => entry.pgid === pid);
+  assert.ok(group().some((entry) => entry.pid === childPid));
+  await sleep(2500);
+  assert.ok(alive(pid), 'the helper runs while its parent lives');
+  const exited = new Promise((resolve) => server.on('exit', resolve));
+  server.kill('SIGKILL');
+  await exited;
+  const started = Date.now();
+  const stopped = await waitFor(() => group().length === 0, 15_000);
+  for (const entry of group()) process.kill(entry.pid, 'SIGKILL');
+  assert.ok(stopped, 'the helper, its child, and the watchdog are gone');
+  // 2 s poll, then 5 s from SIGTERM to SIGKILL.
+  assert.ok(Date.now() - started >= 4500, 'SIGTERM came first');
+  assert.ok(Date.now() - started < 10_000);
+});
+
 test('the watchdog exits with the helper and leaves no process', {
   skip,
   timeout: 30_000,

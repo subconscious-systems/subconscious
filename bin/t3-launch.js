@@ -640,9 +640,20 @@ export function watchdogName(provider) {
  * passthrough such as `--version` leaves no watchdog behind.
  *
  * Every 2 s it checks the process that T3 Code started. When that process
- * now has another parent, T3 Code's server is gone, so the check sends it
- * SIGTERM. The check ends when the process ends. Its stdio is /dev/null, so
- * it never holds T3 Code's pipes open.
+ * now has another parent, T3 Code's server is gone, so the check stops it
+ * the way T3 Code's own orphan reaper does (`OpenCodeServerLedger.ts`):
+ * SIGTERM, then SIGKILL after 5 s. T3 Code 0.1.11 spawns the helper
+ * detached, so the helper leads its own process group, and the check then
+ * signals the whole group, which also reaches the helper's tools and MCP
+ * servers. The check runs in that group too, so it ignores the SIGTERM, and
+ * its own membership keeps the group ID from being reused before the
+ * SIGKILL. A helper that does not lead its group gets the signals alone.
+ *
+ * When `ps` gives no answer, for example on a host without procps, the
+ * parent is unknown, so the check keeps the helper for that round. Install
+ * refuses a provider with a watchdog on such a host. The check ends when the
+ * process ends. Its stdio is /dev/null, so it never holds T3 Code's pipes
+ * open.
  *
  * The plan has exported the key by now. `env -i` starts the check in a new
  * bash with PATH alone, so neither the check nor its `sleep` and `ps`
@@ -655,10 +666,23 @@ function watchdog(provider) {
   /usr/bin/env -i PATH="$PATH" "$BASH" -p -c '
     while sleep 2; do
       kill -0 "$1" 2>/dev/null || exit 0
-      if [ "$(ps -o ppid= -p "$1" 2>/dev/null | tr -d " ")" != "$2" ]; then
-        kill -TERM "$1" 2>/dev/null
+      parent=$(ps -o ppid= -p "$1" 2>/dev/null | tr -d " ")
+      [ -n "$parent" ] || continue
+      [ "$parent" = "$2" ] && continue
+      if [ "$(ps -o pgid= -p "$1" 2>/dev/null | tr -d " ")" = "$1" ]; then
+        trap "" TERM
+        kill -TERM -- "-$1" 2>/dev/null
+        sleep 5
+        kill -KILL -- "-$1" 2>/dev/null
         exit 0
       fi
+      kill -TERM "$1" 2>/dev/null
+      for second in 1 2 3 4 5; do
+        sleep 1
+        kill -0 "$1" 2>/dev/null || exit 0
+      done
+      kill -KILL "$1" 2>/dev/null
+      exit 0
     done
   ' ${watchdogName(provider)} "$subc_helper" "$subc_parent" "$subc_config_dir" </dev/null >/dev/null 2>&1 &
 fi

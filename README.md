@@ -276,7 +276,7 @@ Install waits up to 30 s for T3 Code to write `~/.t3/caches/subconscious-claude.
 | Key | Only `SUBCONSCIOUS_API_KEY` carries the key. The launcher keeps T3 Code's `OPENCODE_PASSWORD`. |
 | Freshness | A new key or model applies after the OpenCode helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes. |
 | Server URL | Keep the provider's Server URL and Server password empty. With a Server URL, T3 Code skips the launcher, so status reports either field as drift. |
-| Watchdog | The launcher stops the helper within about 10 s after T3 Code's server dies. The watchdog starts only for `serve`, and its env holds only `PATH`. |
+| Watchdog | The launcher stops the helper within about 10 s after T3 Code's server dies. It sends SIGTERM to the helper's process group, which also holds the helper's tools and MCP servers, and SIGKILL 5 s later, as T3 Code's own orphan reaper does. The watchdog starts only for `serve`, and its env holds only `PATH`. It needs `ps`, so install refuses this provider on a system without it, such as a Linux image without procps. |
 
 ### Limits for all providers
 

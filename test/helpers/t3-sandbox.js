@@ -79,7 +79,10 @@ if (process.env.FAKE_CLAUDE_SLEEP) setTimeout(() => {}, Number(process.env.FAKE_
 // FAKE_OPENCODE_LOG. For `serve`, it then listens on --port (0 picks a
 // port), answers GET /api/info, and prints exactly one line on stdout:
 // `server listening on http://127.0.0.1:<port>`. It exits at once, or after
-// FAKE_OPENCODE_SLEEP ms, or on SIGTERM.
+// FAKE_OPENCODE_SLEEP ms, or on SIGTERM. FAKE_OPENCODE_IGNORE_TERM=1 makes
+// it ignore SIGTERM, and FAKE_OPENCODE_CHILD=1 makes it start a long
+// `sleep` child in its process group, like a tool or an MCP server. Its
+// PID goes in the record as childPid.
 export const FAKE_OPENCODE = `#!/usr/bin/env node
 const fs = require('fs');
 const path = require('path');
@@ -96,7 +99,10 @@ let config = null;
 try {
   config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
 } catch {}
-const record = { args, env: process.env, pid: process.pid, ppid: process.ppid, cwd: process.cwd(), config };
+let childPid = null;
+if (process.env.FAKE_OPENCODE_CHILD === '1' && args[0] === 'serve')
+  childPid = require('child_process').spawn('sleep', ['600'], { stdio: 'ignore' }).pid;
+const record = { args, env: process.env, pid: process.pid, ppid: process.ppid, cwd: process.cwd(), config, childPid };
 if (process.env.FAKE_OPENCODE_LOG)
   fs.appendFileSync(process.env.FAKE_OPENCODE_LOG, JSON.stringify(record) + '\\n');
 if (args[0] !== 'serve' || args.includes('--help') || args.includes('-h')) {
@@ -109,7 +115,9 @@ const server = http.createServer((req, res) => {
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ version: '2.3.0', pid: process.pid }));
 });
-process.on('SIGTERM', () => process.exit(0));
+process.on('SIGTERM', () => {
+  if (process.env.FAKE_OPENCODE_IGNORE_TERM !== '1') process.exit(0);
+});
 server.listen(port, '127.0.0.1', () => {
   process.stdout.write('server listening on http://127.0.0.1:' + server.address().port + '\\n');
   const sleep = Number(process.env.FAKE_OPENCODE_SLEEP || 0);
