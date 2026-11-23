@@ -78,6 +78,9 @@ export function buildOpenCodeConfig({
 }) {
   return {
     $schema: 'https://opencode.ai/config.json',
+    // Only the Subconscious provider: OpenCode would otherwise list its own
+    // opencode.ai models and any local Ollama models next to the catalog.
+    enabled_providers: [OPENCODE_PROVIDER_ID],
     disabled_providers: ['subconscious-cli'],
     // Trims each request to the newest images before upload.
     plugins: [OPENCODE_PLUGIN_DIR],

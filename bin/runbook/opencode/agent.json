@@ -91,6 +91,12 @@
       "name": "OPENCODE_CONFIG_CONTENT",
       "value": "{opencodeConfig}",
       "description": "Whole OpenCode config for this launch; see the config entry. Nothing is written to disk."
+    },
+    {
+      "name": "OPENCODE_API_KEY",
+      "value": "",
+      "optional": true,
+      "description": "Never exported. OpenCode sends this variable to opencode.ai as the key for its own models, so a key set here only selects the Subconscious key. Keep this entry last: the {apiKey} entries above read it first."
     }
   ],
   "config": [
