@@ -3,14 +3,19 @@
  *
  * T3 Code keeps its providers in `<T3 home>/userdata/settings.json`, under
  * `providerInstances`. Each entry is an envelope
- * `{ driver, displayName, enabled, environment?, config }`, and a Codex
- * instance keeps its own fields (`binaryPath`, `homePath`, ...) in `config`.
- * T3 watches the file and reloads it about 100 ms after a change, so a write
+ * `{ driver, displayName, enabled, environment?, config }`, and each driver
+ * keeps its own fields (`binaryPath`, `homePath`, ...) in `config`. T3
+ * watches the file and reloads it about 100 ms after a change, so a write
  * here takes effect without restarting T3.
  *
- * subc owns one entry, `subconscious-codex`. It never changes another entry,
- * the secret store, the default provider, or text generation. An entry is
- * subc's when it is a Codex instance whose binary is the launcher subc wrote.
+ * subc owns one entry per provider, such as `subconscious-codex`. It never
+ * changes another entry, the secret store, the default provider, or text
+ * generation. An entry is subc's when it has the provider's driver and its
+ * binary is the launcher subc wrote.
+ *
+ * Every function takes a `target`: the T3 home, the launcher path, the agent
+ * home path when the provider has one, and the provider descriptor from
+ * `t3-providers.js`. A target with no provider means Codex.
  */
 
 import { randomBytes } from 'node:crypto';
@@ -18,13 +23,13 @@ import { realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { CODEX_PROVIDER } from './t3-providers.js';
 
-export const T3_INSTANCE_ID = 'subconscious-codex';
-export const T3_DISPLAY_NAME = 'Subconscious (Codex)';
+// The Codex values, kept for callers and tests that name them.
+export const T3_INSTANCE_ID = CODEX_PROVIDER.instanceId;
+export const T3_DISPLAY_NAME = CODEX_PROVIDER.displayName;
 
-// Codex launch fields that subc sets on its entry, and the ones it keeps
-// empty because they would change which home or arguments Codex starts with.
-const CLEARED_CONFIG_FIELDS = ['shadowHomePath', 'launchArgs'];
+const providerOf = (target) => target.provider ?? CODEX_PROVIDER;
 const MAX_WRITE_ATTEMPTS = 5;
 const MAX_BACKUPS = 10;
 // T3 debounces its settings watcher by 100 ms. Wait longer than that before
@@ -181,24 +186,27 @@ function launcherOf(entry) {
   return isObject(entry?.config) ? entry.config.binaryPath : undefined;
 }
 
-/** True when the entry is a Codex instance that runs subc's launcher. */
-function isOwnedEntry(entry, launcherPath) {
+/** True when the entry has the provider's driver and runs subc's launcher. */
+function isOwnedEntry(entry, target) {
   return (
     isObject(entry) &&
-    entry.driver === 'codex' &&
-    sameFile(launcherOf(entry), launcherPath)
+    entry.driver === providerOf(target).driver &&
+    sameFile(launcherOf(entry), target.launcherPath)
   );
 }
 
 /** The managed fields that differ from what subc writes. */
-function driftOf(entry, expected) {
+function driftOf(entry, target) {
+  const provider = providerOf(target);
   const drift = [];
-  if (entry.displayName !== expected.displayName) drift.push('displayName');
+  if (entry.displayName !== provider.displayName) drift.push('displayName');
   if (entry.enabled === false) drift.push('enabled');
-  for (const field of ['setupMode', 'homePath']) {
-    if (entry.config?.[field] !== expected.config[field]) drift.push(field);
+  // binaryPath decides ownership, so a ~ path or a symlink is not drift.
+  for (const [field, value] of Object.entries(provider.managedConfig(target))) {
+    if (field !== 'binaryPath' && entry.config?.[field] !== value)
+      drift.push(field);
   }
-  for (const field of CLEARED_CONFIG_FIELDS) {
+  for (const field of provider.clearedFields) {
     const value = entry.config?.[field];
     if (value !== undefined && value !== '') drift.push(field);
   }
@@ -209,16 +217,15 @@ function driftOf(entry, expected) {
  * The entry subc writes. A repaired entry keeps the fields subc does not
  * manage, such as an accent color or custom models.
  */
-function expectedEntry({ launcherPath, homePath }, current = {}) {
+function expectedEntry(target, current = {}) {
+  const provider = providerOf(target);
   const config = { ...(isObject(current.config) ? current.config : {}) };
-  for (const field of CLEARED_CONFIG_FIELDS) delete config[field];
-  config.setupMode = 'existing';
-  config.binaryPath = launcherPath;
-  config.homePath = homePath;
+  for (const field of provider.clearedFields) delete config[field];
+  Object.assign(config, provider.managedConfig(target));
   return {
     ...current,
-    driver: 'codex',
-    displayName: T3_DISPLAY_NAME,
+    driver: provider.driver,
+    displayName: provider.displayName,
     enabled: true,
     config,
   };
@@ -226,15 +233,15 @@ function expectedEntry({ launcherPath, homePath }, current = {}) {
 
 function survived(entry, target) {
   return (
-    isOwnedEntry(entry, target.launcherPath) &&
+    isOwnedEntry(entry, target) &&
     entry.enabled !== false &&
-    driftOf(entry, expectedEntry(target)).length === 0
+    driftOf(entry, target).length === 0
   );
 }
 
 /**
  * Look at T3 Code's settings without changing anything. `target` names the
- * launcher and the Codex home subc's entry should use.
+ * provider, its launcher, and the agent home subc's entry should use.
  *
  * `state` is one of missing, malformed, unsupported, unsafe, or ok. `entry`
  * is absent, owned, or conflict, and `duplicates` lists other instance ids
@@ -276,22 +283,20 @@ export async function inspectT3(target) {
     report.problem = parsed.problem || parsed.unsupported;
     return report;
   }
+  const { instanceId } = providerOf(target);
   const instances = parsed.settings.providerInstances ?? {};
-  const ours = instances[T3_INSTANCE_ID];
+  const ours = instances[instanceId];
   if (ours !== undefined) {
-    if (isOwnedEntry(ours, target.launcherPath)) {
+    if (isOwnedEntry(ours, target)) {
       report.entry = 'owned';
-      report.drift = driftOf(ours, expectedEntry(target, ours));
+      report.drift = driftOf(ours, target);
     } else {
       report.entry = 'conflict';
-      report.problem = `T3 Code already has a provider named ${T3_INSTANCE_ID} that subc did not create. Rename or remove it in T3 Code, then retry.`;
+      report.problem = `T3 Code already has a provider named ${instanceId} that subc did not create. Rename or remove it in T3 Code, then retry.`;
     }
   }
   report.duplicates = Object.entries(instances)
-    .filter(
-      ([id, entry]) =>
-        id !== T3_INSTANCE_ID && isOwnedEntry(entry, target.launcherPath),
-    )
+    .filter(([id, entry]) => id !== instanceId && isOwnedEntry(entry, target))
     .map(([id]) => id);
   return report;
 }
@@ -409,7 +414,7 @@ async function edit(target, backupDir, change) {
 async function readEntry(target) {
   const text = await readText(t3Files(target.home).settings);
   const parsed = text === null ? {} : parseSettings(text);
-  return parsed.settings?.providerInstances?.[T3_INSTANCE_ID];
+  return parsed.settings?.providerInstances?.[providerOf(target).instanceId];
 }
 
 /**
@@ -419,16 +424,17 @@ async function readEntry(target) {
  */
 export async function installT3Provider(target, options = {}) {
   const { backupDir, settleMs = DEFAULT_SETTLE_MS } = options;
+  const { instanceId } = providerOf(target);
   const blockers = settingsBlockers(await inspectT3(target));
   if (blockers.length) throw new Error(blockers.join('\n'));
   let result = { changed: false, backup: null };
   for (let attempt = 0; attempt < 3; attempt++) {
     const written = await edit(target, backupDir, (settings) => {
       const instances = { ...(settings.providerInstances ?? {}) };
-      const current = instances[T3_INSTANCE_ID];
-      if (current !== undefined && !isOwnedEntry(current, target.launcherPath))
+      const current = instances[instanceId];
+      if (current !== undefined && !isOwnedEntry(current, target))
         throw new Error(
-          `T3 Code now has a provider named ${T3_INSTANCE_ID} that subc did not create.`,
+          `T3 Code now has a provider named ${instanceId} that subc did not create.`,
         );
       const next = expectedEntry(target, current);
       if (
@@ -436,7 +442,7 @@ export async function installT3Provider(target, options = {}) {
         JSON.stringify(current) === JSON.stringify(next)
       )
         return null;
-      instances[T3_INSTANCE_ID] = next;
+      instances[instanceId] = next;
       return { ...settings, providerInstances: instances };
     });
     result = {
@@ -447,7 +453,7 @@ export async function installT3Provider(target, options = {}) {
     if (survived(await readEntry(target), target)) return result;
   }
   throw new Error(
-    `T3 Code did not keep the ${T3_INSTANCE_ID} provider in its settings. Check ${t3Files(target.home).settings}.`,
+    `T3 Code did not keep the ${instanceId} provider in its settings. Check ${t3Files(target.home).settings}.`,
   );
 }
 
@@ -462,11 +468,11 @@ export async function removeT3Provider(target, options = {}) {
   const blockers = settingsBlockers(report, { forRemoval: true });
   if (blockers.length) throw new Error(blockers.join('\n'));
   if (report.entry !== 'owned') return { removed: false, backup: null };
+  const { instanceId } = providerOf(target);
   const written = await edit(target, options.backupDir, (settings) => {
     const instances = { ...(settings.providerInstances ?? {}) };
-    if (!isOwnedEntry(instances[T3_INSTANCE_ID], target.launcherPath))
-      return null;
-    delete instances[T3_INSTANCE_ID];
+    if (!isOwnedEntry(instances[instanceId], target)) return null;
+    delete instances[instanceId];
     return { ...settings, providerInstances: instances };
   });
   return { removed: written.changed, backup: written.backup };

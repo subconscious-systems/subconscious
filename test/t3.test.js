@@ -10,7 +10,12 @@ import {
   resolveAgentEnv,
   resolveInputs,
 } from '../bin/agent-launch.js';
-import { restartWithCallerEnv } from '../bin/t3-launch.js';
+import {
+  LAUNCHER_SHEBANG,
+  launcherScript,
+  restartWithCallerEnv,
+} from '../bin/t3-launch.js';
+import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   fakeGateway,
   GOOD_KEY,
@@ -115,9 +120,8 @@ test('install adds the provider, the launcher, and hooks in ~/.codex', {
   }
   const envFile = path.join(sandbox.codexHome, 'subconscious-hooks.env');
   assert.equal((await fs.stat(envFile)).mode & 0o777, 0o600);
-  const state = JSON.parse(await fs.readFile(sandbox.state, 'utf8'));
-  assert.equal(state.hooks, 'installed');
-  assert.ok(!JSON.stringify(state).includes(GOOD_KEY));
+  // subc keeps no state file; status reads the files themselves.
+  await assert.rejects(fs.access(sandbox.state));
   assert.ok(!(await fs.readFile(sandbox.launcher, 'utf8')).includes(GOOD_KEY));
   assert.ok(!text.includes(GOOD_KEY), 'no key in T3 settings');
 
@@ -139,7 +143,6 @@ test('a second install changes nothing', { skip }, async () => {
   const files = [
     sandbox.settingsPath,
     sandbox.launcher,
-    sandbox.state,
     path.join(sandbox.codexHome, 'hooks.json'),
     path.join(sandbox.codexHome, 'subconscious-hook.sh'),
     path.join(sandbox.codexHome, 'subconscious-hooks.env'),
@@ -609,9 +612,21 @@ test('a failed settings write says what stayed installed', {
     assert.equal(result.code, 1);
     assert.match(result.stderr, /T3 Code settings were not updated/);
     assert.match(result.stderr, /subc t3 uninstall/);
+    // The message names where each file really is, and does not promise
+    // that uninstall removes the hooks.
+    const stderr = result.stderr.replace(/\s+/g, ' ');
+    assert.ok(stderr.includes(`The launcher ${sandbox.launcher} is in place`));
+    assert.ok(
+      stderr.includes(
+        `compaction hooks are in ${sandbox.codexHome}, shared with subc codex`,
+      ),
+    );
+    assert.match(stderr, /subc t3 uninstall removes only the launcher/);
+    assert.doesNotMatch(stderr, /under .*\.subconscious/);
+    assert.doesNotMatch(stderr, /uninstall to remove them/);
     const status = await subc(sandbox, ['t3', 'status']);
     assert.match(status.stdout, /subconscious-codex: not installed/);
-    assert.match(status.stdout, /2 entries.*set up by subc t3 install/);
+    assert.match(status.stdout, /Hooks\s+2 entries, env file present/);
   } finally {
     await fs.chmod(userdata, 0o700);
   }
@@ -786,4 +801,279 @@ test('status flags hook entries that run another path, and install fixes them', 
     assert.equal(hooks[event][0].hooks[0].command, hookScript);
   const fixed = await subc(sandbox, ['t3', 'status']);
   assert.doesNotMatch(fixed.stdout, /run another path/);
+});
+
+test('a BASH_ENV that prints cannot reach stdout', { skip }, async () => {
+  const sandbox = installed;
+  const startup = path.join(sandbox.root, 'startup file.sh');
+  await fs.writeFile(startup, 'echo "hello from BASH_ENV"\n');
+  const env = { BASH_ENV: startup, ENV: startup };
+  const log = logFile(sandbox, 'bash-env');
+  const result = await launch(sandbox, ['app-server'], { log, env });
+  assert.equal(result.code, 0, result.stderr);
+  const [record] = await readRecords(log);
+  assert.equal(
+    result.stdout,
+    `${JSON.stringify({ fake: 'codex', args: record.args })}\n`,
+  );
+  assert.equal(record.env.BASH_ENV, undefined);
+  assert.equal(record.env.ENV, undefined);
+  const version = await launch(sandbox, ['--version'], { env });
+  assert.equal(version.code, 0, version.stderr);
+  assert.equal(version.stdout, 'codex-cli 0.167.2\n');
+});
+
+test('the configured plan unsets BASH_ENV and ENV before run.sh', {
+  skip,
+}, async () => {
+  const sandbox = installed;
+  // The launcher already unsets both, so the adapter must unset them even
+  // when its own env does not have them.
+  const result = await run(
+    process.execPath,
+    [
+      path.join(ROOT, 'bin', 't3-codex.js'),
+      '--codex',
+      path.join(sandbox.bin, 'codex'),
+      '--config-dir',
+      sandbox.subc,
+      '--',
+      'app-server',
+    ],
+    { env: sandbox.env },
+  );
+  assert.equal(result.code, 0, result.stderr);
+  const fields = result.stdout.split('\0');
+  const records = [];
+  for (let i = 0; i + 1 < fields.length; i += 2)
+    records.push([fields[i], fields[i + 1]]);
+  const unset = records.filter(([kind]) => kind === 'unset').map(([, v]) => v);
+  assert.ok(unset.includes('BASH_ENV'));
+  assert.ok(unset.includes('ENV'));
+  assert.ok(
+    !records.some(
+      ([kind, value]) => kind === 'env' && /^(BASH_)?ENV=/.test(value),
+    ),
+  );
+  const args = records.filter(([kind]) => kind === 'arg').map(([, v]) => v);
+  assert.equal(args[0], 'bash');
+  assert.match(args[1], /runbook[/\\]codex[/\\]run\.sh$/);
+});
+
+test('status reads the hooks from disk after subc codex uninstall', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  // A state file from subc 8.2.0 that says the hooks are installed. Nothing
+  // reads it now.
+  await fs.writeFile(
+    sandbox.state,
+    `${JSON.stringify({ schema: 1, hooks: 'installed' })}\n`,
+  );
+  const removed = await subc(sandbox, ['codex', 'uninstall']);
+  assert.equal(removed.code, 0, removed.stderr);
+  const status = await subc(sandbox, ['t3', 'status']);
+  assert.equal(status.code, 0, status.stderr);
+  assert.match(status.stdout, /subconscious-codex: installed/);
+  assert.match(
+    status.stdout,
+    /Hooks\s+missing from .*hooks\.json, so T3 Code sessions run without them\. Run subc t3 install to set them up again/,
+  );
+  assert.doesNotMatch(status.stdout, /set up by subc t3 install/);
+
+  const restored = await subc(sandbox, ['t3', 'install']);
+  assert.equal(restored.code, 0, restored.stderr);
+  const after = await subc(sandbox, ['t3', 'status']);
+  assert.match(
+    after.stdout,
+    /Hooks\s+2 entries, env file present \(mode 600\)/,
+  );
+
+  await fs.rm(path.join(sandbox.codexHome, 'subconscious-hooks.env'));
+  const partial = await subc(sandbox, ['t3', 'status']);
+  assert.match(
+    partial.stdout,
+    /2 entries, env file missing; run subc t3 install to fix/,
+  );
+});
+
+test('install, status, and uninstall report the old Codex home and keep it', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const old = sandbox.legacyCodexHome;
+  const keyFile = path.join(old, 'subconscious-hooks.env');
+  const thread = path.join(old, 'sessions', 'rollout-old.jsonl');
+  await fs.mkdir(path.dirname(thread), { recursive: true });
+  await fs.writeFile(keyFile, 'API_KEY=sk-old-home-fake\n', { mode: 0o600 });
+  await fs.writeFile(thread, '{}\n');
+  await fs.writeFile(sandbox.state, '{"schema":1}\n');
+  for (const args of [
+    ['t3', 'status'],
+    ['t3', 'install', '--dry-run'],
+    ['t3', 'uninstall'],
+  ]) {
+    const result = await subc(sandbox, args);
+    assert.equal(result.code, 0, `${args.join(' ')}: ${result.stderr}`);
+    const out = result.stdout.replace(/\s+/g, ' ');
+    assert.ok(
+      out.includes(
+        `${old} is the separate Codex home from subc before 8.2.0. subc no longer uses it and does not delete it.`,
+      ),
+      args.join(' '),
+    );
+    assert.ok(
+      out.includes(`It holds a key file. Remove it with: rm '${keyFile}'`),
+      args.join(' '),
+    );
+    assert.match(out, /threads made before 8\.2\.0\. They are your data/);
+    assert.ok(!out.includes('sk-old-home-fake'));
+  }
+  // The legacy state file is gone; the old home is kept.
+  await assert.rejects(fs.access(sandbox.state));
+  await fs.access(keyFile);
+  await fs.access(thread);
+  const after = await subc(sandbox, ['t3', 'status']);
+  assert.match(after.stdout, /Old home/);
+});
+
+test('--provider selects a provider, and refuses one that is not available', {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const settings = await fs.readFile(sandbox.settingsPath, 'utf8');
+  for (const [args, message] of [
+    [
+      ['t3', 'install', '--provider', 'claude'],
+      /claude provider is not available yet/,
+    ],
+    [
+      ['t3', 'status', '--provider', 'opencode'],
+      /opencode provider is not available yet/,
+    ],
+    [
+      ['t3', 'uninstall', '--provider=claude'],
+      /claude provider is not available yet/,
+    ],
+    [['t3', 'install', '--provider', 'cursor'], /Unknown provider: cursor/],
+    [['t3', 'status', '--provider'], /--provider needs a name/],
+    [['t3', 'status', '--dry-run'], /Unknown argument for subc t3 status/],
+  ]) {
+    const result = await subc(sandbox, args);
+    assert.equal(result.code, 1, args.join(' '));
+    assert.match(result.stderr, message);
+  }
+  assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), settings);
+  await assert.rejects(fs.access(sandbox.launcher));
+
+  const dry = await subc(sandbox, [
+    't3',
+    'install',
+    '--provider',
+    'codex',
+    '--dry-run',
+  ]);
+  assert.equal(dry.code, 0, dry.stderr);
+  assert.match(dry.stdout, /Plan: Subconscious \(Codex\) in T3 Code/);
+  const result = await subc(sandbox, [
+    't3',
+    'install',
+    '--provider=codex',
+    '--provider',
+    'codex',
+  ]);
+  assert.equal(result.code, 0, result.stderr);
+  const status = await subc(sandbox, ['t3', 'status', '--provider', 'codex']);
+  assert.match(status.stdout, /subconscious-codex: installed/);
+  const removed = await subc(sandbox, [
+    't3',
+    'uninstall',
+    '--provider',
+    'codex',
+  ]);
+  assert.equal(removed.code, 0, removed.stderr);
+  await assert.rejects(fs.access(sandbox.launcher));
+
+  const help = await subc(sandbox, ['t3', 'help']);
+  assert.match(help.stdout, /--provider NAME/);
+  assert.match(
+    help.stdout,
+    /Available: codex\. Not available yet: claude, opencode\./,
+  );
+});
+
+test('status reports a launcher in an older format, and install rewrites it', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const current = await fs.readFile(sandbox.launcher, 'utf8');
+  // The 8.2.0 launcher, written by this subc version.
+  await fs.writeFile(
+    sandbox.launcher,
+    current
+      .replace(`${LAUNCHER_SHEBANG}\n`, '#!/usr/bin/env bash\n')
+      .replace('unset BASH_ENV ENV\n', ''),
+  );
+  const old = await subc(sandbox, ['t3', 'status']);
+  assert.match(
+    old.stdout,
+    /stale \(written in an older format\); run subc t3 install/,
+  );
+  const result = await subc(sandbox, ['t3', 'install']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(await fs.readFile(sandbox.launcher, 'utf8'), current);
+  const fixed = await subc(sandbox, ['t3', 'status']);
+  assert.match(fixed.stdout, /subc-t3-codex: current/);
+});
+
+const alive = (pid) => {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+test('a launcher with a watchdog stops the agent after T3 Code dies', {
+  skip,
+  timeout: 30_000,
+}, async () => {
+  const sandbox = installed;
+  // No provider sets watchdog yet, so the test renders one from Codex.
+  const file = path.join(sandbox.root, 'watchdog launcher');
+  await fs.writeFile(
+    file,
+    launcherScript({
+      provider: { ...CODEX_PROVIDER, watchdog: true },
+      node: process.execPath,
+      adapter: path.join(ROOT, 'bin', 't3-codex.js'),
+      binary: path.join(sandbox.bin, 'codex'),
+      configDir: sandbox.subc,
+      version: 'test',
+    }),
+    { mode: 0o755 },
+  );
+  const log = logFile(sandbox, 'watchdog');
+  // The bash process plays the T3 Code server that started the launcher.
+  const server = spawn('bash', ['-c', '"$0" help exec & wait', file], {
+    env: sandbox.t3Env({ FAKE_CODEX_LOG: log, FAKE_CODEX_SLEEP: '60000' }),
+    stdio: 'ignore',
+  });
+  let records = [];
+  for (let waited = 0; !records.length && waited < 10_000; waited += 50) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    records = await readRecords(log);
+  }
+  const { pid } = records[0];
+  await new Promise((resolve) => setTimeout(resolve, 2500));
+  assert.ok(alive(pid), 'the agent runs while its parent lives');
+  const exited = new Promise((resolve) => server.on('exit', resolve));
+  server.kill('SIGKILL');
+  await exited;
+  let waited = 0;
+  for (; alive(pid) && waited < 10_000; waited += 100)
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  if (alive(pid)) process.kill(pid, 'SIGKILL');
+  assert.ok(waited < 10_000, 'the watchdog stopped the agent within 10 s');
 });

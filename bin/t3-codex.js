@@ -20,7 +20,12 @@
  * profile, the network, or hooks. Any other command is refused.
  */
 
-import path from 'node:path';
+import {
+  encodePlan,
+  exitWithParent,
+  passthroughPlan,
+  writeStdout,
+} from './t3-plan.js';
 
 const USAGE =
   'usage: t3-codex.js --codex PATH --config-dir DIR -- CODEX_ARGS...';
@@ -124,54 +129,6 @@ function parseOwnArgs(argv) {
   if (!own.codexPath || !own.configDir || argv[i] !== '--')
     throw new Error(USAGE);
   return { ...own, args: argv.slice(i + 1) };
-}
-
-/**
- * The real Codex with T3's args and env unchanged, except that Codex's own
- * directory joins PATH when it is missing, because an npm-installed Codex is
- * a Node script that finds `node` there.
- */
-function passthroughPlan(codexPath, args, env) {
-  const binDir = path.dirname(codexPath);
-  const dirs = (env.PATH ?? '').split(path.delimiter).filter(Boolean);
-  const next = { ...env };
-  if (!dirs.includes(binDir))
-    next.PATH = [binDir, ...dirs].join(path.delimiter);
-  return { argv: [codexPath, ...args], env: next };
-}
-
-const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-
-/** The plan as records: unset, then env, then argv, then ok. */
-function encodePlan(plan, original) {
-  const records = [];
-  for (const name of Object.keys(original)) {
-    if (!(name in plan.env) && ENV_NAME.test(name)) records.push('unset', name);
-  }
-  for (const [name, value] of Object.entries(plan.env)) {
-    if (original[name] === value || !ENV_NAME.test(name)) continue;
-    records.push('env', `${name}=${value}`);
-  }
-  for (const word of plan.argv) records.push('arg', word);
-  records.push('ok', '');
-  if (records.some((record) => record.includes('\0')))
-    throw new Error('A launch value contains a NUL byte');
-  return `${records.join('\0')}\0`;
-}
-
-function writeStdout(text) {
-  return new Promise((resolve, reject) => {
-    process.stdout.write(text, (error) => (error ? reject(error) : resolve()));
-  });
-}
-
-// The launcher is our parent. If T3 kills it while this plan is still being
-// computed, stop too instead of finishing a catalog fetch nobody will use.
-function exitWithParent() {
-  const parent = process.ppid;
-  setInterval(() => {
-    if (process.ppid !== parent) process.exit(1);
-  }, 100).unref();
 }
 
 async function configuredPlan(own) {

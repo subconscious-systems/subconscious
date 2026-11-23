@@ -159,7 +159,10 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
     launcher: path.join(subc, 'bin', 'subc-t3-codex'),
     codexHome: codexDir,
     catalogDir: path.join(subc, 't3', 'codex', 'catalog'),
+    // subc 8.2.0 wrote this file; nothing reads it now.
     state: path.join(subc, 't3', 'state.json'),
+    // The separate Codex home of subc t3 builds before 8.2.0.
+    legacyCodexHome: path.join(subc, 't3', 'codex', 'default'),
   };
   return {
     ...paths,

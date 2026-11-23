@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   inspectT3,
   installT3Provider,
@@ -432,4 +433,60 @@ test('a ~ path or a symlink to the launcher counts as the launcher', {
   } finally {
     process.env.HOME = previousHome;
   }
+});
+
+test('another descriptor writes its own entry and leaves the Codex one alone', {
+  skip,
+}, async () => {
+  // Shaped like a provider with no agent home: no homePath, and one field
+  // that subc keeps empty.
+  const other = Object.freeze({
+    ...CODEX_PROVIDER,
+    id: 'other',
+    instanceId: 'subconscious-other',
+    displayName: 'Subconscious (Other)',
+    driver: 'otherAgent',
+    homeDir: null,
+    managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
+    clearedFields: ['launchArgs'],
+  });
+  const codexEntry = ours();
+  const box = await t3Home({
+    ...BASE,
+    providerInstances: {
+      ...BASE.providerInstances,
+      [T3_INSTANCE_ID]: codexEntry,
+    },
+  });
+  const target = {
+    home: box.target.home,
+    launcherPath: '/opt/subc home/bin/subc-t3-other',
+    provider: other,
+  };
+  assert.equal((await inspectT3(target)).entry, 'absent');
+  await installT3Provider(target, { backupDir: box.backupDir, settleMs: 0 });
+  const settings = await box.read();
+  assert.deepEqual(settings.providerInstances['subconscious-other'], {
+    driver: 'otherAgent',
+    displayName: 'Subconscious (Other)',
+    enabled: true,
+    config: { binaryPath: '/opt/subc home/bin/subc-t3-other' },
+  });
+  assert.deepEqual(settings.providerInstances[T3_INSTANCE_ID], codexEntry);
+  // The Codex target does not count the other entry as a duplicate.
+  assert.deepEqual((await inspectT3(box.target)).duplicates, []);
+
+  settings.providerInstances['subconscious-other'].config.launchArgs = '--x';
+  settings.providerInstances['subconscious-other'].config.homePath = '/a';
+  await fs.writeFile(box.file, JSON.stringify(settings));
+  // homePath is not managed for this descriptor, so it is not drift.
+  assert.deepEqual((await inspectT3(target)).drift, ['launchArgs']);
+
+  assert.equal(
+    (await removeT3Provider(target, { backupDir: box.backupDir })).removed,
+    true,
+  );
+  const after = await box.read();
+  assert.equal(after.providerInstances['subconscious-other'], undefined);
+  assert.deepEqual(after.providerInstances[T3_INSTANCE_ID], codexEntry);
 });
