@@ -1069,6 +1069,35 @@ test('--provider opencode installs only OpenCode, and Codex and Claude keep work
   assert.equal((await readRecords(openCodeLog)).length, 1);
 });
 
+test('install without --provider installs Codex and skips OpenCode 1.x', {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const result = await subc(sandbox, ['t3', 'install'], {
+    FAKE_OPENCODE_VERSION: '1.14.30',
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Skipped.*Subconscious \(OpenCode\): OpenCode 1\.14\.30 is older than 2\.0\.18/,
+  );
+  assert.match(result.stdout, /Subconscious \(Codex\) is ready in T3 Code/);
+  const settings = await readSettings(sandbox);
+  assert.ok(settings.providerInstances['subconscious-codex']);
+  assert.equal(settings.providerInstances[OURS], undefined);
+  assert.ok(await missing(sandbox.opencodeLauncher));
+
+  // With every found CLI refused, install fails and changes nothing.
+  await fs.rm(path.join(sandbox.bin, 'codex'));
+  const before = await snapshot(sandbox.home);
+  const none = await subc(sandbox, ['t3', 'install'], {
+    FAKE_OPENCODE_VERSION: '1.14.30',
+  });
+  assert.equal(none.code, 1);
+  assert.match(none.stderr, /OpenCode 1\.14\.30 is older than 2\.0\.18/);
+  assert.deepEqual(await snapshot(sandbox.home), before);
+});
+
 test('install without --provider skips OpenCode when its CLI is missing', {
   skip,
 }, async () => {

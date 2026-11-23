@@ -1010,6 +1010,45 @@ test('install without --provider skips Claude when its CLI is missing', {
   assert.match(named.stderr, /Claude Code CLI is not installed/);
 });
 
+test('install without --provider repairs Codex and skips an old Claude Code', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox({}, ['--provider', 'codex']);
+  // A stale Codex provider: status asks for subc t3 install.
+  await fs.rm(sandbox.launcher);
+  const result = await subc(sandbox, ['t3', 'install'], {
+    FAKE_CLAUDE_VERSION: '2.1.200',
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Skipped.*Subconscious \(Claude\): Claude Code 2\.1\.200 is older than 2\.1\.280, the oldest version this provider supports/,
+  );
+  assert.match(
+    result.stdout,
+    /Subconscious \(Codex\) is (ready|already set up)/,
+  );
+  assert.ok(
+    (await fs.readFile(sandbox.launcher, 'utf8')).includes('subc_codex='),
+  );
+  const settings = JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
+  assert.ok(settings.providerInstances['subconscious-codex']);
+  assert.equal(settings.providerInstances['subconscious-claude'], undefined);
+  await assert.rejects(fs.lstat(sandbox.claudeLauncher));
+
+  // --provider stays strict: one refused provider stops the whole install.
+  const before = await snapshot(sandbox.home);
+  const named = await subc(
+    sandbox,
+    ['t3', 'install', '--provider', 'codex', '--provider', 'claude'],
+    { FAKE_CLAUDE_VERSION: '2.1.200' },
+  );
+  assert.equal(named.code, 1);
+  assert.match(named.stderr, /Subconscious \(Claude\): Claude Code 2\.1\.200/);
+  assert.match(named.stderr, /Nothing was changed\./);
+  assert.deepEqual(await snapshot(sandbox.home), before);
+});
+
 test('pinClaudeModel and mergeClaudeSettings leave words after -- alone', () => {
   assert.deepEqual(
     pinClaudeModel(

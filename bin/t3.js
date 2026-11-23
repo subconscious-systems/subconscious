@@ -80,7 +80,9 @@ It works on macOS and Linux only, and with the default profile only.
   --provider NAME    Act on this provider only. Repeat it to name more.
                      Available: ${available}.
                      Without it, install sets up every provider whose CLI is
-                     found, and status and uninstall cover all of them.
+                     found, and skips one that a check refuses, such as an
+                     old CLI. It fails only when no provider is left. Status
+                     and uninstall cover all of them.
 
 What install writes:
   - One entry per provider in T3 Code's settings.json: subconscious-codex,
@@ -704,30 +706,42 @@ async function install({ dryRun, providers, explicit }) {
   ];
   if (blockers.length) return failWith(blockers);
 
-  const single = found.length === 1;
   try {
     checkLauncherShell();
   } catch (error) {
     if (error instanceof T3LaunchError) return failWith(error.message);
     throw error;
   }
+  // Without --provider, a provider that a check refuses, such as an old
+  // CLI, is skipped with its message, and the others install (D5). With
+  // --provider, every named provider must pass.
+  const ready = [];
+  const refused = [];
   for (const item of found) {
     try {
       await prepare(paths, item);
+      ready.push(item);
     } catch (error) {
       if (!(error instanceof T3LaunchError)) throw error;
-      return failWith(
-        single
-          ? error.message
-          : [
-              `${item.provider.displayName}: ${error.message}`,
-              'Nothing was changed. Use --provider to install the other providers.',
-            ],
-      );
+      refused.push({ provider: item.provider, message: error.message });
     }
   }
+  if (!ready.length || (explicit && refused.length)) {
+    if (found.length === 1) return failWith(refused[0].message);
+    // One cause for every provider, such as a missing key, prints once.
+    const texts = new Set(refused.map((item) => item.message));
+    return failWith([
+      ...(texts.size === 1 && refused.length > 1
+        ? texts
+        : refused.map(
+            (item) => `${item.provider.displayName}: ${item.message}`,
+          )),
+      'Nothing was changed.',
+    ]);
+  }
+  const single = ready.length === 1;
 
-  const [first] = found;
+  const [first] = ready;
   console.log(
     `\n  ${c.bold}${dryRun ? 'Plan' : 'Installing'}: ${single ? first.provider.displayName : 'Subconscious providers'} in T3 Code${c.reset}\n`,
   );
@@ -741,11 +755,17 @@ async function install({ dryRun, providers, explicit }) {
       `${first.provider.instanceId}: ${describeEntry(first.report)}`,
     );
   line('Settings', first.report.settingsPath);
-  for (const item of found) {
+  for (const item of ready) {
     printPlan(item, single);
     if (dryRun && item.provider.builtInInstanceId)
       await printHideListPlan(item);
   }
+  if (refused.length || missing.length) console.log('');
+  for (const item of refused)
+    line(
+      'Skipped',
+      `${c.yellow}${item.provider.displayName}: ${item.message}${c.reset}`,
+    );
   for (const item of missing)
     line('Skipped', `${item.provider.displayName}: ${item.message}`);
   console.log('');
@@ -757,7 +777,7 @@ async function install({ dryRun, providers, explicit }) {
   await privateDir(paths.root);
   let code = 0;
   // A failure in one provider does not stop the others.
-  for (const item of found) {
+  for (const item of ready) {
     if ((await installOne(paths, item, single)) !== 0) code = 1;
   }
   if (!single && code === 0) console.log('');

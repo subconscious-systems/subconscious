@@ -196,7 +196,7 @@ subc t3 status                    # needs no network and no key
 subc t3 uninstall
 ```
 
-`--provider codex|claude|opencode` works on install, status, and uninstall. Without it, install sets up every provider whose CLI it finds, and status and uninstall cover all three.
+`--provider codex|claude|opencode` works on install, status, and uninstall. Without it, install sets up every provider whose CLI it finds. It skips a provider that a check refuses, such as an old CLI, prints why, and installs the others. It fails only when no provider is left. With `--provider`, every named provider must pass its checks. Status and uninstall cover all three.
 
 ### What install writes
 
