@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
 import { agentById } from '../bin/agent-data.js';
-import { runbookEnv } from '../bin/agents.js';
+import { getAgentApiKey, runbookEnv } from '../bin/agents.js';
 import {
   OPENCODE_PROVIDER_ID,
   OPENCODE_PROVIDER_NAME,
@@ -265,6 +265,7 @@ test('OpenCode gets the key only as SUBCONSCIOUS_API_KEY', async () => {
         '  else echo "$1=other"; fi\n' +
         '}\n' +
         `show OPENCODE_API_KEY "\${OPENCODE_API_KEY-unset}"\n` +
+        `show SUBC_OPENCODE_API_KEY "\${SUBC_OPENCODE_API_KEY-unset}"\n` +
         `show SUBCONSCIOUS_API_KEY "\${SUBCONSCIOUS_API_KEY-unset}"\n`,
       { mode: 0o755 },
     );
@@ -281,14 +282,17 @@ test('OpenCode gets the key only as SUBCONSCIOUS_API_KEY', async () => {
       PATH: `${dir}:${process.env.PATH}`,
       EXPECTED_KEY: key,
     };
-    // runbookEnv sets the agent's own key name, as a real launch does.
-    assert.equal(env.OPENCODE_API_KEY, key);
+    // A real launch env carries the agent's own key name, and the user's
+    // own opencode.ai key when the shell exports one.
+    assert.equal(env.SUBC_OPENCODE_API_KEY, key);
+    env.OPENCODE_API_KEY = 'opencode-ai-key';
 
     for (const prompt of [undefined, 'summarize']) {
       const result = runSync(launchCommand('opencode', { env, prompt }));
       assert.equal(result.status, 0, result.stderr);
       assert.deepEqual(result.stdout.trim().split('\n'), [
         'OPENCODE_API_KEY=unset',
+        'SUBC_OPENCODE_API_KEY=unset',
         'SUBCONSCIOUS_API_KEY=key',
       ]);
     }
@@ -297,16 +301,60 @@ test('OpenCode gets the key only as SUBCONSCIOUS_API_KEY', async () => {
   }
 });
 
-test('an OPENCODE_API_KEY set for subc still selects the Subconscious key', () => {
-  const env = {
-    ...process.env,
-    PATH: `${testDir}:${process.env.PATH}`,
-    GATEWAY_URL: 'https://gateway.example',
-    API_KEY: 'sk-shared',
-    OPENCODE_API_KEY: 'sk-opencode-specific',
-    MODEL: 'subconscious/glm-5.3-marathon',
-  };
-  const command = launchCommand('opencode', { env });
-  assert.equal(command.env.SUBCONSCIOUS_API_KEY, 'sk-opencode-specific');
-  assert.equal('OPENCODE_API_KEY' in command.env, false);
+test('the OpenCode key setting is read from the profile under its old name, never from the env', async () => {
+  const opencode = agentById('opencode');
+  const names = [
+    'SUBC_OPENCODE_API_KEY',
+    'OPENCODE_API_KEY',
+    'SUBCONSCIOUS_API_KEY',
+  ];
+  const previous = Object.fromEntries(
+    names.map((name) => [name, process.env[name]]),
+  );
+  for (const name of names) delete process.env[name];
+  const profile = (values) => ({
+    name: 'opencode-key',
+    path: '/profiles/opencode-key.env',
+    values: { API_KEY: 'profile-shared-key', ...values },
+  });
+  try {
+    // A profile saved before the rename keeps working.
+    assert.equal(
+      (
+        await getAgentApiKey(
+          profile({ OPENCODE_API_KEY: 'legacy-key' }),
+          opencode,
+        )
+      ).key,
+      'legacy-key',
+    );
+    assert.equal(
+      (
+        await getAgentApiKey(
+          profile({
+            SUBC_OPENCODE_API_KEY: 'new-key',
+            OPENCODE_API_KEY: 'old',
+          }),
+          opencode,
+        )
+      ).key,
+      'new-key',
+    );
+    // A user's own opencode.ai key in the shell is not a Subconscious key.
+    process.env.OPENCODE_API_KEY = 'opencode-ai-key';
+    assert.equal(
+      (await getAgentApiKey(profile({}), opencode)).key,
+      'profile-shared-key',
+    );
+    process.env.SUBC_OPENCODE_API_KEY = 'env-specific-key';
+    assert.equal(
+      (await getAgentApiKey(profile({}), opencode)).key,
+      'env-specific-key',
+    );
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
 });
