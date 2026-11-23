@@ -30,10 +30,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { CODEX_PROVIDER } from './t3-providers.js';
 
-// The Codex values, kept for callers and tests that name them.
-export const T3_INSTANCE_ID = CODEX_PROVIDER.instanceId;
-export const T3_DISPLAY_NAME = CODEX_PROVIDER.displayName;
-
 const providerOf = (target) => target.provider ?? CODEX_PROVIDER;
 const MAX_WRITE_ATTEMPTS = 5;
 const MAX_BACKUPS = 10;

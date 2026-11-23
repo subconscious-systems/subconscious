@@ -555,17 +555,6 @@ const CACHE_WAIT_MS = 30_000;
 const CACHE_POLL_MS = 250;
 
 /**
- * The cache wait. SUBC_T3_CACHE_WAIT_MS is a test knob that can only make
- * the wait shorter. Any value that is not a positive number is ignored.
- */
-export function cacheWaitMs(env = process.env) {
-  const value = Number(env.SUBC_T3_CACHE_WAIT_MS);
-  return Number.isFinite(value) && value > 0
-    ? Math.min(value, CACHE_WAIT_MS)
-    : CACHE_WAIT_MS;
-}
-
-/**
  * The model cache to build the hide list from. With `since`, only a cache
  * of subc's instance that T3 Code wrote at or after `since` counts, because
  * an earlier install may have left an old one. Without it, any cache of
@@ -713,8 +702,6 @@ async function installOne(paths, item, single) {
 
 async function install({ dryRun, providers, explicit }) {
   const paths = t3Paths(configDir());
-  // Read before prepare() removes every SUBC_* name from the env.
-  const waitMs = cacheWaitMs();
   const found = [];
   const missing = [];
   for (const provider of providers) {
@@ -732,7 +719,7 @@ async function install({ dryRun, providers, explicit }) {
   for (const item of found) {
     item.target = context(item.provider).target;
     item.report = await inspectT3(item.target);
-    item.cacheWaitMs = serverRunning ? waitMs : 0;
+    item.cacheWaitMs = serverRunning ? CACHE_WAIT_MS : 0;
   }
   const blockers = [
     ...new Set(found.flatMap((item) => settingsBlockers(item.report))),

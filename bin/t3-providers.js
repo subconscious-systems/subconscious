@@ -226,11 +226,10 @@ const OPENCODE = Object.freeze({
 /** Every provider this subc version can install, in a fixed order. */
 export const T3_PROVIDERS = Object.freeze([CODEX, CLAUDE, OPENCODE]);
 
-/**
- * Every provider key that `--provider` accepts, in a fixed order. It matches
- * the IDs in T3_PROVIDERS.
- */
-export const T3_PROVIDER_KEYS = Object.freeze(['codex', 'claude', 'opencode']);
+/** Every provider key that `--provider` accepts, in table order. */
+export const T3_PROVIDER_KEYS = Object.freeze(
+  T3_PROVIDERS.map((provider) => provider.id),
+);
 
 export const CODEX_PROVIDER = CODEX;
 export const CLAUDE_PROVIDER = CLAUDE;

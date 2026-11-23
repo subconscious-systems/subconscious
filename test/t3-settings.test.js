@@ -10,9 +10,10 @@ import {
   readT3ModelPreferences,
   removeT3Provider,
   settingsBlockers,
-  T3_INSTANCE_ID,
   writeT3HideList,
 } from '../bin/t3-settings.js';
+
+const T3_INSTANCE_ID = CODEX_PROVIDER.instanceId;
 
 const skip = process.platform === 'win32';
 const roots = [];

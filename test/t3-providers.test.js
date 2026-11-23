@@ -5,7 +5,6 @@ import {
   isolateLaunchEnv,
   LAUNCHER_SHEBANG,
   launcherScript,
-  T3_LAUNCHER_NAME,
 } from '../bin/t3-launch.js';
 import { encodePlan, SHELL_STARTUP_ENV } from '../bin/t3-plan.js';
 import {
@@ -16,7 +15,6 @@ import {
   T3_PROVIDER_KEYS,
   T3_PROVIDERS,
 } from '../bin/t3-providers.js';
-import { T3_DISPLAY_NAME, T3_INSTANCE_ID } from '../bin/t3-settings.js';
 
 test('the provider table is frozen and has a fixed order', () => {
   assert.ok(Object.isFrozen(T3_PROVIDERS));
@@ -24,10 +22,9 @@ test('the provider table is frozen and has a fixed order', () => {
     T3_PROVIDERS.map((provider) => provider.id),
     ['codex', 'claude', 'opencode'],
   );
-  assert.deepEqual(T3_PROVIDER_KEYS, ['codex', 'claude', 'opencode']);
+  assert.ok(Object.isFrozen(T3_PROVIDER_KEYS));
   for (const provider of T3_PROVIDERS) {
     assert.ok(Object.isFrozen(provider), provider.id);
-    assert.ok(T3_PROVIDER_KEYS.includes(provider.id), provider.id);
     assert.equal(providerByKey(provider.id), provider);
     // binaryPath decides ownership, so every provider must write it.
     const config = provider.managedConfig({
@@ -40,11 +37,11 @@ test('the provider table is frozen and has a fixed order', () => {
   assert.equal(providerByKey('cursor'), null);
 });
 
-test('the Codex exports keep their values', () => {
+test('the Codex descriptor keeps the 8.2.0 names', () => {
   assert.equal(CODEX_PROVIDER, providerByKey('codex'));
-  assert.equal(T3_INSTANCE_ID, 'subconscious-codex');
-  assert.equal(T3_DISPLAY_NAME, 'Subconscious (Codex)');
-  assert.equal(T3_LAUNCHER_NAME, 'subc-t3-codex');
+  assert.equal(CODEX_PROVIDER.instanceId, 'subconscious-codex');
+  assert.equal(CODEX_PROVIDER.displayName, 'Subconscious (Codex)');
+  assert.equal(CODEX_PROVIDER.launcherName, 'subc-t3-codex');
   assert.equal(CODEX_PROVIDER.driver, 'codex');
   assert.equal(CODEX_PROVIDER.watchdog, false);
 });

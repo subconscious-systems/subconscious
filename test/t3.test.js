@@ -1353,15 +1353,6 @@ test('status names the Subconscious provider that writes titles and commit messa
   );
 });
 
-test('the cache wait knob only accepts a positive number', async () => {
-  const { cacheWaitMs } = await import('../bin/t3.js');
-  assert.equal(cacheWaitMs({}), 30_000);
-  assert.equal(cacheWaitMs({ SUBC_T3_CACHE_WAIT_MS: '300' }), 300);
-  assert.equal(cacheWaitMs({ SUBC_T3_CACHE_WAIT_MS: '999999' }), 30_000);
-  for (const value of ['0', '-5', '', 'soon', 'Infinity'])
-    assert.equal(cacheWaitMs({ SUBC_T3_CACHE_WAIT_MS: value }), 30_000, value);
-});
-
 test('help names all three providers, --provider, status exit codes, and no test knob', {
   skip,
 }, async () => {

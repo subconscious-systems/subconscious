@@ -1251,8 +1251,8 @@ test('with no T3 Code server, install does not wait for a cache', {
 test('with no fresh cache, install uses the built-in cache, or skips the hide list', {
   skip,
 }, async () => {
-  const wait = { SUBC_T3_CACHE_WAIT_MS: '300' };
-  // A cache an earlier install left does not count for a new entry.
+  // No T3 Code server runs here, so install does not wait for a probe. A
+  // cache an earlier install left does not count for a new entry.
   const sandbox = await box({ settings: tabbed(settingsWith({})) });
   await writeT3ModelCache(sandbox, {
     instanceId: OURS,
@@ -1261,11 +1261,12 @@ test('with no fresh cache, install uses the built-in cache, or skips the hide li
     checkedAt: '2020-01-01T00:00:00.000Z',
   });
   await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
-  const fallback = await subc(
-    sandbox,
-    ['t3', 'install', '--provider', 'claude'],
-    wait,
-  );
+  const fallback = await subc(sandbox, [
+    't3',
+    'install',
+    '--provider',
+    'claude',
+  ]);
   assert.equal(fallback.code, 0, fallback.stderr);
   assert.match(fallback.stdout, /hid 14 models/);
   assert.deepEqual(
@@ -1275,11 +1276,7 @@ test('with no fresh cache, install uses the built-in cache, or skips the hide li
 
   // No cache at all: the hide list is skipped and install still succeeds.
   const bare = await box({ settings: tabbed(settingsWith({})) });
-  const skipped = await subc(
-    bare,
-    ['t3', 'install', '--provider', 'claude'],
-    wait,
-  );
+  const skipped = await subc(bare, ['t3', 'install', '--provider', 'claude']);
   assert.equal(skipped.code, 0, skipped.stderr);
   assert.match(
     skipped.stdout,
