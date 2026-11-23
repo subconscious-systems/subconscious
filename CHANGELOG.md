@@ -1,5 +1,27 @@
 # Changelog
 
+## [8.2.0](https://github.com/subconscious-systems/subconscious/compare/v8.1.0...v8.2.0) (2026-11-23)
+
+
+### Features
+
+* **codex:** add a protocol launch mode and a launch marker for hooks ([0d8c364](https://github.com/subconscious-systems/subconscious/commit/0d8c36457ce5722650e10ee866ef25b9752ae800))
+* **t3:** add subc t3 to run Codex in T3 Code on Subconscious ([b03b593](https://github.com/subconscious-systems/subconscious/commit/b03b593dd6bc77250fed9cdbd3b1a22754c7dd52))
+* **t3:** add subc t3 to run Codex in T3 Code on Subconscious ([2bdd4e9](https://github.com/subconscious-systems/subconscious/commit/2bdd4e986b4fef13d569bb5ec37f87e744edcdd3))
+
+
+### Bug fixes
+
+* **codex:** keep hook logs and the fallback env file in CODEX_HOME ([374ac77](https://github.com/subconscious-systems/subconscious/commit/374ac7793abd89bde1f945daba88f018fd2f2e60))
+* **codex:** keep hooks.json unchanged when only the hook script is new ([96a6158](https://github.com/subconscious-systems/subconscious/commit/96a6158ee1dd60ad1397d570571784d5e88ef7ca))
+* **codex:** keep the API key out of argv and repair stale hook paths ([a88efca](https://github.com/subconscious-systems/subconscious/commit/a88efcae2cda6d918995aae7eada68e7a4cdee6e))
+* **t3:** flag stale hook entries and isolate the env after a failed restart ([73810be](https://github.com/subconscious-systems/subconscious/commit/73810be835dc7d2114bb541f08ea4d40e457a245))
+* **t3:** keep the Codex version check off ~/.codex ([99c5e34](https://github.com/subconscious-systems/subconscious/commit/99c5e3423387bc08a1c36918bd117f6e8ceccab3))
+* **t3:** match the launcher through ~ and symlinks in T3 settings ([5288c7f](https://github.com/subconscious-systems/subconscious/commit/5288c7fe75e9e560c50abc86923b98fe749f97ef))
+* **t3:** report the real hook env mode and what a failed step leaves ([fbb81e2](https://github.com/subconscious-systems/subconscious/commit/fbb81e21531a28502996769d8960536eac58657b))
+* **t3:** take Codex tuning only from the profile and drop CODEX_API_KEY ([febd0eb](https://github.com/subconscious-systems/subconscious/commit/febd0eb3877d8399e92a7a7b396d946e56ebd80a))
+* **t3:** use ~/.codex as the provider's Codex home ([fe7e013](https://github.com/subconscious-systems/subconscious/commit/fe7e0130cdfe73253dcaeb93e41fe01af0d7d9d8))
+
 ## [8.1.0](https://github.com/subconscious-systems/subconscious/compare/v8.0.2...v8.1.0) (2026-11-16)
 
 
