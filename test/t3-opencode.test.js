@@ -467,6 +467,29 @@ test('an exported shell function in the env never runs, and stdout stays clean',
   await assert.rejects(fs.lstat(marker), { code: 'ENOENT' });
 });
 
+test('a BASH_ENV line in the default profile never reaches run.sh or the helper', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const startup = path.join(sandbox.root, 'profile startup.sh');
+  await fs.writeFile(startup, 'echo "hello from the profile BASH_ENV"\n');
+  await fs.writeFile(
+    profileFile(sandbox),
+    PROFILE(gateway.url, GOOD_KEY, `BASH_ENV=${startup}\nENV=${startup}\n`),
+    { mode: 0o600 },
+  );
+  const log = logFile(sandbox, 'profile-bash-env');
+  const result = await launch(sandbox, SERVE_ARGS, { log });
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /^server listening on http:\/\/127\.0\.0\.1:\d+\n$/,
+  );
+  const [record] = await readRecords(log);
+  assert.equal(record.env.BASH_ENV, undefined);
+  assert.equal(record.env.ENV, undefined);
+});
+
 test('the helper command line ends with T3 Code serve args, for the orphan reaper', {
   skip,
 }, async () => {

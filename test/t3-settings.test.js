@@ -364,6 +364,85 @@ test('a write that lands before the compare is kept and retried', {
   assert.ok(settings.providerInstances[T3_INSTANCE_ID]);
 });
 
+/**
+ * Play a T3 Code save that lands after subc read the file and before it
+ * renamed its new copy into place. subc chmods its temp file right before
+ * it compares and renames, so the save happens inside that chmod, once.
+ */
+function saveDuringReplace(t, file, change) {
+  const chmod = fs.chmod;
+  const state = { saved: false };
+  t.mock.method(fs, 'chmod', async (target, mode) => {
+    await chmod(target, mode);
+    if (
+      state.saved ||
+      !path.basename(String(target)).startsWith('.settings.json.subc-')
+    )
+      return;
+    state.saved = true;
+    const settings = JSON.parse(await fs.readFile(file, 'utf8'));
+    change(settings);
+    await fs.writeFile(`${file}.t3`, JSON.stringify(settings, null, 2));
+    await fs.rename(`${file}.t3`, file);
+  });
+  return state;
+}
+
+test('a T3 Code save between the read and the rename survives', {
+  skip,
+}, async (t) => {
+  const box = await t3Home(BASE);
+  const entrySave = saveDuringReplace(t, box.file, (settings) => {
+    settings.t3Saved = 'entry';
+  });
+  await installT3Provider(box.target, {
+    backupDir: box.backupDir,
+    settleMs: 10,
+  });
+  t.mock.restoreAll();
+  assert.ok(entrySave.saved, 'the save landed inside the write');
+  const afterEntry = await box.read();
+  assert.equal(afterEntry.t3Saved, 'entry');
+  assert.ok(afterEntry.providerInstances[T3_INSTANCE_ID]);
+
+  // The hide list relies on the same compare.
+  const launcherPath = '/opt/subc home/bin/subc-t3-claude';
+  const hide = await t3Home({
+    ...BASE,
+    providerModelPreferences: {},
+    providerInstances: {
+      ...BASE.providerInstances,
+      'subconscious-claude': {
+        driver: 'claudeAgent',
+        displayName: 'Subconscious (Claude)',
+        enabled: true,
+        config: { binaryPath: launcherPath },
+      },
+    },
+  });
+  const prefsSave = saveDuringReplace(t, hide.file, (settings) => {
+    settings.providerModelPreferences.claudeAgent = {
+      hiddenModels: ['claude-haiku-4-5'],
+      modelOrder: [],
+    };
+  });
+  const result = await writeT3HideList(
+    { home: hide.target.home, launcherPath, provider: CLAUDE_PROVIDER },
+    ['claude-opus-5-5'],
+    { backupDir: hide.backupDir },
+  );
+  t.mock.restoreAll();
+  assert.ok(prefsSave.saved, 'the save landed inside the write');
+  assert.equal(result.state, 'written');
+  assert.deepEqual((await hide.read()).providerModelPreferences, {
+    claudeAgent: { hiddenModels: ['claude-haiku-4-5'], modelOrder: [] },
+    'subconscious-claude': {
+      hiddenModels: ['claude-opus-5-5'],
+      modelOrder: [],
+    },
+  });
+});
+
 test('uninstall removes only subc entry and keeps a backup', {
   skip,
 }, async () => {
