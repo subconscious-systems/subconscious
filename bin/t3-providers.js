@@ -59,9 +59,10 @@
  * - `legacyHome`: a directory under `<config dir>/t3` that an older subc
  *   used as the agent home, or `null`. Install, status, and uninstall report
  *   it and never delete it.
- * - `watchdog`: true when the launcher starts a background watchdog that
+ * - `watchdog`: true when the launcher can start a background watchdog that
  *   stops the agent after T3 Code's server dies. It is for a long-lived
- *   helper that T3 Code may fail to stop.
+ *   helper that T3 Code may fail to stop. The adapter turns it on for each
+ *   launch with a `watch` record, and status lists the helpers it watches.
  * - `builtInInstanceId`: the instance ID of T3 Code's own provider for the
  *   same agent, such as `claudeAgent`, or `null`. When it is set, install
  *   writes a hide list for subc's instance: every model in T3 Code's model
@@ -229,8 +230,8 @@ const OPENCODE = Object.freeze({
 export const T3_PROVIDERS = Object.freeze([CODEX, CLAUDE, OPENCODE]);
 
 /**
- * Every provider key that `--provider` accepts, in a fixed order. A key here
- * that is not in T3_PROVIDERS is known but not available yet.
+ * Every provider key that `--provider` accepts, in a fixed order. It matches
+ * the IDs in T3_PROVIDERS.
  */
 export const T3_PROVIDER_KEYS = Object.freeze(['codex', 'claude', 'opencode']);
 

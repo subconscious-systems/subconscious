@@ -13,12 +13,14 @@
  *   env   NAME=VALUE   export the variable
  *   unset NAME         unset the variable
  *   arg   WORD         the next argv word
+ *   watch (empty)      start the watchdog before the exec
  *   ok    (empty)      the plan is complete
  *
  * T3 Code 0.1.11 runs OpenCode in two ways. The version check (`--version`)
  * runs the real OpenCode unchanged, without reading the profile or the
- * network. The helper (`serve --hostname=H --port=P`) gets the Subconscious
- * launch. `serve --service` and `serve --stdio` are refused, because the
+ * network, and starts no watchdog. The helper (`serve --hostname=H
+ * --port=P`) gets the Subconscious launch and a `watch` record, so the
+ * launcher stops it after T3 Code's server dies. `serve --service` and `serve --stdio` are refused, because the
  * first starts OpenCode's shared background service and the second is
  * another protocol. `upgrade` and every other command are refused too.
  */

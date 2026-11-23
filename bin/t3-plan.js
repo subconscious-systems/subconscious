@@ -6,7 +6,11 @@
  *   env   NAME=VALUE   export the variable
  *   unset NAME         unset the variable
  *   arg   WORD         the next argv word
+ *   watch (empty)      start the watchdog before the exec
  *   ok    (empty)      the plan is complete
+ *
+ * Only a launcher whose provider has `watchdog` accepts `watch`. An adapter
+ * sends it only for a launch that starts a long-lived helper.
  */
 
 import path from 'node:path';
@@ -36,9 +40,10 @@ export function passthroughPlan(binaryPath, args, env) {
 }
 
 /**
- * The plan as records: unset, then env, then argv, then ok. A name in the
- * env the adapter started with that the plan leaves out is unset. A name in
- * `plan.unset` is unset even when that env did not have it.
+ * The plan as records: unset, then env, then argv, then watch when
+ * `plan.watch` is set, then ok. A name in the env the adapter started with
+ * that the plan leaves out is unset. A name in `plan.unset` is unset even
+ * when that env did not have it.
  */
 export function encodePlan(plan, original) {
   const records = [];
@@ -55,6 +60,7 @@ export function encodePlan(plan, original) {
     records.push('env', `${name}=${value}`);
   }
   for (const word of plan.argv) records.push('arg', word);
+  if (plan.watch) records.push('watch', '');
   records.push('ok', '');
   if (records.some((record) => record.includes('\0')))
     throw new Error('A launch value contains a NUL byte');

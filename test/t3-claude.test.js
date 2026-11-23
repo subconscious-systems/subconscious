@@ -1178,7 +1178,7 @@ test('status reports the hide list, and drift for a new built-in model', {
     reported: MODELS,
   });
   const drift = await subc(sandbox, ['t3', 'status', '--provider', 'claude']);
-  assert.equal(drift.code, 0, drift.stderr);
+  assert.equal(drift.code, 1, drift.stderr);
   assert.match(
     drift.stdout,
     /drift: T3 Code lists 1 built-in models that the hide list does not hide: claude-opus-6\. Run subc t3 install again\./,

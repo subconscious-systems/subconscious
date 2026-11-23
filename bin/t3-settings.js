@@ -625,3 +625,101 @@ export async function writeT3HideList(target, hiddenModels, options = {}) {
   });
   return { state, backup: written.backup };
 }
+
+// T3 Code 0.1.11 decodes a missing textGenerationModelSelection to its
+// built-in Codex instance (`packages/contracts/src/settings.ts`).
+const DEFAULT_TEXT_GENERATION_INSTANCE = 'codex';
+
+/**
+ * Where one model selection points. T3 Code reads `instanceId`, or the
+ * older `provider` field. `kind` is `subconscious` for an entry that subc
+ * owns, `textGenerator` for a model API from `textGenerators`, `provider`
+ * for any other instance, or `invalid`.
+ */
+function describeSelection(selection, settings, targets) {
+  if (!isObject(selection)) return { kind: 'invalid' };
+  const instanceId =
+    typeof selection.instanceId === 'string'
+      ? selection.instanceId
+      : selection.provider;
+  if (typeof instanceId !== 'string' || !instanceId) return { kind: 'invalid' };
+  const model = typeof selection.model === 'string' ? selection.model : null;
+  const entry = settings.providerInstances?.[instanceId];
+  const ours = targets.find(
+    (target) => providerOf(target).instanceId === instanceId,
+  );
+  if (ours && isOwnedEntry(entry, ours))
+    return {
+      kind: 'subconscious',
+      instanceId,
+      model,
+      name: providerOf(ours).displayName,
+    };
+  const generator = isObject(settings.textGenerators)
+    ? settings.textGenerators[instanceId]
+    : undefined;
+  if (isObject(generator)) {
+    let origin = null;
+    try {
+      origin = new URL(generator.baseUrl).origin;
+    } catch {
+      // T3 Code refuses such a value too.
+    }
+    return {
+      kind: 'textGenerator',
+      instanceId,
+      model,
+      name: typeof generator.label === 'string' ? generator.label : instanceId,
+      origin,
+    };
+  }
+  return {
+    kind: 'provider',
+    instanceId,
+    model,
+    name:
+      typeof entry?.displayName === 'string' && entry.displayName
+        ? entry.displayName
+        : instanceId,
+  };
+}
+
+/**
+ * Where T3 Code sends its generated text, read from the settings with no
+ * network. subc never writes these settings.
+ *
+ * - `titles`: `textGenerationModelSelection`, for thread titles. A missing
+ *   value is T3 Code's default, marked `isDefault`.
+ * - `commits`: `sourceControlWriterModelSelection`, for commit messages, or
+ *   null when it is null or missing, because T3 Code then uses `titles`.
+ *
+ * `targets` lists subc's targets, so that an entry subc owns counts as
+ * Subconscious. `state` is `ok` or `unreadable`.
+ */
+export async function readT3TextGeneration(home, targets) {
+  const text = await readText(t3Files(home).settings);
+  const parsed = text === null ? {} : parseSettings(text);
+  if (!parsed.settings) return { state: 'unreadable' };
+  const { settings } = parsed;
+  const titles =
+    settings.textGenerationModelSelection === undefined
+      ? {
+          ...describeSelection(
+            { instanceId: DEFAULT_TEXT_GENERATION_INSTANCE },
+            settings,
+            targets,
+          ),
+          isDefault: true,
+        }
+      : describeSelection(
+          settings.textGenerationModelSelection,
+          settings,
+          targets,
+        );
+  const writer = settings.sourceControlWriterModelSelection;
+  const commits =
+    writer === undefined || writer === null
+      ? null
+      : describeSelection(writer, settings, targets);
+  return { state: 'ok', titles, commits };
+}

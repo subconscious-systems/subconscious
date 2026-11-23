@@ -794,7 +794,7 @@ test('status flags hook entries that run another path, and install fixes them', 
     text.split(hookScript).join('/old/home/.codex/subconscious-hook.sh'),
   );
   const stale = await subc(sandbox, ['t3', 'status']);
-  assert.equal(stale.code, 0, stale.stderr);
+  assert.equal(stale.code, 1, stale.stderr);
   assert.match(stale.stdout, /2 entries, 2 run another path/);
 
   const result = await subc(sandbox, ['t3', 'install']);
@@ -876,7 +876,7 @@ test('status reads the hooks from disk after subc codex uninstall', {
   const removed = await subc(sandbox, ['codex', 'uninstall']);
   assert.equal(removed.code, 0, removed.stderr);
   const status = await subc(sandbox, ['t3', 'status']);
-  assert.equal(status.code, 0, status.stderr);
+  assert.equal(status.code, 1, status.stderr);
   assert.match(status.stdout, /subconscious-codex: installed/);
   assert.match(
     status.stdout,
@@ -1034,14 +1034,25 @@ test('a launcher with a watchdog stops the agent after T3 Code dies', {
 }, async () => {
   const sandbox = installed;
   // OpenCode sets watchdog. This test renders it for Codex too, so the
-  // watchdog also works for an agent that is not a server.
+  // watchdog also works for an agent that is not a server. The Codex
+  // adapter never asks for the watchdog, so a wrapper adds the `watch`
+  // record to its plan.
   const file = path.join(sandbox.root, 'watchdog launcher');
+  const wrapper = path.join(sandbox.root, 'watch-adapter.cjs');
+  await fs.writeFile(
+    wrapper,
+    `const { spawnSync } = require('node:child_process');
+const result = spawnSync(process.execPath, [${JSON.stringify(path.join(ROOT, 'bin', 't3-codex.js'))}, ...process.argv.slice(2)], { stdio: ['ignore', 'pipe', 'inherit'] });
+process.stdout.write(Buffer.concat([result.stdout, Buffer.from('watch\\0\\0')]));
+process.exit(result.status ?? 1);
+`,
+  );
   await fs.writeFile(
     file,
     launcherScript({
       provider: { ...CODEX_PROVIDER, watchdog: true },
       node: process.execPath,
-      adapter: path.join(ROOT, 'bin', 't3-codex.js'),
+      adapter: wrapper,
       binary: path.join(sandbox.bin, 'codex'),
       configDir: sandbox.subc,
       version: 'test',
@@ -1070,4 +1081,195 @@ test('a launcher with a watchdog stops the agent after T3 Code dies', {
     await new Promise((resolve) => setTimeout(resolve, 100));
   if (alive(pid)) process.kill(pid, 'SIGKILL');
   assert.ok(waited < 10_000, 'the watchdog stopped the agent within 10 s');
+});
+
+test('status exits 0 when everything installed works, or nothing is installed', {
+  skip,
+}, async () => {
+  const empty = await box();
+  for (const args of [
+    ['t3', 'status'],
+    ['t3', 'status', '--provider', 'codex'],
+    ['t3', 'status', '--provider', 'claude', '--provider', 'opencode'],
+  ]) {
+    const result = await subc(empty, args);
+    assert.equal(result.code, 0, `${args.join(' ')}\n${result.stdout}`);
+    assert.doesNotMatch(result.stdout, /Broken:/);
+  }
+  const healthy = await installedBox();
+  const result = await subc(healthy, ['t3', 'status']);
+  assert.equal(result.code, 0, result.stdout);
+  assert.match(result.stdout, /subconscious-codex: installed/);
+  assert.match(result.stdout, /subconscious-claude: not installed/);
+  assert.doesNotMatch(result.stdout, /Broken:/);
+});
+
+test('status exits 1 for drift, a missing launcher, missing hooks, or a conflict', {
+  skip,
+}, async () => {
+  const broken = async (sandbox, reason) => {
+    const result = await subc(sandbox, ['t3', 'status']);
+    assert.equal(result.code, 1, result.stdout);
+    assert.match(result.stdout, /Broken: Subconscious \(Codex\): /);
+    assert.match(result.stdout, reason);
+    assert.ok(!result.stdout.includes(GOOD_KEY));
+    return result;
+  };
+
+  const drift = await installedBox();
+  const settings = JSON.parse(await fs.readFile(drift.settingsPath, 'utf8'));
+  settings.providerInstances['subconscious-codex'].displayName = 'Renamed';
+  await fs.writeFile(drift.settingsPath, JSON.stringify(settings));
+  await broken(drift, /drift in displayName/);
+
+  const launcher = await installedBox();
+  await fs.rm(launcher.launcher);
+  await broken(launcher, /launcher missing/);
+  // A launcher that subc did not write is broken too.
+  await fs.writeFile(launcher.launcher, '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+  await broken(launcher, /launcher foreign/);
+
+  const hooks = await installedBox();
+  const removed = await subc(hooks, ['codex', 'uninstall']);
+  assert.equal(removed.code, 0, removed.stderr);
+  await broken(hooks, /missing or broken Codex hooks/);
+
+  const conflict = await box({
+    settings: `${JSON.stringify({
+      providerInstances: {
+        'subconscious-codex': {
+          driver: 'codex',
+          config: { binaryPath: '/usr/local/bin/codex' },
+        },
+      },
+    })}\n`,
+  });
+  await broken(conflict, /an entry that subc did not write/);
+
+  // An entry without its launcher is broken, and a launcher without its
+  // entry is too.
+  const orphan = await installedBox();
+  const kept = JSON.parse(await fs.readFile(orphan.settingsPath, 'utf8'));
+  delete kept.providerInstances['subconscious-codex'];
+  await fs.writeFile(orphan.settingsPath, JSON.stringify(kept));
+  await broken(orphan, /a launcher with no entry in T3 Code/);
+
+  const fixed = await subc(drift, ['t3', 'install']);
+  assert.equal(fixed.code, 0, fixed.stderr);
+  assert.equal((await subc(drift, ['t3', 'status'])).code, 0);
+});
+
+test('status exits 1 when the pinned CLI is older than install accepts', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const codex = path.join(sandbox.bin, 'codex');
+  const text = await fs.readFile(codex, 'utf8');
+  await fs.writeFile(
+    codex,
+    text.replace('codex-cli 0.167.2', 'codex-cli 0.1.0'),
+  );
+  const result = await subc(sandbox, ['t3', 'status']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(result.stdout, /\(0\.1\.0\) is older than /);
+  assert.match(result.stdout, /a CLI version that install refuses/);
+});
+
+test("status says T3 Code's default text generation is not Subconscious", {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const result = await subc(sandbox, ['t3', 'status']);
+  assert.equal(result.code, 0, result.stdout);
+  assert.match(
+    result.stdout,
+    /Text gen\s+\S*Thread titles and commit messages go to codex, T3 Code's default, not to Subconscious\./,
+  );
+  assert.match(
+    result.stdout,
+    /open Settings in T3 Code, then Text generation, and pick a Subconscious provider\. subc never changes this setting\./,
+  );
+});
+
+test('status names the Subconscious provider that writes titles and commit messages', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const settings = JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
+  settings.textGenerationModelSelection = {
+    instanceId: 'subconscious-codex',
+    model: MODELS[0],
+  };
+  await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings));
+  const before = await fs.readFile(sandbox.settingsPath, 'utf8');
+  const result = await subc(sandbox, ['t3', 'status']);
+  assert.equal(result.code, 0, result.stdout);
+  assert.match(
+    result.stdout,
+    /Thread titles and commit messages go to Subconscious: Subconscious \(Codex\) \(subconscious-codex\), model subconscious\/sandbox-a\./,
+  );
+  assert.doesNotMatch(result.stdout, /not to Subconscious/);
+  assert.doesNotMatch(result.stdout, /pick a Subconscious provider/);
+
+  // A separate commit message model that is not Subconscious gets its own
+  // warning, and a hint for its own setting.
+  settings.sourceControlWriterModelSelection = {
+    instanceId: 'claudeAgent',
+    model: 'claude-sonnet-5-5',
+  };
+  await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings));
+  const split = await subc(sandbox, ['t3', 'status']);
+  assert.match(split.stdout, /Thread titles go to Subconscious: /);
+  assert.match(
+    split.stdout,
+    /Commit messages go to claudeAgent, model claude-sonnet-5-5, not to Subconscious\./,
+  );
+  assert.match(split.stdout, /Settings, Commits & pull requests/);
+
+  // An entry with subc's ID that subc did not write is not Subconscious.
+  const foreign = JSON.parse(before);
+  foreign.providerInstances['subconscious-codex'].config.binaryPath =
+    '/usr/local/bin/codex';
+  await fs.writeFile(sandbox.settingsPath, JSON.stringify(foreign));
+  const spoofed = await subc(sandbox, ['t3', 'status']);
+  assert.match(
+    spoofed.stdout,
+    /go to Subconscious \(Codex\) \(subconscious-codex\), model subconscious\/sandbox-a, not to Subconscious\./,
+  );
+});
+
+test('the cache wait knob only accepts a positive number', async () => {
+  const { cacheWaitMs } = await import('../bin/t3.js');
+  assert.equal(cacheWaitMs({}), 30_000);
+  assert.equal(cacheWaitMs({ SUBC_T3_CACHE_WAIT_MS: '300' }), 300);
+  assert.equal(cacheWaitMs({ SUBC_T3_CACHE_WAIT_MS: '999999' }), 30_000);
+  for (const value of ['0', '-5', '', 'soon', 'Infinity'])
+    assert.equal(cacheWaitMs({ SUBC_T3_CACHE_WAIT_MS: value }), 30_000, value);
+});
+
+test('help names all three providers, --provider, status exit codes, and no test knob', {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const help = await subc(sandbox, ['t3', 'help']);
+  assert.equal(help.code, 0, help.stderr);
+  for (const name of [
+    'Subconscious (Codex)',
+    'Subconscious (Claude)',
+    'Subconscious (OpenCode)',
+    'subc-t3-codex',
+    'subc-t3-claude',
+    'subc-t3-opencode',
+    '--provider NAME',
+    'Exit codes:',
+    'providerModelPreferences["subconscious-claude"]',
+    'text\n    generation setting',
+    'env -S bash -p',
+  ])
+    assert.ok(help.stdout.includes(name), name);
+  assert.doesNotMatch(help.stdout, /SUBC_T3_CACHE_WAIT_MS/);
+  assert.doesNotMatch(help.stdout, /—/);
+  for (const row of help.stdout.split('\n')) assert.ok(row.length <= 80, row);
+  const top = await subc(sandbox, ['help']);
+  assert.match(top.stdout, /t3 .*Codex, Claude Code, and OpenCode/);
 });

@@ -1134,3 +1134,213 @@ test('the OpenCode descriptor keeps T3 Code helper names and removes steering na
     'T3CODE_HOME',
   ]);
 });
+
+const WATCHDOG = 'subc-t3-opencode-watchdog';
+
+/** The live processes in the process group `pgid`. */
+const groupOf = (pgid) => processes().filter((entry) => entry.pgid === pgid);
+
+/**
+ * A process's env as text, or null when this system does not show it:
+ * /proc/<pid>/environ on Linux, and `ps -E` on macOS, which newer macOS
+ * releases answer without the env.
+ */
+async function processEnv(pid) {
+  if (process.platform === 'linux') {
+    try {
+      return await fs.readFile(`/proc/${pid}/environ`, 'latin1');
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const text = execFileSync(
+      'ps',
+      ['-wwE', '-o', 'command=', '-p', `${pid}`],
+      {
+        encoding: 'utf8',
+      },
+    );
+    return /\sPATH=/.test(text) ? text : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The plan records the adapter prints for `args`, as [kind, value] pairs. */
+async function planRecords(sandbox, args) {
+  const result = await run(
+    process.execPath,
+    [
+      ADAPTER,
+      '--opencode',
+      sandbox.opencodeBin,
+      '--config-dir',
+      sandbox.subc,
+      '--',
+      ...args,
+    ],
+    { env: sandbox.openCodeT3Env() },
+  );
+  assert.equal(result.code, 0, result.stderr);
+  const words = result.stdout.split('\0').slice(0, -1);
+  const records = [];
+  for (let i = 0; i < words.length; i += 2)
+    records.push([words[i], words[i + 1]]);
+  return records;
+}
+
+test('the watchdog and its children hold no key and no helper password', {
+  skip,
+  timeout: 30_000,
+}, async () => {
+  const sandbox = await installedBox();
+  // A sleep on the launch PATH that records, as booleans, whether its env
+  // holds the key or T3 Code's helper password. The watchdog runs it every
+  // 2 s.
+  const sleepLog = logFile(sandbox, 'watchdog-sleep');
+  await fs.writeFile(
+    path.join(sandbox.bin, 'sleep'),
+    `#!/bin/sh
+case "$(/usr/bin/env)" in
+  *${GOOD_KEY}*) echo key >> '${sleepLog}' ;;
+  *t3-helper-password*) echo password >> '${sleepLog}' ;;
+  *) echo clean >> '${sleepLog}' ;;
+esac
+for s in /bin/sleep /usr/bin/sleep; do [ -x "$s" ] && exec "$s" "$@"; done
+exit 1
+`,
+    { mode: 0o755 },
+  );
+  const log = logFile(sandbox, 'watchdog-env');
+  const child = spawn(sandbox.opencodeLauncher, SERVE_ARGS, {
+    env: sandbox.openCodeT3Env({
+      FAKE_OPENCODE_LOG: log,
+      FAKE_OPENCODE_SLEEP: '60000',
+    }),
+    stdio: 'ignore',
+    detached: true,
+  });
+  const exited = new Promise((resolve) => child.on('exit', resolve));
+  try {
+    const [record] = await waitFor(async () => {
+      const found = await readRecords(log);
+      return found.length ? found : null;
+    }, 10_000);
+    // The helper itself holds the key, as the launch intends.
+    assert.deepEqual(keyHolders(record.env), ['SUBCONSCIOUS_API_KEY']);
+    const watchdog = await waitFor(
+      () =>
+        groupOf(child.pid).find(({ command }) => command.includes(WATCHDOG)),
+      5000,
+    );
+    assert.ok(watchdog, JSON.stringify(groupOf(child.pid)));
+    assert.ok(
+      watchdog.command.endsWith(
+        ` ${WATCHDOG} ${child.pid} ${process.pid} ${sandbox.subc}`,
+      ),
+      watchdog.command,
+    );
+    assert.ok(!watchdog.command.includes(GOOD_KEY));
+    const env = await processEnv(watchdog.pid);
+    if (env !== null) {
+      assert.equal(env.includes(GOOD_KEY), false);
+      assert.equal(env.includes('t3-helper-password'), false);
+    }
+    // Wait for the first poll's sleep to run.
+    const polls = await waitFor(async () => {
+      const text = await fs.readFile(sleepLog, 'utf8').catch(() => '');
+      return text ? text.trim().split('\n') : null;
+    }, 5000);
+    assert.deepEqual([...new Set(polls)], ['clean']);
+  } finally {
+    process.kill(child.pid, 'SIGTERM');
+    await exited;
+  }
+});
+
+test('--version and --help start no watchdog, and serve does', {
+  skip,
+  timeout: 30_000,
+}, async () => {
+  const sandbox = installed;
+  for (const args of [['--version'], ['--help'], ['serve', '--help']]) {
+    const kinds = (await planRecords(sandbox, args)).map(([kind]) => kind);
+    assert.ok(!kinds.includes('watch'), args.join(' '));
+    const child = spawn(sandbox.opencodeLauncher, args, {
+      env: sandbox.openCodeT3Env(),
+      stdio: 'ignore',
+      detached: true,
+    });
+    const code = await new Promise((resolve) => child.on('exit', resolve));
+    assert.equal(code, 0, args.join(' '));
+    // An old launcher kept a watchdog in the group for 2 s after the exit.
+    const empty = await waitFor(() => groupOf(child.pid).length === 0, 500);
+    assert.ok(
+      empty,
+      `${args.join(' ')}: ${JSON.stringify(groupOf(child.pid))}`,
+    );
+  }
+  const serve = await planRecords(sandbox, SERVE_ARGS);
+  assert.deepEqual(serve.slice(-2), [
+    ['watch', ''],
+    ['ok', ''],
+  ]);
+});
+
+test('status lists the running helpers by PID and start time, and nothing else', {
+  skip,
+  timeout: 30_000,
+}, async () => {
+  const sandbox = await installedBox();
+  const none = await subc(sandbox, ['t3', 'status', '--provider', 'opencode']);
+  assert.equal(none.code, 0, none.stdout);
+  assert.match(none.stdout, /Helpers\s+none running/);
+
+  const log = logFile(sandbox, 'status-helper');
+  const child = spawn(sandbox.opencodeLauncher, SERVE_ARGS, {
+    env: sandbox.openCodeT3Env({
+      FAKE_OPENCODE_LOG: log,
+      FAKE_OPENCODE_SLEEP: '60000',
+    }),
+    stdio: 'ignore',
+    detached: true,
+  });
+  const exited = new Promise((resolve) => child.on('exit', resolve));
+  try {
+    assert.ok(
+      await waitFor(
+        () =>
+          groupOf(child.pid).some(({ command }) => command.includes(WATCHDOG)),
+        10_000,
+      ),
+    );
+    // Another subc config dir's helper is not this install's.
+    const other = await box();
+    const elsewhere = await subc(other, ['t3', 'status']);
+    assert.match(elsewhere.stdout, /Helpers\s+none running/);
+
+    const status = await subc(sandbox, [
+      't3',
+      'status',
+      '--provider',
+      'opencode',
+    ]);
+    assert.equal(status.code, 0, status.stdout);
+    assert.match(
+      status.stdout,
+      new RegExp(`Helpers\\s+PID ${child.pid}, started \\S.*\\d{4}\\n`),
+    );
+    assert.equal(status.stdout.match(/, started /g)?.length, 1);
+    const output = `${status.stdout}${status.stderr}`;
+    assert.equal(output.includes(GOOD_KEY), false);
+    assert.equal(output.includes('t3-helper-password'), false);
+    assert.equal(output.includes('OPENCODE_CONFIG_CONTENT'), false);
+  } finally {
+    process.kill(child.pid, 'SIGTERM');
+    await exited;
+  }
+  assert.ok(await waitFor(() => groupOf(child.pid).length === 0, 5000));
+  const after = await subc(sandbox, ['t3', 'status', '--provider', 'opencode']);
+  assert.match(after.stdout, /Helpers\s+none running/);
+});
