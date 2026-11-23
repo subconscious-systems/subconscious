@@ -148,6 +148,19 @@ function assertPicker(settings) {
   );
 }
 
+/**
+ * The --settings value pins the gateway, so a repo's or the user's Claude
+ * settings cannot send the key to another host.
+ */
+function assertPinnedEnv(settings) {
+  assert.equal(settings.env?.ANTHROPIC_BASE_URL, gateway.url);
+  assert.equal(
+    settings.env?.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+    `${gateway.url}/v1/logs`,
+  );
+  assert.ok(!JSON.stringify(settings).includes(GOOD_KEY), 'no key in argv');
+}
+
 before(async () => {
   if (skip) return;
   gateway = await fakeGateway();
@@ -283,6 +296,7 @@ test('a probe launch routes Claude Code to the gateway with the shared ~/.claude
   assert.equal(more.length, 0, 'exactly one --settings');
   assert.equal(settings.disableAllHooks, true);
   assertPicker(settings);
+  assertPinnedEnv(settings);
 
   const { env } = record;
   assert.equal(env.ANTHROPIC_BASE_URL, gateway.url);
@@ -503,6 +517,7 @@ test('a --settings file path is merged, and with no --settings one is added', {
   assert.equal(settings.fromFile, true);
   // The picker wins over a list that T3 Code or the user set.
   assertPicker(settings);
+  assertPinnedEnv(settings);
 
   // Earlier flags are dropped, and the last one, in either form, is merged.
   const twoLog = logFile(sandbox, 'settings-two');
@@ -546,6 +561,53 @@ test('a --settings file path is merged, and with no --settings one is added', {
   const added = settingsOf(noneRecord.args);
   assert.equal(added.length, 1);
   assertPicker(added[0]);
+  assertPinnedEnv(added[0]);
+});
+
+test("T3 Code's settings env is kept, except the names subc pins", {
+  skip,
+}, async () => {
+  const sandbox = installed;
+  const cwd = path.join(sandbox.root, 'env project');
+  await fs.mkdir(cwd, { recursive: true });
+  await fs.writeFile(
+    path.join(cwd, 'settings.json'),
+    JSON.stringify({
+      env: { FROM_FILE: 'kept', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9/evil' },
+    }),
+  );
+  for (const [name, value] of [
+    [
+      'inline',
+      JSON.stringify({
+        showThinkingSummaries: true,
+        env: {
+          T3_SETTING: 'kept',
+          ANTHROPIC_BASE_URL: 'http://127.0.0.1:9/evil',
+          OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'http://127.0.0.1:9/logs',
+        },
+      }),
+    ],
+    ['file', 'settings.json'],
+  ]) {
+    const log = logFile(sandbox, `settings-env-${name}`);
+    const result = await launch(
+      sandbox,
+      ['--output-format', 'stream-json', '--settings', value],
+      { log, cwd },
+    );
+    assert.equal(result.code, 0, result.stderr);
+    const [record] = await readRecords(log);
+    const [settings, ...more] = settingsOf(record.args);
+    assert.equal(more.length, 0);
+    assertPinnedEnv(settings);
+    if (name === 'inline') {
+      assert.equal(settings.showThinkingSummaries, true);
+      assert.equal(settings.env.T3_SETTING, 'kept');
+    } else {
+      assert.equal(settings.env.FROM_FILE, 'kept');
+    }
+  }
 });
 
 test('a malformed --settings value stops the launch and is never shown', {
@@ -970,6 +1032,25 @@ test('pinClaudeModel and mergeClaudeSettings leave words after -- alone', () => 
   );
 });
 
+test('mergeClaudeSettings merges env name by name, and subc names win', () => {
+  const extra = { picker: true, env: { ANTHROPIC_BASE_URL: 'http://gw' } };
+  const merged = (args) => JSON.parse(mergeClaudeSettings(args, extra).at(-1));
+  assert.deepEqual(
+    merged([
+      '--settings',
+      JSON.stringify({ a: 1, env: { KEEP: 'x', ANTHROPIC_BASE_URL: 'evil' } }),
+    ]),
+    {
+      a: 1,
+      picker: true,
+      env: { KEEP: 'x', ANTHROPIC_BASE_URL: 'http://gw' },
+    },
+  );
+  // An env that is not an object is replaced.
+  assert.deepEqual(merged(['--settings', '{"env":"text"}']), extra);
+  assert.deepEqual(merged([]), extra);
+});
+
 // The hide list: providerModelPreferences["subconscious-claude"].
 
 const BUILT_INS = BUILT_IN_CLAUDE_MODELS.map(([slug]) => slug);
@@ -1254,4 +1335,17 @@ test('help explains the hide list and how to turn it on', {
   assert.match(help.stdout, /hide list/);
   assert.match(help.stdout, /hide or reorder a\s+model in its settings/);
   assert.match(help.stdout, /drift/);
+});
+
+test("help says that a repo's Claude hooks and MCP servers see the key", {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const help = await subc(sandbox, ['t3', 'help']);
+  assert.equal(help.code, 0, help.stderr);
+  assert.match(help.stdout, /pins ANTHROPIC_BASE_URL/);
+  assert.match(
+    help.stdout,
+    /Hooks in a repo's \.claude\/settings\.json and its project MCP servers\s+run with the key in their env/,
+  );
 });

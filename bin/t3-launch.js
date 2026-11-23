@@ -279,6 +279,16 @@ const CLAUDE_KEY_CARRIERS = new Set([
   'ANTHROPIC_AUTH_TOKEN',
   'OTEL_EXPORTER_OTLP_HEADERS',
 ]);
+// The env names that the launch also pins in the --settings value. Claude
+// Code applies the `env` of every settings source it loads, and a repo's
+// .claude/settings.json or the user's ~/.claude/settings.json can set these
+// names. The flag's settings win over both, so the key goes only to the
+// gateway that the default profile names. Neither value is a secret, so the
+// argv stays free of the key.
+export const CLAUDE_PINNED_SETTINGS_ENV = Object.freeze([
+  'ANTHROPIC_BASE_URL',
+  'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT',
+]);
 // Copies of the key, the catalog, or the picker that runbookEnv adds for an
 // ordinary subc claude launch. Claude Code reads none of them.
 const CLAUDE_LAUNCH_EXTRAS = Object.freeze([
@@ -341,14 +351,32 @@ function readSettingsValue(value, cwd) {
 }
 
 /**
- * Merge `picker` into the last `--settings` value in `args`, and drop the
+ * T3 Code's settings with subc's keys on top. `env` is merged name by name,
+ * so T3 Code's own env names stay and subc's names win.
+ */
+function withSubcSettings(settings, extra) {
+  const merged = { ...settings, ...extra };
+  if (extra.env)
+    merged.env = {
+      ...(isPlainObject(settings.env) ? settings.env : {}),
+      ...extra.env,
+    };
+  return merged;
+}
+
+const isPlainObject = (value) =>
+  Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * Merge `extra` into the last `--settings` value in `args`, and drop the
  * earlier ones, so Claude Code gets exactly one `--settings`. Claude Code
  * keeps only the last flag, so a second flag beside T3 Code's would drop
- * either T3 Code's keys or the picker. A value that starts with `{` is
- * inline JSON, and any other value is a file path relative to `cwd`. With
- * no `--settings` in `args`, one is added before any `--`.
+ * either T3 Code's keys or subc's. A value that starts with `{` is inline
+ * JSON, and any other value is a file path relative to `cwd`. With no
+ * `--settings` in `args`, one is added before any `--`. The `env` key is
+ * merged name by name.
  */
-export function mergeClaudeSettings(args, picker, cwd = process.cwd()) {
+export function mergeClaudeSettings(args, extra, cwd = process.cwd()) {
   const flags = [];
   let end = args.length;
   for (let i = 0; i < args.length; i++) {
@@ -369,14 +397,13 @@ export function mergeClaudeSettings(args, picker, cwd = process.cwd()) {
     return [
       ...args.slice(0, end),
       '--settings',
-      JSON.stringify(picker),
+      JSON.stringify(extra),
       ...args.slice(end),
     ];
   const last = flags.at(-1);
-  const merged = JSON.stringify({
-    ...readSettingsValue(last.value, cwd),
-    ...picker,
-  });
+  const merged = JSON.stringify(
+    withSubcSettings(readSettingsValue(last.value, cwd), extra),
+  );
   const drop = new Set();
   for (const flag of flags)
     for (let word = 0; word < flag.words; word++) drop.add(flag.index + word);
@@ -391,10 +418,12 @@ export function mergeClaudeSettings(args, picker, cwd = process.cwd()) {
 /**
  * The command the launcher execs for a Claude Code protocol launch: the
  * claude-code runbook, as subc claude builds it, with T3 Code's args kept
- * in order. Three changes make it fit T3 Code:
+ * in order. Four changes make it fit T3 Code:
  *
  * - The template's own `--settings` picker is merged into T3 Code's last
  *   `--settings` value.
+ * - That value also pins the names in CLAUDE_PINNED_SETTINGS_ENV in its
+ *   `env`, so no other settings file can send the key to another host.
  * - A `--model` outside the key-scoped catalog becomes the profile model.
  * - Only ANTHROPIC_AUTH_TOKEN and OTEL_EXPORTER_OTLP_HEADERS carry the key.
  *
@@ -442,10 +471,28 @@ export async function t3ClaudePlan({
   for (const [name, value] of Object.entries(claudeEnv))
     if (value === launch.apiKey && !CLAUDE_KEY_CARRIERS.has(name))
       delete claudeEnv[name];
+  const pinnedEnv = {};
+  for (const name of CLAUDE_PINNED_SETTINGS_ENV) {
+    const value = claudeEnv[name];
+    if (!value) continue;
+    if (value.includes(launch.apiKey))
+      throw new T3LaunchError(
+        `${name} holds the API key, so it cannot go in the Claude Code argv. Check the default profile.`,
+      );
+    pinnedEnv[name] = value;
+  }
+  if (!pinnedEnv.ANTHROPIC_BASE_URL)
+    throw new T3LaunchError(
+      'The claude-code launch has no ANTHROPIC_BASE_URL. Update subc.',
+    );
   return {
     argv: [
       claudePath,
-      ...mergeClaudeSettings(command.args.slice(2), picker, cwd),
+      ...mergeClaudeSettings(
+        command.args.slice(2),
+        { ...picker, env: pinnedEnv },
+        cwd,
+      ),
     ],
     env: claudeEnv,
     fallback: pinned.replaced

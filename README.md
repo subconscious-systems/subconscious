@@ -262,6 +262,8 @@ Each provider uses the same folders as the matching subc command, so your settin
 | Hide list hint | T3 Code creates `providerModelPreferences` only after you hide or reorder a model in its settings. Do that once, then run `subc t3 install` again. |
 | Off-catalog fallback | A model outside your catalog runs as the default profile's model. The launcher logs one line that names both models. This also covers `t3 thread start --model`, which ignores the hide list. |
 | Thread switch | T3 Code's built-in Claude provider uses the same `~/.claude`. You can switch a running thread between the two, and the next turn sends the whole thread to the other backend. |
+| Pinned gateway | Each launch pins `ANTHROPIC_BASE_URL` and `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` in the `env` of its `--settings` value. Claude Code applies that value over every settings file, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host. Neither value is a secret, so the key stays out of the argv. |
+| Repo settings | Claude Code still loads a repo's project settings, as it does in `subc claude`. Hooks in a repo's `.claude/settings.json` and the repo's project MCP servers run with the key in their env. Open only repos that you trust with this provider. |
 
 Install waits up to 30 s for T3 Code to write `~/.t3/caches/subconscious-claude.json`, and uses `caches/claudeAgent.json` if it does not appear. The hide list holds every model in that cache that is not in your catalog. T3 Code downloads its built-in model list at run time, so status can report new drift at any time.
 
