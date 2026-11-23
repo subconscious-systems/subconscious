@@ -337,3 +337,118 @@ export async function snapshot(dir) {
   await walk(dir);
   return entries;
 }
+
+/**
+ * The 14 built-in Claude models that T3 Code 0.1.11 lists on every
+ * claudeAgent instance (step 0, November 23, 2026). Each has a display name.
+ */
+export const BUILT_IN_CLAUDE_MODELS = Object.freeze([
+  ['claude-opus-5-5', 'Claude Opus 5.5'],
+  ['claude-sonnet-5-5', 'Claude Sonnet 5.5'],
+  ['claude-fable-5-2', 'Claude Fable 5.2'],
+  ['claude-fable-5-1', 'Claude Fable 5.1'],
+  ['claude-fable-5', 'Claude Fable 5'],
+  ['claude-opus-5', 'Claude Opus 5'],
+  ['claude-opus-4-8', 'Claude Opus 4.8'],
+  ['claude-opus-4-7', 'Claude Opus 4.7'],
+  ['claude-opus-4-6', 'Claude Opus 4.6'],
+  ['claude-opus-4-5', 'Claude Opus 4.5'],
+  ['claude-sonnet-5', 'Claude Sonnet 5'],
+  ['claude-sonnet-4-6', 'Claude Sonnet 4.6'],
+  ['claude-haiku-5-5', 'Claude Haiku 5.5'],
+  ['claude-haiku-4-5', 'Claude Haiku 4.5'],
+]);
+
+/**
+ * A T3 Code 0.1.11 model cache, `caches/<instance id>.json`: the provider
+ * snapshot itself, with no wrapper. Built-in models carry a display name;
+ * models that Claude Code reports, such as the Subconscious catalog, have
+ * `name` equal to `slug`. No field tells the two kinds apart.
+ */
+export function t3ModelCache({
+  instanceId,
+  home,
+  builtIns = BUILT_IN_CLAUDE_MODELS.map(([slug]) => slug),
+  reported = [],
+  checkedAt = new Date().toISOString(),
+}) {
+  const names = new Map(BUILT_IN_CLAUDE_MODELS);
+  const capabilities = { supportsImages: true, supportsThinking: true };
+  return {
+    displayName:
+      instanceId === 'claudeAgent' ? 'Claude' : 'Subconscious (Claude)',
+    showInteractionModeToggle: true,
+    reportsContextWindow: true,
+    enabled: true,
+    installed: true,
+    version: '2.1.326',
+    status: 'ready',
+    auth: { status: 'authenticated', type: 'apiKey' },
+    setup: { status: 'complete' },
+    checkedAt,
+    models: [
+      ...builtIns.map((slug) => ({
+        slug,
+        name: names.get(slug) ?? `Claude ${slug}`,
+        isCustom: false,
+        capabilities,
+        ...(slug === 'claude-opus-5-5' ? { isDefault: true } : {}),
+      })),
+      ...reported.map((slug) => ({
+        slug,
+        name: slug,
+        isCustom: false,
+        capabilities,
+      })),
+    ],
+    slashCommands: [],
+    skills: [],
+    usageLimits: null,
+    instanceId,
+    driver: 'claudeAgent',
+    continuation: { groupKey: `claude:home:${home}/.claude` },
+    versionAdvisory: { canUpdate: false, updateCommand: null },
+    compatibilityAdvisory: null,
+  };
+}
+
+/** Write a model cache the way T3 Code does: one file per instance, mode 600. */
+export async function writeT3ModelCache(box, options) {
+  const dir = path.join(box.t3Home, 'caches');
+  await fs.mkdir(dir, { recursive: true });
+  const file = path.join(dir, `${options.instanceId}.json`);
+  await fs.writeFile(
+    file,
+    JSON.stringify(t3ModelCache({ home: box.home, ...options })),
+    { mode: 0o600 },
+  );
+  return file;
+}
+
+/**
+ * Play T3 Code's probe: once the settings name `instanceId`, write that
+ * instance's model cache with a fresh checkedAt, as T3 Code does about 1 s
+ * after a settings change. Returns a stop function.
+ */
+export function fakeT3Probe(
+  box,
+  { instanceId = 'subconscious-claude', ...cache } = {},
+) {
+  let done = false;
+  const timer = setInterval(async () => {
+    if (done) return;
+    try {
+      const settings = JSON.parse(await fs.readFile(box.settingsPath, 'utf8'));
+      if (!settings.providerInstances?.[instanceId]) return;
+      done = true;
+      clearInterval(timer);
+      await writeT3ModelCache(box, { instanceId, ...cache });
+    } catch {
+      // The file is between writes. Try again at the next tick.
+    }
+  }, 50);
+  return () => {
+    done = true;
+    clearInterval(timer);
+  };
+}

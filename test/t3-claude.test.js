@@ -5,7 +5,9 @@ import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { mergeClaudeSettings, pinClaudeModel } from '../bin/t3-launch.js';
 import {
+  BUILT_IN_CLAUDE_MODELS,
   fakeGateway,
+  fakeT3Probe,
   GOOD_KEY,
   MODELS,
   readRecords,
@@ -15,6 +17,7 @@ import {
   t3Sandbox,
   USER_CLAUDE_JSON,
   USER_CLAUDE_SETTINGS,
+  writeT3ModelCache,
 } from './helpers/t3-sandbox.js';
 
 const skip = process.platform === 'win32';
@@ -965,4 +968,290 @@ test('pinClaudeModel and mergeClaudeSettings leave words after -- alone', () => 
     mergeClaudeSettings(['-p', '--', '--settings', 'x'], { a: 1 }),
     ['-p', '--settings', '{"a":1}', '--', '--settings', 'x'],
   );
+});
+
+// The hide list: providerModelPreferences["subconscious-claude"].
+
+const BUILT_INS = BUILT_IN_CLAUDE_MODELS.map(([slug]) => slug);
+const OURS = 'subconscious-claude';
+const tabbed = (value) => `${JSON.stringify(value, null, '\t')}\n`;
+const readSettings = async (sandbox) =>
+  JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
+
+function settingsWith(preferences) {
+  return {
+    projectSettingsFolded: true,
+    favorites: [{ provider: 'claudeAgent', model: 'claude-opus-5-5' }],
+    ...(preferences === undefined
+      ? {}
+      : { providerModelPreferences: preferences }),
+    providerInstances: {
+      claudeAgent: { driver: 'claudeAgent', enabled: true },
+    },
+    futureTopLevelSetting: { keep: [1, 2, 3] },
+  };
+}
+
+/** Install with T3 Code playing its probe of the new entry. */
+async function installWithProbe(sandbox, extraEnv = {}) {
+  const stop = fakeT3Probe(sandbox, { reported: MODELS });
+  try {
+    return await subc(
+      sandbox,
+      ['t3', 'install', '--provider', 'claude'],
+      extraEnv,
+    );
+  } finally {
+    stop();
+  }
+}
+
+test('install writes only the hide list key and keeps every other setting', {
+  skip,
+}, async () => {
+  const text = tabbed(
+    settingsWith({
+      claudeAgent: {
+        hiddenModels: ['claude-haiku-4-5'],
+        modelOrder: ['claude-opus-5-5'],
+      },
+      'subconscious-codex': { hiddenModels: [], modelOrder: ['x/y'] },
+    }),
+  );
+  const sandbox = await box({ settings: text });
+  await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
+  const result = await installWithProbe(sandbox);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Hide list\s+hid 14 models that are not in the catalog: claude-opus-5-5, /,
+  );
+  const settings = await readSettings(sandbox);
+  assert.deepEqual(settings.providerModelPreferences[OURS], {
+    hiddenModels: BUILT_INS,
+    modelOrder: [],
+  });
+  for (const model of MODELS)
+    assert.ok(
+      !settings.providerModelPreferences[OURS].hiddenModels.includes(model),
+    );
+  // Without subc's entry and its hide list, the file is the original, byte
+  // for byte: favorites and the other instances' preferences are kept.
+  const rest = structuredClone(settings);
+  delete rest.providerInstances[OURS];
+  delete rest.providerModelPreferences[OURS];
+  assert.equal(tabbed(rest), text);
+
+  // Uninstall removes exactly those two keys again.
+  const removed = await subc(sandbox, [
+    't3',
+    'uninstall',
+    '--provider',
+    'claude',
+  ]);
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.match(
+    removed.stdout,
+    /Removed the subconscious-claude hide list from providerModelPreferences/,
+  );
+  assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), text);
+});
+
+test('a second install keeps modelOrder and uses the current cache at once', {
+  skip,
+}, async () => {
+  const sandbox = await box({ settings: tabbed(settingsWith({})) });
+  const first = await installWithProbe(sandbox);
+  assert.equal(first.code, 0, first.stderr);
+  const settings = await readSettings(sandbox);
+  settings.providerModelPreferences[OURS] = {
+    hiddenModels: [MODELS[0], 'claude-opus-5-5'],
+    modelOrder: [MODELS[1], MODELS[0]],
+  };
+  await fs.writeFile(sandbox.settingsPath, tabbed(settings));
+  // The entry is current, so T3 Code does not probe again, and the cache
+  // from the last probe counts. The default wait is 30 s.
+  const started = Date.now();
+  const again = await subc(sandbox, ['t3', 'install', '--provider', 'claude']);
+  assert.equal(again.code, 0, again.stderr);
+  assert.ok(Date.now() - started < 15_000, 'install did not wait for a probe');
+  assert.deepEqual(
+    (await readSettings(sandbox)).providerModelPreferences[OURS],
+    {
+      hiddenModels: BUILT_INS,
+      modelOrder: [MODELS[1], MODELS[0]],
+    },
+  );
+  const third = await subc(sandbox, ['t3', 'install', '--provider', 'claude']);
+  assert.match(third.stdout, /Hide list\s+already hides 14 models/);
+});
+
+test('install skips the hide list when providerModelPreferences is null or missing', {
+  skip,
+}, async () => {
+  const hint =
+    'In T3 Code, hide or reorder any model once, then run subc t3 install again.';
+  for (const preferences of [null, undefined]) {
+    const sandbox = await box({ settings: tabbed(settingsWith(preferences)) });
+    await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
+    const started = Date.now();
+    const result = await installWithProbe(sandbox);
+    assert.equal(result.code, 0, result.stderr);
+    assert.ok(Date.now() - started < 15_000, 'the skip does not wait');
+    assert.ok(result.stdout.includes(hint), result.stdout);
+    const settings = await readSettings(sandbox);
+    assert.equal(settings.providerModelPreferences, preferences);
+    assert.ok(settings.providerInstances[OURS], 'the entry is installed');
+    const status = await subc(sandbox, [
+      't3',
+      'status',
+      '--provider',
+      'claude',
+    ]);
+    assert.ok(status.stdout.includes(hint), status.stdout);
+    assert.match(status.stdout, /Hide list\s+skipped/);
+  }
+});
+
+test('with no fresh cache, install uses the built-in cache, or skips the hide list', {
+  skip,
+}, async () => {
+  const wait = { SUBC_T3_CACHE_WAIT_MS: '300' };
+  // A cache an earlier install left does not count for a new entry.
+  const sandbox = await box({ settings: tabbed(settingsWith({})) });
+  await writeT3ModelCache(sandbox, {
+    instanceId: OURS,
+    builtIns: [],
+    reported: ['stale/model'],
+    checkedAt: '2020-01-01T00:00:00.000Z',
+  });
+  await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
+  const fallback = await subc(
+    sandbox,
+    ['t3', 'install', '--provider', 'claude'],
+    wait,
+  );
+  assert.equal(fallback.code, 0, fallback.stderr);
+  assert.match(fallback.stdout, /hid 14 models/);
+  assert.deepEqual(
+    (await readSettings(sandbox)).providerModelPreferences[OURS].hiddenModels,
+    BUILT_INS,
+  );
+
+  // No cache at all: the hide list is skipped and install still succeeds.
+  const bare = await box({ settings: tabbed(settingsWith({})) });
+  const skipped = await subc(
+    bare,
+    ['t3', 'install', '--provider', 'claude'],
+    wait,
+  );
+  assert.equal(skipped.code, 0, skipped.stderr);
+  assert.match(
+    skipped.stdout,
+    /Skipped: T3 Code wrote no model cache for subconscious-claude or claudeAgent/,
+  );
+  assert.match(skipped.stdout, /Subconscious \(Claude\) is ready in T3 Code/);
+  const settings = await readSettings(bare);
+  assert.deepEqual(settings.providerModelPreferences, {});
+  assert.ok(settings.providerInstances[OURS]);
+  const status = await subc(bare, ['t3', 'status', '--provider', 'claude']);
+  assert.match(status.stdout, /Hide list\s+not written\. Run subc t3 install/);
+});
+
+test('status reports the hide list, and drift for a new built-in model', {
+  skip,
+}, async () => {
+  const sandbox = await box({ settings: tabbed(settingsWith({})) });
+  await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
+  const result = await installWithProbe(sandbox);
+  assert.equal(result.code, 0, result.stderr);
+  const clean = await subc(sandbox, ['t3', 'status', '--provider', 'claude']);
+  assert.match(clean.stdout, /Hide list\s+written, 14 models hidden/);
+  assert.doesNotMatch(clean.stdout, /drift/);
+
+  // T3 Code's remote model list adds a built-in model.
+  const builtIns = [...BUILT_INS, 'claude-opus-6'];
+  await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent', builtIns });
+  await writeT3ModelCache(sandbox, {
+    instanceId: OURS,
+    builtIns,
+    reported: MODELS,
+  });
+  const drift = await subc(sandbox, ['t3', 'status', '--provider', 'claude']);
+  assert.equal(drift.code, 0, drift.stderr);
+  assert.match(
+    drift.stdout,
+    /drift: T3 Code lists 1 built-in models that the hide list does not hide: claude-opus-6\. Run subc t3 install again\./,
+  );
+
+  const fixed = await subc(sandbox, ['t3', 'install', '--provider', 'claude']);
+  assert.equal(fixed.code, 0, fixed.stderr);
+  const after = await subc(sandbox, ['t3', 'status', '--provider', 'claude']);
+  assert.match(after.stdout, /written, 15 models hidden/);
+  assert.doesNotMatch(after.stdout, /drift/);
+});
+
+test('install --dry-run prints the hide list and writes nothing', {
+  skip,
+}, async () => {
+  const sandbox = await box({ settings: tabbed(settingsWith({})) });
+  await writeT3ModelCache(sandbox, {
+    instanceId: OURS,
+    reported: MODELS,
+  });
+  const before = await snapshot(sandbox.home);
+  const result = await subc(sandbox, [
+    't3',
+    'install',
+    '--provider',
+    'claude',
+    '--dry-run',
+  ]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /Hide list\s+would hide 14 models that are not in the catalog: claude-opus-5-5/,
+  );
+  assert.ok(!result.stdout.includes(`${MODELS[0]},`));
+  assert.match(result.stdout, /Dry run: nothing was changed/);
+  assert.deepEqual(await snapshot(sandbox.home), before);
+});
+
+test('uninstall removes a hide list whose entry is already gone, and nothing else', {
+  skip,
+}, async () => {
+  const sandbox = await box({
+    settings: tabbed(
+      settingsWith({ claudeAgent: { hiddenModels: ['a'], modelOrder: [] } }),
+    ),
+  });
+  const result = await installWithProbe(sandbox);
+  assert.equal(result.code, 0, result.stderr);
+  const settings = await readSettings(sandbox);
+  delete settings.providerInstances[OURS];
+  await fs.writeFile(sandbox.settingsPath, tabbed(settings));
+  const removed = await subc(sandbox, [
+    't3',
+    'uninstall',
+    '--provider',
+    'claude',
+  ]);
+  assert.equal(removed.code, 0, removed.stderr);
+  assert.match(removed.stdout, /Removed the subconscious-claude hide list/);
+  const after = await readSettings(sandbox);
+  assert.deepEqual(after.providerModelPreferences, {
+    claudeAgent: { hiddenModels: ['a'], modelOrder: [] },
+  });
+  assert.deepEqual(after.favorites, settings.favorites);
+});
+
+test('help explains the hide list and how to turn it on', {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const help = await subc(sandbox, ['t3', 'help']);
+  assert.equal(help.code, 0, help.stderr);
+  assert.match(help.stdout, /hide list/);
+  assert.match(help.stdout, /hide or reorder a\s+model in its settings/);
+  assert.match(help.stdout, /drift/);
 });

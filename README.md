@@ -231,11 +231,19 @@ The launcher handles each Claude Code command in one of three ways:
 - `--version`, `-v`, `-h`, `--help`, and `update` run the real Claude Code unchanged. They read no profile and make no request.
 - Every other Claude Code command fails with an error.
 
-T3 Code also lists its built-in Claude models on this provider. A model that is not in your key-scoped catalog runs as the default profile's model instead. The launcher then writes one line to T3 Code's log that names both models.
+T3 Code also lists its built-in Claude models on this provider. Install hides them with a hide list, `providerModelPreferences["subconscious-claude"]` in the T3 Code settings. This is the one setting that subc writes outside its own provider entry, and it is keyed by subc's instance ID:
+
+- After the entry is in place, install waits up to 30 s for T3 Code to probe it and write `~/.t3/caches/subconscious-claude.json`. If that file does not appear, install uses the built-in provider's `caches/claudeAgent.json`.
+- The hide list holds every model in that cache that is not in your key-scoped catalog, so it never hides a Subconscious model. Install keeps any model order you set, and changes no other key in `providerModelPreferences`.
+- T3 Code creates `providerModelPreferences` only when you hide or reorder a model in its settings. Until then, install skips the hide list and prints: "In T3 Code, hide or reorder any model once, then run subc t3 install again." subc does not create the value itself, because T3 Code would then skip the migration of your own model preferences.
+- T3 Code downloads its list of built-in models at run time, so a new built-in model can appear at any time. `subc t3 status` reports it as drift. Run `subc t3 install` again to hide it.
+- `subc t3 install --dry-run` prints the models that it would hide.
+
+The hide list applies to T3 Code's model picker, not to `t3 thread start --model`. A model that is not in your catalog, from any path, runs as the default profile's model instead. The launcher then writes one line to T3 Code's log that names both models.
 
 T3 Code's built-in Claude provider uses the same `~/.claude`, so T3 Code lets you switch a running thread between "Claude" and "Subconscious (Claude)". The next turn then sends the whole thread to the other backend, Anthropic or Subconscious. subc allows this switch, so pick the provider you want before you send a thread anything private.
 
-`subc t3 uninstall` removes the `subconscious-claude` entry and the launcher. It never changes `~/.claude`.
+`subc t3 uninstall` removes the `subconscious-claude` entry, its hide list, and the launcher. It never changes `~/.claude`.
 
 Builds of `subc t3` from before 8.2.0 gave the provider its own Codex home, `~/.subconscious/t3/codex/default`. When that folder exists, install, status, and uninstall report it. It holds a key file, `subconscious-hooks.env`, and the threads made before 8.2.0. subc does not delete it. Remove the key file with the `rm` command that subc prints. The threads are your data, so delete the folder yourself when you no longer need them.
 

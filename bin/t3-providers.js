@@ -59,6 +59,11 @@
  * - `watchdog`: true when the launcher starts a background watchdog that
  *   stops the agent after T3 Code's server dies. It is for a long-lived
  *   helper that T3 Code may fail to stop.
+ * - `builtInInstanceId`: the instance ID of T3 Code's own provider for the
+ *   same agent, such as `claudeAgent`, or `null`. When it is set, install
+ *   writes a hide list for subc's instance: every model in T3 Code's model
+ *   cache that is not in the key-scoped catalog. The built-in instance's
+ *   cache is the fallback when subc's instance has no cache yet.
  */
 
 const CODEX = Object.freeze({
@@ -94,6 +99,7 @@ const CODEX = Object.freeze({
   // Before 8.2.0, the provider had its own Codex home here.
   legacyHome: 'codex/default',
   watchdog: false,
+  builtInInstanceId: null,
 });
 
 const CLAUDE = Object.freeze({
@@ -142,6 +148,8 @@ const CLAUDE = Object.freeze({
   ownedDirs: Object.freeze([]),
   legacyHome: null,
   watchdog: false,
+  // T3 Code lists its built-in Claude models on every claudeAgent instance.
+  builtInInstanceId: 'claudeAgent',
 });
 
 /** Every provider this subc version can install, in a fixed order. */

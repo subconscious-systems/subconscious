@@ -13,6 +13,11 @@
  * generation. An entry is subc's when it has the provider's driver and its
  * binary is the launcher subc wrote.
  *
+ * The one other write is the hide list of a provider with a built-in twin,
+ * such as Claude: `providerModelPreferences[<subc instance id>]`. It is
+ * keyed by subc's own instance id, and subc never changes another key in
+ * `providerModelPreferences`.
+ *
  * Every function takes a `target`: the T3 home, the launcher path, the agent
  * home path when the provider has one, and the provider descriptor from
  * `t3-providers.js`. A target with no provider means Codex.
@@ -459,21 +464,156 @@ export async function installT3Provider(target, options = {}) {
 
 /**
  * Remove subc's entry and nothing else. Threads and other providers stay.
- * Returns whether an entry was removed; a foreign entry with the same id is
- * left alone.
+ * With `preferences`, also remove subc's hide list, the instance's key in
+ * `providerModelPreferences`, in the same write, and report it as
+ * `removedPreferences`. Returns what was removed;
+ * a foreign entry with the same id, and its preferences, are left alone.
  */
 export async function removeT3Provider(target, options = {}) {
+  const preferences = Boolean(options.preferences);
+  const none = {
+    removed: false,
+    ...(preferences ? { removedPreferences: false } : {}),
+    backup: null,
+  };
   const report = await inspectT3(target);
-  if (report.state === 'missing') return { removed: false, backup: null };
+  if (report.state === 'missing') return none;
   const blockers = settingsBlockers(report, { forRemoval: true });
   if (blockers.length) throw new Error(blockers.join('\n'));
-  if (report.entry !== 'owned') return { removed: false, backup: null };
+  if (report.entry === 'conflict') return none;
+  if (report.entry !== 'owned' && !preferences) return none;
   const { instanceId } = providerOf(target);
+  let removed = false;
+  let removedPreferences = false;
   const written = await edit(target, options.backupDir, (settings) => {
-    const instances = { ...(settings.providerInstances ?? {}) };
-    if (!isOwnedEntry(instances[instanceId], target)) return null;
-    delete instances[instanceId];
-    return { ...settings, providerInstances: instances };
+    removed = false;
+    removedPreferences = false;
+    const next = { ...settings };
+    const instances = settings.providerInstances ?? {};
+    const current = instances[instanceId];
+    if (current !== undefined) {
+      if (!isOwnedEntry(current, target)) return null;
+      const rest = { ...instances };
+      delete rest[instanceId];
+      next.providerInstances = rest;
+      removed = true;
+    }
+    const prefs = settings.providerModelPreferences;
+    if (preferences && isObject(prefs) && Object.hasOwn(prefs, instanceId)) {
+      const rest = { ...prefs };
+      delete rest[instanceId];
+      next.providerModelPreferences = rest;
+      removedPreferences = true;
+    }
+    return removed || removedPreferences ? next : null;
   });
-  return { removed: written.changed, backup: written.backup };
+  return {
+    removed: written.changed && removed,
+    ...(preferences
+      ? { removedPreferences: written.changed && removedPreferences }
+      : {}),
+    backup: written.backup,
+  };
+}
+
+/**
+ * T3 Code's model cache for one instance, `<T3 home>/caches/<id>.json`, or
+ * null when it is missing or unreadable. The file is the provider snapshot
+ * itself. `slugs` lists its models in order, and `checkedAt` is the time of
+ * the probe that wrote it, in ms, or null.
+ */
+export async function readT3ModelCache(home, instanceId) {
+  const file = path.join(home, 'caches', `${instanceId}.json`);
+  let snapshot;
+  try {
+    snapshot = JSON.parse((await readText(file)) ?? 'null');
+  } catch {
+    return null;
+  }
+  if (!isObject(snapshot) || !Array.isArray(snapshot.models)) return null;
+  const slugs = [];
+  for (const model of snapshot.models) {
+    const slug = model?.slug;
+    if (typeof slug === 'string' && slug && !slugs.includes(slug))
+      slugs.push(slug);
+  }
+  const checkedAt = Date.parse(snapshot.checkedAt);
+  return {
+    file,
+    slugs,
+    checkedAt: Number.isFinite(checkedAt) ? checkedAt : null,
+  };
+}
+
+/**
+ * subc's hide list in T3 Code's settings. `state` is one of:
+ *
+ * - `unmigrated`: `providerModelPreferences` is missing or null. T3 Code
+ *   uses null to mean that its clients have not migrated their own model
+ *   preferences yet, and a value from subc would stop that migration.
+ * - `absent`: the object exists and has no key for subc's instance.
+ * - `present`: the key exists. `hiddenModels` and `modelOrder` hold it.
+ * - `invalid`: the value is not an object.
+ * - `unreadable`: the settings file is missing or not valid.
+ */
+export async function readT3ModelPreferences(target) {
+  const text = await readText(t3Files(target.home).settings);
+  const parsed = text === null ? { problem: 'missing' } : parseSettings(text);
+  if (!parsed.settings) return { state: 'unreadable' };
+  const prefs = parsed.settings.providerModelPreferences;
+  if (prefs === undefined || prefs === null) return { state: 'unmigrated' };
+  if (!isObject(prefs)) return { state: 'invalid' };
+  const ours = prefs[providerOf(target).instanceId];
+  if (ours === undefined) return { state: 'absent' };
+  const list = (value) =>
+    Array.isArray(value)
+      ? value.filter((item) => typeof item === 'string')
+      : [];
+  return {
+    state: 'present',
+    hiddenModels: list(ours?.hiddenModels),
+    modelOrder: list(ours?.modelOrder),
+  };
+}
+
+/**
+ * Set subc's hide list to `hiddenModels`, with the same compare-and-rename
+ * edit and backup as the entry. An existing `modelOrder` is kept. The write
+ * is skipped when `providerModelPreferences` is missing, null, or not an
+ * object, and when subc's entry is not in the file.
+ *
+ * `state` is `written`, `current`, `unmigrated`, or `no-entry`.
+ */
+export async function writeT3HideList(target, hiddenModels, options = {}) {
+  const blockers = settingsBlockers(await inspectT3(target));
+  if (blockers.length) throw new Error(blockers.join('\n'));
+  const { instanceId } = providerOf(target);
+  let state = 'current';
+  const written = await edit(target, options.backupDir, (settings) => {
+    const prefs = settings.providerModelPreferences;
+    if (!isObject(prefs)) {
+      state = 'unmigrated';
+      return null;
+    }
+    if (!isOwnedEntry(settings.providerInstances?.[instanceId], target)) {
+      state = 'no-entry';
+      return null;
+    }
+    const current = isObject(prefs[instanceId]) ? prefs[instanceId] : {};
+    const next = {
+      ...current,
+      hiddenModels: [...hiddenModels],
+      modelOrder: Array.isArray(current.modelOrder) ? current.modelOrder : [],
+    };
+    if (JSON.stringify(prefs[instanceId]) === JSON.stringify(next)) {
+      state = 'current';
+      return null;
+    }
+    state = 'written';
+    return {
+      ...settings,
+      providerModelPreferences: { ...prefs, [instanceId]: next },
+    };
+  });
+  return { state, backup: written.backup };
 }

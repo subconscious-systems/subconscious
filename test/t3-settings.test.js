@@ -3,13 +3,15 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { CODEX_PROVIDER } from '../bin/t3-providers.js';
+import { CLAUDE_PROVIDER, CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   inspectT3,
   installT3Provider,
+  readT3ModelPreferences,
   removeT3Provider,
   settingsBlockers,
   T3_INSTANCE_ID,
+  writeT3HideList,
 } from '../bin/t3-settings.js';
 
 const skip = process.platform === 'win32';
@@ -489,4 +491,69 @@ test('another descriptor writes its own entry and leaves the Codex one alone', {
   const after = await box.read();
   assert.equal(after.providerInstances['subconscious-other'], undefined);
   assert.deepEqual(after.providerInstances[T3_INSTANCE_ID], codexEntry);
+});
+
+test('the hide list write skips unmigrated preferences and a missing entry', {
+  skip,
+}, async () => {
+  const launcherPath = '/opt/subc home/bin/subc-t3-claude';
+  const entry = {
+    driver: 'claudeAgent',
+    displayName: 'Subconscious (Claude)',
+    enabled: true,
+    config: { binaryPath: launcherPath },
+  };
+  const withEntry = (prefs) => ({
+    ...BASE,
+    ...(prefs === undefined ? {} : { providerModelPreferences: prefs }),
+    providerInstances: {
+      ...BASE.providerInstances,
+      'subconscious-claude': entry,
+    },
+  });
+  for (const prefs of [null, undefined, ['not', 'an', 'object']]) {
+    const box = await t3Home(withEntry(prefs));
+    const target = {
+      home: box.target.home,
+      launcherPath,
+      provider: CLAUDE_PROVIDER,
+    };
+    const before = await fs.readFile(box.file, 'utf8');
+    const result = await writeT3HideList(target, ['claude-opus-5-5'], {
+      backupDir: box.backupDir,
+    });
+    assert.equal(result.state, 'unmigrated');
+    assert.equal(await fs.readFile(box.file, 'utf8'), before);
+  }
+  const noEntry = await t3Home({ ...BASE, providerModelPreferences: {} });
+  const target = {
+    home: noEntry.target.home,
+    launcherPath,
+    provider: CLAUDE_PROVIDER,
+  };
+  const result = await writeT3HideList(target, ['claude-opus-5-5'], {
+    backupDir: noEntry.backupDir,
+  });
+  assert.equal(result.state, 'no-entry');
+  assert.deepEqual((await noEntry.read()).providerModelPreferences, {});
+  assert.equal((await readT3ModelPreferences(target)).state, 'absent');
+
+  const written = await t3Home(withEntry({ other: { hiddenModels: ['x'] } }));
+  const ownTarget = { ...target, home: written.target.home };
+  const first = await writeT3HideList(ownTarget, ['claude-opus-5-5'], {
+    backupDir: written.backupDir,
+  });
+  assert.equal(first.state, 'written');
+  assert.ok(first.backup);
+  assert.deepEqual((await written.read()).providerModelPreferences, {
+    other: { hiddenModels: ['x'] },
+    'subconscious-claude': {
+      hiddenModels: ['claude-opus-5-5'],
+      modelOrder: [],
+    },
+  });
+  const again = await writeT3HideList(ownTarget, ['claude-opus-5-5'], {
+    backupDir: written.backupDir,
+  });
+  assert.equal(again.state, 'current');
 });
