@@ -178,6 +178,16 @@ The packaged integrations live in `bin/runbook`.
 | `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
+### `subc opencode`
+
+- The OpenCode key setting in a profile is now `SUBC_OPENCODE_API_KEY`. A profile that still holds `OPENCODE_API_KEY` keeps working.
+- An `OPENCODE_API_KEY` exported in your shell no longer reaches OpenCode and does not select the key. OpenCode uses that name for its own opencode.ai key.
+- OpenCode lists only Subconscious models, because the launch config sets `enabled_providers` to the Subconscious provider.
+
+### `subc claude`
+
+Each launch pins the gateway in its `--settings` value, so a settings file cannot redirect requests. A repo's hooks and MCP servers still run with the key in their env.
+
 ## T3 Code
 
 `subc t3 install` adds three providers to T3 Code. Each one runs a coding agent CLI on your hosted Subconscious models.
