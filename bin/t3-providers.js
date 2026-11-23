@@ -180,12 +180,9 @@ const OPENCODE = Object.freeze({
   // the helper reads the key and the catalog once, when it starts.
   freshnessNote:
     'A new key or model applies after the OpenCode helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes.',
-  // T3 Code 0.1.11 decodes a missing config.enabled as false, and the
-  // envelope flag alone does not turn the instance on.
-  managedConfig: ({ launcherPath }) => ({
-    enabled: true,
-    binaryPath: launcherPath,
-  }),
+  // No config.enabled: T3 Code 0.1.11 removes it from config and keeps only
+  // the envelope's enabled flag, which turns the instance on by itself.
+  managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
   // A Server URL makes T3 Code connect to that server and skip the
   // launcher, so the key-scoped launch never runs. A password only makes
   // sense with a Server URL.

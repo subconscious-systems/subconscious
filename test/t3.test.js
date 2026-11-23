@@ -19,6 +19,7 @@ import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   exportedFunctions,
   fakeGateway,
+  fakeT3Server,
   GOOD_KEY,
   MODELS,
   readRecords,
@@ -26,6 +27,7 @@ import {
   snapshot,
   subc,
   t3Sandbox,
+  writeT3ModelCache,
 } from './helpers/t3-sandbox.js';
 
 const skip = process.platform === 'win32';
@@ -901,7 +903,7 @@ test('status reads the hooks from disk after subc codex uninstall', {
   assert.match(status.stdout, /subconscious-codex: installed/);
   assert.match(
     status.stdout,
-    /Hooks\s+missing from .*hooks\.json, so T3 Code sessions run without them\. Run subc t3 install to set them up again/,
+    /Hooks\s+missing from .*hooks\.json, so T3 Code sessions run without them\. Run subc t3 install --provider codex to set them up again/,
   );
   assert.doesNotMatch(status.stdout, /set up by subc t3 install/);
 
@@ -917,7 +919,7 @@ test('status reads the hooks from disk after subc codex uninstall', {
   const partial = await subc(sandbox, ['t3', 'status']);
   assert.match(
     partial.stdout,
-    /2 entries, env file missing; run subc t3 install to fix/,
+    /2 entries, env file missing; run subc t3 install --provider codex to fix/,
   );
 });
 
@@ -1178,6 +1180,98 @@ test('status exits 1 for drift, a missing launcher, missing hooks, or a conflict
   const fixed = await subc(drift, ['t3', 'install']);
   assert.equal(fixed.code, 0, fixed.stderr);
   assert.equal((await subc(drift, ['t3', 'status'])).code, 0);
+});
+
+test('status names the install command that repairs each broken provider', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  await fs.rm(sandbox.launcher);
+  const result = await subc(sandbox, ['t3', 'status']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(
+    result.stdout,
+    /To repair it, run: subc t3 install --provider codex\n/,
+  );
+  assert.doesNotMatch(result.stdout, /--provider claude|--provider opencode/);
+});
+
+test("status shows T3 Code's failed check, says how to fix the key, and exits 1", {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  // No cache yet: T3 Code has not checked the provider. That is not broken.
+  const fresh = await subc(sandbox, ['t3', 'status', '--provider', 'codex']);
+  assert.equal(fresh.code, 0, fresh.stdout);
+  assert.match(fresh.stdout, /T3 check\s+none recorded yet/);
+
+  await writeT3ModelCache(sandbox, {
+    instanceId: 'subconscious-codex',
+    builtIns: [],
+    reported: MODELS,
+    checkedAt: '2026-11-23T19:40:00.000Z',
+  });
+  const ready = await subc(sandbox, ['t3', 'status', '--provider', 'codex']);
+  assert.equal(ready.code, 0, ready.stdout);
+  assert.match(
+    ready.stdout,
+    /T3 check\s+ready, checked 2026-11-23T19:40:00\.000Z/,
+  );
+
+  // The bad key case from the live test: T3 Code reports error, with the
+  // adapter's 401 line as its message.
+  await writeT3ModelCache(sandbox, {
+    instanceId: 'subconscious-codex',
+    builtIns: [],
+    status: 'error',
+    auth: { status: 'unknown' },
+    message:
+      'subc-t3-codex: Could not read the model catalog from http://127.0.0.1:1: Model discovery returned HTTP 401.',
+  });
+  const failed = await subc(sandbox, ['t3', 'status', '--provider', 'codex']);
+  assert.equal(failed.code, 1, failed.stdout);
+  assert.match(
+    failed.stdout,
+    /T3 check\s+error, checked .*Model discovery returned HTTP 401\./,
+  );
+  assert.match(failed.stdout, /run subc login/);
+  assert.match(failed.stdout, /restart T3 Code/);
+  assert.match(
+    failed.stdout,
+    /Broken: Subconscious \(Codex\): T3 Code reports a failed check\./,
+  );
+  // Install cannot fix a rejected key, so status does not suggest it.
+  assert.doesNotMatch(failed.stdout, /To repair it, run/);
+  assert.ok(!failed.stdout.includes(GOOD_KEY));
+});
+
+test('status notes that a T3 Code project can override text generation', {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const result = await subc(sandbox, ['t3', 'status']);
+  assert.match(
+    result.stdout,
+    /A T3 Code project can override them in its own settings/,
+  );
+});
+
+test('install waits for the T3 Code check only while a T3 Code server runs', {
+  skip,
+}, async () => {
+  const { t3ServerRunning } = await import('../bin/t3-settings.js');
+  const sandbox = await box();
+  assert.equal(await t3ServerRunning(sandbox.t3Home), false);
+  const stop = await fakeT3Server(sandbox);
+  assert.equal(await t3ServerRunning(sandbox.t3Home), true);
+  await stop();
+  // A file that a crashed server left names a PID that has ended.
+  const ended = await run(process.execPath, ['-e', '']);
+  const runtime = path.join(sandbox.t3Home, 'userdata', 'server-runtime.json');
+  await fs.writeFile(runtime, JSON.stringify({ version: 1, pid: ended.pid }));
+  assert.equal(await t3ServerRunning(sandbox.t3Home), false);
+  await fs.writeFile(runtime, JSON.stringify({ managedPolicy: null }));
+  assert.equal(await t3ServerRunning(sandbox.t3Home), false);
 });
 
 test('status exits 1 when the pinned CLI is older than install accepts', {

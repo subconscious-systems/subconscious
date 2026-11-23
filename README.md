@@ -230,12 +230,13 @@ Each provider uses the same folders as the matching subc command, so your settin
 - Codex: the compaction hooks, including when `subc codex uninstall` removed them.
 - Claude: the hide list, and drift when T3 Code lists a built-in model that the hide list does not hide.
 - OpenCode: the freshness rule, and the running helpers with their PID and start time. Status reads them with `ps`, never from their env.
-- All providers: where T3 Code sends thread titles and commit messages. Status warns when that is not a Subconscious provider.
+- All providers: where T3 Code sends thread titles and commit messages. Status warns when that is not a Subconscious provider. These are the global settings, and a T3 Code project can override them.
+- All providers: T3 Code's last check of the provider, from `~/.t3/caches/<instance id>.json`, with T3 Code's message. An error, or a sign-in warning such as the one for a rejected key, makes status exit 1, and status says to run `subc login` and restart T3 Code. T3 Code does not check a provider again on its own. A missing cache file only means that T3 Code has not checked the provider yet.
 
 | Exit code | Meaning |
 | --- | --- |
 | 0 | Every installed provider works, or nothing is installed. |
-| 1 | A provider is broken: a conflict, a missing or foreign launcher, unreadable settings, drift, missing Codex hooks, or a CLI version that install refuses. Run `subc t3 install` to repair it. |
+| 1 | A provider is broken: a conflict, a missing or foreign launcher, unreadable settings, drift, missing Codex hooks, a CLI version that install refuses, or a failed T3 Code check. For each problem that install can repair, status prints the `subc t3 install --provider <name>` command. |
 
 ### Uninstall
 
@@ -260,12 +261,12 @@ Each provider uses the same folders as the matching subc command, so your settin
 | Key | Only `ANTHROPIC_AUTH_TOKEN` and `OTEL_EXPORTER_OTLP_HEADERS` carry the key. |
 | Built-in models | T3 Code also lists its built-in Claude models on this provider. The hide list hides them in T3 Code's model picker. |
 | Hide list hint | T3 Code creates `providerModelPreferences` only after you hide or reorder a model in its settings. Do that once, then run `subc t3 install` again. |
-| Off-catalog fallback | A model outside your catalog runs as the default profile's model. The launcher logs one line that names both models. This also covers `t3 thread start --model`, which ignores the hide list. |
+| Off-catalog fallback | A model outside your catalog runs as the default profile's model. This also covers `t3 thread start --model`, which ignores the hide list. The launcher writes one line about it to stderr, but T3 Code does not show launcher stderr, so the thread runs the default model with no notice. |
 | Thread switch | T3 Code's built-in Claude provider uses the same `~/.claude`. You can switch a running thread between the two, and the next turn sends the whole thread to the other backend. |
 | Pinned gateway | Each launch pins `ANTHROPIC_BASE_URL` and `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` in the `env` of its `--settings` value. Claude Code applies that value over every settings file, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host. Neither value is a secret, so the key stays out of the argv. |
 | Repo settings | Claude Code still loads a repo's project settings, as it does in `subc claude`. Hooks in a repo's `.claude/settings.json` and the repo's project MCP servers run with the key in their env. Open only repos that you trust with this provider. |
 
-Install waits up to 30 s for T3 Code to write `~/.t3/caches/subconscious-claude.json`, and uses `caches/claudeAgent.json` if it does not appear. The hide list holds every model in that cache that is not in your catalog. T3 Code downloads its built-in model list at run time, so status can report new drift at any time.
+While a T3 Code server runs, install waits up to 30 s for it to write `~/.t3/caches/subconscious-claude.json`, and uses `caches/claudeAgent.json` if it does not appear. When no server runs, as `userdata/server-runtime.json` shows, install uses `caches/claudeAgent.json` at once. The hide list holds every model in that cache that is not in your catalog. T3 Code downloads its built-in model list at run time, so status can report new drift at any time.
 
 ### OpenCode provider (beta)
 
@@ -280,7 +281,7 @@ Install waits up to 30 s for T3 Code to write `~/.t3/caches/subconscious-claude.
 
 ### Limits for all providers
 
-- Text generation: T3 Code writes thread titles and commit messages with its own setting, which defaults to its built-in Codex provider. subc never changes it. To use Subconscious, open Settings in T3 Code, then Text generation, and pick a Subconscious provider. Commit messages can have their own model under Commits & pull requests.
+- Text generation: T3 Code writes thread titles and commit messages with its own setting, which defaults to its built-in Codex provider. subc never changes it. To use Subconscious, open Settings in T3 Code, then Text generation, and pick a Subconscious provider. Commit messages can have their own model under Commits & pull requests. A T3 Code project can override both settings, and status reads only the global ones.
 - Beta: the Claude Code and OpenCode providers are in beta.
 - Platforms: macOS and Linux only. On Windows, `subc t3` fails with an error. It supports the default profile only.
 - Launcher shell: the first line is `#!/usr/bin/env -S bash -p`. It needs bash and an `env` that supports `-S`: macOS, or GNU coreutils 8.30 or newer. Install checks this.

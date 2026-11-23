@@ -8,6 +8,7 @@ import {
   BUILT_IN_CLAUDE_MODELS,
   fakeGateway,
   fakeT3Probe,
+  fakeT3Server,
   GOOD_KEY,
   MODELS,
   readRecords,
@@ -1114,6 +1115,7 @@ function settingsWith(preferences) {
 
 /** Install with T3 Code playing its probe of the new entry. */
 async function installWithProbe(sandbox, extraEnv = {}) {
+  const stopServer = await fakeT3Server(sandbox);
   const stop = fakeT3Probe(sandbox, { reported: MODELS });
   try {
     return await subc(
@@ -1123,6 +1125,7 @@ async function installWithProbe(sandbox, extraEnv = {}) {
     );
   } finally {
     stop();
+    await stopServer();
   }
 }
 
@@ -1233,6 +1236,18 @@ test('install skips the hide list when providerModelPreferences is null or missi
   }
 });
 
+test('with no T3 Code server, install does not wait for a cache', {
+  skip,
+}, async () => {
+  const sandbox = await box({ settings: tabbed(settingsWith({})) });
+  await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
+  const started = Date.now();
+  const result = await subc(sandbox, ['t3', 'install', '--provider', 'claude']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /hid 14 models/);
+  assert.ok(Date.now() - started < 10_000, 'no 30 s wait');
+});
+
 test('with no fresh cache, install uses the built-in cache, or skips the hide list', {
   skip,
 }, async () => {
@@ -1301,7 +1316,7 @@ test('status reports the hide list, and drift for a new built-in model', {
   assert.equal(drift.code, 1, drift.stderr);
   assert.match(
     drift.stdout,
-    /drift: T3 Code lists 1 built-in models that the hide list does not hide: claude-opus-6\. Run subc t3 install again\./,
+    /drift: T3 Code lists 1 built-in models that the hide list does not hide: claude-opus-6\. Run subc t3 install --provider claude again\./,
   );
 
   const fixed = await subc(sandbox, ['t3', 'install', '--provider', 'claude']);
@@ -1363,6 +1378,44 @@ test('uninstall removes a hide list whose entry is already gone, and nothing els
     claudeAgent: { hiddenModels: ['a'], modelOrder: [] },
   });
   assert.deepEqual(after.favorites, settings.favorites);
+});
+
+test("status shows T3 Code's sign-in warning for a rejected key", {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  await writeT3ModelCache(sandbox, {
+    instanceId: 'subconscious-claude',
+    status: 'warning',
+    auth: { status: 'unknown' },
+    message: 'Claude Agent CLI failed while checking account status.',
+  });
+  const result = await subc(sandbox, ['t3', 'status', '--provider', 'claude']);
+  assert.equal(result.code, 1, result.stdout);
+  assert.match(
+    result.stdout,
+    /T3 check\s+warning, checked .*: Claude Agent CLI failed while checking account status\./,
+  );
+  assert.match(result.stdout, /run subc login/);
+
+  // A warning with a signed-in account is not about the key.
+  await writeT3ModelCache(sandbox, {
+    instanceId: 'subconscious-claude',
+    status: 'warning',
+    message: 'Claude Code 2.1.290 is older than T3 Code recommends.',
+  });
+  const warned = await subc(sandbox, ['t3', 'status', '--provider', 'claude']);
+  assert.match(warned.stdout, /T3 check\s+warning, checked .*older than/);
+  assert.doesNotMatch(warned.stdout, /run subc login/);
+});
+
+test('help says that T3 Code does not show the fallback line', {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const help = await subc(sandbox, ['t3', 'help']);
+  assert.doesNotMatch(help.stdout, /logs one line/);
+  assert.match(help.stdout, /T3 Code does not show the\s+launcher's\s+stderr/);
 });
 
 test('help explains the hide list and how to turn it on', {

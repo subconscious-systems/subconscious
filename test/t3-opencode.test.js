@@ -171,12 +171,12 @@ test('install adds subconscious-opencode with an empty server URL and password',
     'claudeAgent',
     OURS,
   ]);
-  // Both enabled flags: T3 Code decodes a missing config.enabled as false.
+  // Only the envelope's enabled flag. T3 Code removes config.enabled.
   assert.deepEqual(settings.providerInstances[OURS], {
     driver: 'opencode',
     displayName: 'Subconscious (OpenCode)',
     enabled: true,
-    config: { enabled: true, binaryPath: sandbox.opencodeLauncher },
+    config: { binaryPath: sandbox.opencodeLauncher },
   });
   assert.equal(settings.providerModelPreferences, undefined);
   assert.equal((await fs.stat(sandbox.opencodeLauncher)).mode & 0o777, 0o755);
@@ -947,6 +947,39 @@ test('killing the launcher 200 times during the catalog fetch leaves no process 
   assert.ok(empty, JSON.stringify(left()));
 });
 
+test('an entry without config.enabled, as T3 Code writes it, is current', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  // T3 Code 0.1.11 rewrites the file on start and removes config.enabled,
+  // even when an older subc wrote it.
+  const settings = await readSettings(sandbox);
+  settings.providerInstances[OURS].config = {
+    binaryPath: sandbox.opencodeLauncher,
+  };
+  settings.idleCompaction = { enabled: true };
+  await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings, null, 2));
+  const status = await subc(sandbox, [
+    't3',
+    'status',
+    '--provider',
+    'opencode',
+  ]);
+  assert.equal(status.code, 0, status.stdout);
+  assert.match(status.stdout, /subconscious-opencode: installed\n/);
+  assert.doesNotMatch(status.stdout, /drift|Broken/);
+  const before = await fs.readFile(sandbox.settingsPath, 'utf8');
+  const again = await subc(sandbox, [
+    't3',
+    'install',
+    '--provider',
+    'opencode',
+  ]);
+  assert.equal(again.code, 0, again.stderr);
+  assert.match(again.stdout, /already current/);
+  assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), before);
+});
+
 test('an opencode entry that subc did not write blocks install', {
   skip,
 }, async () => {
@@ -1028,7 +1061,6 @@ test('a server URL or password set in T3 Code is drift, and install repairs it',
     displayName: 'Subconscious (OpenCode)',
     enabled: true,
     config: {
-      enabled: true,
       binaryPath: sandbox.opencodeLauncher,
       customModels: [{ slug: 'subconscious/mine' }],
     },
@@ -1249,7 +1281,7 @@ test('the OpenCode descriptor keeps T3 Code helper names and removes steering na
   assert.equal(OPENCODE_PROVIDER.homeDir, null);
   assert.deepEqual(
     OPENCODE_PROVIDER.managedConfig({ launcherPath: '/x/launcher' }),
-    { enabled: true, binaryPath: '/x/launcher' },
+    { binaryPath: '/x/launcher' },
   );
   assert.deepEqual(OPENCODE_PROVIDER.clearedFields, [
     'serverUrl',

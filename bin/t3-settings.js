@@ -88,6 +88,30 @@ async function managedPolicy(file) {
   }
 }
 
+/**
+ * True when a T3 Code server for `home` is running. T3 Code 0.1.11 writes
+ * its PID to `userdata/server-runtime.json` when its server starts and
+ * removes the file when it stops (`serverRuntimeState.ts`). A file left by
+ * a server that crashed names a PID that no longer runs.
+ */
+export async function t3ServerRunning(home) {
+  let runtime;
+  try {
+    runtime = JSON.parse((await readText(t3Files(home).runtime)) ?? 'null');
+  } catch {
+    return false;
+  }
+  const pid = runtime?.pid;
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: the PID runs, under another user.
+    return error.code === 'EPERM';
+  }
+}
+
 async function t3Version(files) {
   const desktop = (await readText(files.version))?.trim();
   if (desktop) return desktop;
@@ -200,24 +224,27 @@ function isOwnedEntry(entry, target) {
   );
 }
 
-const ENVELOPE_FIELDS = Object.freeze({
-  driver: true,
-  displayName: true,
-  enabled: true,
-});
-
-/** The managed fields that differ from what subc writes. */
+/**
+ * The managed fields that differ from what subc writes.
+ *
+ * T3 Code 0.1.11 folds a boolean `config.enabled` into the envelope's
+ * `enabled` and removes it from `config` on every settings load and save
+ * (`foldProviderInstanceEnabledFlags` in `apps/server/src/serverSettings.ts`).
+ * The envelope flag alone turns an instance on (`resolveEntryEnabled` in
+ * `ProviderInstanceRegistry.ts`). So subc writes only the envelope flag, a
+ * missing `config.enabled` is current, and only a `false` in either place is
+ * drift, because T3 Code resolves either one to off.
+ */
 function driftOf(entry, target) {
   const provider = providerOf(target);
   const drift = [];
   if (entry.displayName !== provider.displayName) drift.push('displayName');
   if (entry.enabled === false) drift.push('enabled');
+  if (entry.config?.enabled === false) drift.push('config.enabled');
   // binaryPath decides ownership, so a ~ path or a symlink is not drift.
-  // A config field with an envelope field's name, such as OpenCode's
-  // config.enabled, is reported with its config. prefix.
   for (const [field, value] of Object.entries(provider.managedConfig(target))) {
     if (field !== 'binaryPath' && entry.config?.[field] !== value)
-      drift.push(field in ENVELOPE_FIELDS ? `config.${field}` : field);
+      drift.push(field);
   }
   for (const field of provider.clearedFields) {
     const value = entry.config?.[field];
@@ -234,6 +261,8 @@ function expectedEntry(target, current = {}) {
   const provider = providerOf(target);
   const config = { ...(isObject(current.config) ? current.config : {}) };
   for (const field of provider.clearedFields) delete config[field];
+  // T3 Code would fold this into enabled: false.
+  if (config.enabled === false) delete config.enabled;
   Object.assign(config, provider.managedConfig(target));
   return {
     ...current,
@@ -529,6 +558,11 @@ export async function removeT3Provider(target, options = {}) {
  * null when it is missing or unreadable. The file is the provider snapshot
  * itself. `slugs` lists its models in order, and `checkedAt` is the time of
  * the probe that wrote it, in ms, or null.
+ *
+ * The snapshot also holds what T3 Code found at that probe: `status` is
+ * `ready`, `warning`, `error`, or `disabled`, `authStatus` is
+ * `authenticated`, `unauthenticated`, or `unknown`, and `message` is T3
+ * Code's text for a problem. Each is null when the file lacks it.
  */
 export async function readT3ModelCache(home, instanceId) {
   const file = path.join(home, 'caches', `${instanceId}.json`);
@@ -546,10 +580,15 @@ export async function readT3ModelCache(home, instanceId) {
       slugs.push(slug);
   }
   const checkedAt = Date.parse(snapshot.checkedAt);
+  const text = (value) =>
+    typeof value === 'string' && value.trim() ? value.trim() : null;
   return {
     file,
     slugs,
     checkedAt: Number.isFinite(checkedAt) ? checkedAt : null,
+    status: text(snapshot.status),
+    authStatus: text(snapshot.auth?.status),
+    message: text(snapshot.message) ?? text(snapshot.unavailableReason),
   };
 }
 
