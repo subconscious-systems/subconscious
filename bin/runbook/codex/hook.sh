@@ -17,23 +17,43 @@
 
 set -u
 
-CONFIG="${SUBCONSCIOUS_HOOKS_ENV:-${HOME}/.codex/subconscious-hooks.env}"
-if [[ -f "$CONFIG" ]]; then
-  # shellcheck disable=SC1090
-  source "$CONFIG"
-fi
-# Older overwrite-style setup also wrote subconscious.env; keep reading it.
-if [[ -f "${HOME}/.codex/subconscious.env" ]]; then
-  # shellcheck disable=SC1090
-  source "${HOME}/.codex/subconscious.env"
-fi
-
-GATEWAY_URL="${SUBCONSCIOUS_GATEWAY_URL:-}"
-API_KEY="${SUBCONSCIOUS_API_KEY:-}"
-
 fail_open() {
   exit 0
 }
+
+# Report only sessions that a Subconscious launch started. subc sets
+# SUBCONSCIOUS_CODEX_LAUNCH on every Codex it starts, and Codex passes its
+# environment to hooks. A plain `codex` that reads the same hooks.json is an
+# OpenAI session, so it sends nothing.
+if [[ -z "${SUBCONSCIOUS_CODEX_LAUNCH:-}" ]]; then
+  fail_open
+fi
+
+# The Codex home of this session. Ordinary subc launches leave CODEX_HOME
+# unset, so this is ~/.codex. A host that gives Codex its own home, such as
+# `subc t3`, keeps the env file and the logs of this hook in that home.
+CODEX_DIR="${CODEX_HOME:-${HOME}/.codex}"
+
+# The launch that started this session already gave Codex its key and gateway.
+# Use that pair first, so a session started on one profile never reports with
+# the key another launch saved to the env file.
+if [[ -n "${SUBCONSCIOUS_API_KEY:-}" ]]; then
+  GATEWAY_URL="${SUBCONSCIOUS_GATEWAY_URL:-}"
+  API_KEY="$SUBCONSCIOUS_API_KEY"
+else
+  CONFIG="${SUBCONSCIOUS_HOOKS_ENV:-${CODEX_DIR}/subconscious-hooks.env}"
+  if [[ -f "$CONFIG" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONFIG"
+  fi
+  # Older overwrite-style setup also wrote subconscious.env; keep reading it.
+  if [[ -f "${CODEX_DIR}/subconscious.env" ]]; then
+    # shellcheck disable=SC1090
+    source "${CODEX_DIR}/subconscious.env"
+  fi
+  GATEWAY_URL="${SUBCONSCIOUS_GATEWAY_URL:-}"
+  API_KEY="${SUBCONSCIOUS_API_KEY:-}"
+fi
 
 if [[ -z "$GATEWAY_URL" || -z "$API_KEY" ]]; then
   echo "subconscious codex hook: missing SUBCONSCIOUS_GATEWAY_URL or SUBCONSCIOUS_API_KEY" >&2
@@ -53,7 +73,7 @@ if [[ -z "$INPUT" ]]; then
 fi
 
 # Local fire-log for capture/debug (never blocks).
-FIRE_LOG_DIR="${SUBCONSCIOUS_CODEX_HOOK_LOG_DIR:-${HOME}/.codex/subconscious-hook-logs}"
+FIRE_LOG_DIR="${SUBCONSCIOUS_CODEX_HOOK_LOG_DIR:-${CODEX_DIR}/subconscious-hook-logs}"
 mkdir -p "$FIRE_LOG_DIR" 2>/dev/null || true
 
 HOOK_EVENT="$(printf '%s' "$INPUT" | jq -r '.hook_event_name // empty' 2>/dev/null || true)"
@@ -102,8 +122,18 @@ PAYLOAD="$(jq -n \
   }'
 )"
 
-curl -sS -m 2 \
-  -H "Authorization: Bearer ${API_KEY}" \
+# The key goes to curl as a config file on stdin, never in argv, where any
+# local user could read it with ps. A key with a quote, a backslash or a line
+# break cannot be written safely into that config line, so send nothing.
+case "$API_KEY" in
+  *[\"\\$'\n'$'\r']*)
+    echo "subconscious codex hook: the API key contains a character the hook cannot send" >&2
+    fail_open
+    ;;
+esac
+
+printf 'header = "Authorization: Bearer %s"\n' "$API_KEY" | curl -sS -m 2 \
+  --config - \
   -H "Content-Type: application/json" \
   -H "x-subconscious-client: codex" \
   -d "$PAYLOAD" \

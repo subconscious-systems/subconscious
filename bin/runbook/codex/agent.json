@@ -196,6 +196,11 @@
       "name": "SUBCONSCIOUS_GATEWAY_URL",
       "value": "{baseUrl}",
       "description": "Gateway origin for the hook environment."
+    },
+    {
+      "name": "SUBCONSCIOUS_CODEX_LAUNCH",
+      "value": "subc",
+      "description": "Marks a Codex that subc started. The compaction hook reports only when it is set, so a plain codex session that reads the same hooks.json sends nothing."
     }
   ],
   "config": [
