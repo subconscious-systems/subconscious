@@ -41,6 +41,41 @@ process.stdout.write(JSON.stringify({ fake: 'codex', args }) + '\\n');
 if (process.env.FAKE_CODEX_SLEEP) setTimeout(() => {}, Number(process.env.FAKE_CODEX_SLEEP));
 `;
 
+// A fake claude. --version prints FAKE_CLAUDE_VERSION (default 2.1.326) and,
+// like a real start, writes a file in its config dir (CLAUDE_CONFIG_DIR, or
+// ~/.claude), so a test can see which dir a version check used. Any other
+// call records its argv, env, stdin, cwd, and pid to FAKE_CLAUDE_LOG, then
+// prints exactly one JSON line: a result for -p and an init message for
+// stream-json. FAKE_CLAUDE_SLEEP keeps it alive in the same process.
+export const FAKE_CLAUDE = `#!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
+const args = process.argv.slice(2);
+if (args.length === 1 && (args[0] === '--version' || args[0] === '-v')) {
+  const dir = process.env.CLAUDE_CONFIG_DIR || path.join(require('os').homedir(), '.claude');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'fake-version-check'), 'ran\\n');
+  process.stdout.write((process.env.FAKE_CLAUDE_VERSION || '2.1.326') + ' (Claude Code)\\n');
+  process.exit(0);
+}
+let stdin = '';
+if (process.env.FAKE_CLAUDE_READ_STDIN === '1') stdin = fs.readFileSync(0, 'utf8');
+const record = { args, env: process.env, stdin, cwd: process.cwd(), pid: process.pid };
+if (process.env.FAKE_CLAUDE_LOG)
+  fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify(record) + '\\n');
+const print = args.includes('-p') || args.includes('--print');
+const line = print
+  ? { type: 'result', subtype: 'success', result: 'fake', fake: 'claude' }
+  : { type: 'system', subtype: 'init', fake: 'claude' };
+process.stdout.write(JSON.stringify(line) + '\\n');
+if (process.env.FAKE_CLAUDE_SLEEP) setTimeout(() => {}, Number(process.env.FAKE_CLAUDE_SLEEP));
+`;
+
+// The user's own Claude Code files. Install and launches must leave them as
+// they are.
+export const USER_CLAUDE_SETTINGS = `${JSON.stringify({ model: 'opus', env: { USER_SETTING: '1' } }, null, 2)}\n`;
+export const USER_CLAUDE_JSON = `${JSON.stringify({ projects: { '/x': { hasTrustDialogAccepted: true } } }, null, 2)}\n`;
+
 /** A local gateway: the canonical catalog for GOOD_KEY, 401 for any other. */
 export async function fakeGateway() {
   const requests = [];
@@ -91,7 +126,12 @@ export async function fakeGateway() {
  * profile, a fake codex, and an existing ordinary ~/.codex. Nothing outside
  * `root` is read or written by the commands a test runs with `env`.
  */
-export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
+export async function t3Sandbox({
+  gateway,
+  apiKey = GOOD_KEY,
+  settings,
+  withClaude = false,
+} = {}) {
   const root = await fs.realpath(
     await fs.mkdtemp(path.join(os.tmpdir(), 'subc-t3-test-')),
   );
@@ -132,6 +172,31 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
     path.join(codexDir, 'config.toml'),
     'model = "gpt-user"\n[mcp_servers.user]\ncommand = "user-mcp"\n',
   );
+  // With withClaude, a fake Claude Code installed the way the native
+  // installer does it: ~/.local/bin/claude links to a versioned file.
+  const claudeDir = path.join(home, '.claude');
+  const claudeJson = path.join(home, '.claude.json');
+  const claudeBin = path.join(home, '.local', 'bin', 'claude');
+  const claudeVersions = path.join(
+    home,
+    '.local',
+    'share',
+    'claude',
+    'versions',
+  );
+  if (withClaude) {
+    await fs.mkdir(path.dirname(claudeBin), { recursive: true });
+    await fs.mkdir(claudeVersions, { recursive: true });
+    const versioned = path.join(claudeVersions, '2.1.326');
+    await fs.writeFile(versioned, FAKE_CLAUDE, { mode: 0o755 });
+    await fs.symlink(versioned, claudeBin);
+    await fs.mkdir(claudeDir, { recursive: true });
+    await fs.writeFile(
+      path.join(claudeDir, 'settings.json'),
+      USER_CLAUDE_SETTINGS,
+    );
+    await fs.writeFile(claudeJson, USER_CLAUDE_JSON);
+  }
   const PATH = [
     bin,
     path.dirname(process.execPath),
@@ -163,6 +228,10 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
     state: path.join(subc, 't3', 'state.json'),
     // The separate Codex home of subc t3 builds before 8.2.0.
     legacyCodexHome: path.join(subc, 't3', 'codex', 'default'),
+    claudeDir,
+    claudeJson,
+    claudeBin,
+    claudeLauncher: path.join(subc, 'bin', 'subc-t3-claude'),
   };
   return {
     ...paths,
@@ -184,14 +253,34 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
         ...extra,
       };
     },
+    // How T3 Code 0.1.11 starts its Claude binary with no homePath: its own
+    // env plus the protocol names it adds, and no CLAUDE_CONFIG_DIR.
+    claudeT3Env(extra = {}) {
+      return {
+        ...env,
+        CLAUDE_CODE_ENTRYPOINT: 't3-code',
+        CLAUDE_AGENT_SDK_VERSION: '0.3.321',
+        CLAUDE_CODE_SDK_READS_SESSION_STATE: '1',
+        ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
+        CLAUDE_CODE_AUTO_CONNECT_IDE: 'false',
+        CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL: '1',
+        MISE_OFFLINE: '1',
+        T3CODE_THREAD_ID: 'thread-1',
+        ...extra,
+      };
+    },
     cleanup: () => fs.rm(root, { recursive: true, force: true }),
   };
 }
 
-/** Run a command; resolves with code, signal, stdout, and stderr. */
-export function run(file, args, { env, input, timeoutMs = 60_000 } = {}) {
+/** Run a command; resolves with code, signal, stdout, stderr, and pid. */
+export function run(file, args, { env, input, cwd, timeoutMs = 60_000 } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(file, args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(file, args, {
+      env,
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
@@ -206,7 +295,7 @@ export function run(file, args, { env, input, timeoutMs = 60_000 } = {}) {
     child.on('error', reject);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
-      resolve({ code, signal, stdout, stderr });
+      resolve({ code, signal, stdout, stderr, pid: child.pid });
     });
   });
 }

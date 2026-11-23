@@ -687,8 +687,11 @@ test('help explains the scope and limits', { skip }, async () => {
   for (const args of [['t3', 'help'], ['help', 't3'], ['t3']]) {
     const result = await subc(sandbox, args);
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /Codex only/);
+    assert.match(result.stdout, /Codex or Claude Code/);
     assert.match(result.stdout, /default profile only/);
+    assert.match(result.stdout, /uses your ~\/\.claude/);
+    assert.match(result.stdout, /switch a running thread/);
+    assert.match(result.stdout, /runs as the default profile's\s+model/);
     assert.match(result.stdout, /macOS and Linux/);
     assert.match(result.stdout, /same Codex home as subc codex/);
     assert.match(result.stdout, /\/hooks/);
@@ -944,16 +947,16 @@ test('--provider selects a provider, and refuses one that is not available', {
   const settings = await fs.readFile(sandbox.settingsPath, 'utf8');
   for (const [args, message] of [
     [
-      ['t3', 'install', '--provider', 'claude'],
-      /claude provider is not available yet/,
+      ['t3', 'install', '--provider', 'opencode'],
+      /opencode provider is not available yet/,
     ],
     [
       ['t3', 'status', '--provider', 'opencode'],
       /opencode provider is not available yet/,
     ],
     [
-      ['t3', 'uninstall', '--provider=claude'],
-      /claude provider is not available yet/,
+      ['t3', 'uninstall', '--provider=opencode'],
+      /opencode provider is not available yet/,
     ],
     [['t3', 'install', '--provider', 'cursor'], /Unknown provider: cursor/],
     [['t3', 'status', '--provider'], /--provider needs a name/],
@@ -998,7 +1001,7 @@ test('--provider selects a provider, and refuses one that is not available', {
   assert.match(help.stdout, /--provider NAME/);
   assert.match(
     help.stdout,
-    /Available: codex\. Not available yet: claude, opencode\./,
+    /Available: codex, claude\. Not available yet: opencode\./,
   );
 });
 

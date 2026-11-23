@@ -26,6 +26,8 @@
  * - `binaryFlag`: the adapter option that carries the pinned binary path.
  * - `homeDir`: the agent home relative to the user's home, such as `.codex`,
  *   that the entry names as its `homePath`. `null` writes no `homePath`.
+ * - `homeNote`: one sentence that install and status print about the agent
+ *   home when `homeDir` is `null`, or `null` for no sentence.
  * - `managedConfig(target)`: every `config` field subc sets on its entry,
  *   in write order, `binaryPath` included. `target` holds `launcherPath` and,
  *   when `homeDir` is set, `homePath`. Status reports a changed value as
@@ -36,11 +38,15 @@
  * - `extraIsolatedEnv`: env names the launch removes from T3 Code's env, on
  *   top of `SUBC_*`, `SUBCONSCIOUS_*`, and every input in the agent file. A
  *   name that ends in `*` removes every name with that prefix.
+ * - `isolateAgentOverrides`: true when the launch also removes every input
+ *   alias and every env `override` name in the agent file. Each of those
+ *   names changes the launch when T3 Code's env sets it.
  * - `versionProbeEnv(dir)`: env for the install-time `--version` check, so
  *   that the check writes into the throwaway `dir` and not into the user's
  *   agent home.
- * - `minimumVersion`: the oldest version install accepts. `null` uses the
- *   agent file's `minimum_version`.
+ * - `minimumVersion`: the oldest version install accepts. Install uses the
+ *   higher of this and the agent file's `minimum_version`. `null` uses the
+ *   agent file's value alone.
  * - `recommendedVersion`: below this version install prints a warning and
  *   continues. `null` prints no warning.
  * - `hooks`: true when install sets up the Codex compaction hooks in
@@ -69,6 +75,7 @@ const CODEX = Object.freeze({
   // The same Codex home that plain `subc codex` uses, so T3 Code sessions
   // get the user's own AGENTS.md, skills, and MCP servers.
   homeDir: '.codex',
+  homeNote: null,
   managedConfig: ({ launcherPath, homePath }) => ({
     setupMode: 'existing',
     binaryPath: launcherPath,
@@ -76,6 +83,7 @@ const CODEX = Object.freeze({
   }),
   clearedFields: Object.freeze(['shadowHomePath', 'launchArgs']),
   extraIsolatedEnv: Object.freeze([]),
+  isolateAgentOverrides: false,
   // Codex writes helper files under CODEX_HOME/tmp on every start, even for
   // --version.
   versionProbeEnv: (dir) => ({ CODEX_HOME: dir }),
@@ -88,8 +96,56 @@ const CODEX = Object.freeze({
   watchdog: false,
 });
 
+const CLAUDE = Object.freeze({
+  id: 'claude',
+  agentId: 'claude-code',
+  label: 'Claude Code',
+  instanceId: 'subconscious-claude',
+  displayName: 'Subconscious (Claude)',
+  driver: 'claudeAgent',
+  launcherName: 'subc-t3-claude',
+  adapterFile: 't3-claude.js',
+  binaryName: 'claude',
+  binaryFlag: '--claude',
+  // No homePath, so T3 Code sets no CLAUDE_CONFIG_DIR. Claude Code then reads
+  // the user's ~/.claude and ~/.claude.json, as plain subc claude does.
+  homeDir: null,
+  homeNote:
+    "Claude Code uses your ~/.claude, the same config as subc claude and T3 Code's built-in Claude provider.",
+  managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
+  clearedFields: Object.freeze(['launchArgs']),
+  // Each of these routes Claude Code away from the default profile, signs
+  // it in another way, or changes the telemetry that carries the key.
+  extraIsolatedEnv: Object.freeze([
+    'ANTHROPIC_*',
+    'OTEL_*',
+    'CLAUDE_CODE_OAUTH_TOKEN',
+    'CLAUDE_CODE_USE_BEDROCK',
+    'CLAUDE_CODE_USE_VERTEX',
+    'CLAUDE_CODE_USE_FOUNDRY',
+    'CLAUDE_CODE_SKIP_BEDROCK_AUTH',
+    'CLAUDE_CODE_SKIP_VERTEX_AUTH',
+    'CLAUDE_CODE_SKIP_FOUNDRY_AUTH',
+    'API_KEY',
+    'GATEWAY_URL',
+    'MODEL',
+  ]),
+  isolateAgentOverrides: true,
+  // A throwaway config dir keeps the version check out of ~/.claude and
+  // ~/.claude.json.
+  versionProbeEnv: (dir) => ({ CLAUDE_CONFIG_DIR: dir }),
+  // T3 Code 0.1.11 supports Claude Code 2.1.280 and newer, and recommends
+  // 2.1.301. Install uses the higher of this and the agent file's minimum.
+  minimumVersion: '2.1.280',
+  recommendedVersion: '2.1.301',
+  hooks: false,
+  ownedDirs: Object.freeze([]),
+  legacyHome: null,
+  watchdog: false,
+});
+
 /** Every provider this subc version can install, in a fixed order. */
-export const T3_PROVIDERS = Object.freeze([CODEX]);
+export const T3_PROVIDERS = Object.freeze([CODEX, CLAUDE]);
 
 /**
  * Every provider key that `--provider` accepts, in a fixed order. A key here
@@ -98,6 +154,7 @@ export const T3_PROVIDERS = Object.freeze([CODEX]);
 export const T3_PROVIDER_KEYS = Object.freeze(['codex', 'claude', 'opencode']);
 
 export const CODEX_PROVIDER = CODEX;
+export const CLAUDE_PROVIDER = CLAUDE;
 
 /** The registered descriptor for `key`, or null. */
 export function providerByKey(key) {

@@ -48,7 +48,6 @@ import {
   installT3Provider,
   removeT3Provider,
   settingsBlockers,
-  T3_DISPLAY_NAME,
   t3HomeDir,
 } from './t3-settings.js';
 
@@ -58,6 +57,9 @@ const HOOK_ENV_FILE = 'subconscious-hooks.env';
 export function printT3Help() {
   const available = T3_PROVIDERS.map((provider) => provider.id);
   const pending = T3_PROVIDER_KEYS.filter((key) => !providerByKey(key));
+  const names = T3_PROVIDERS.map(
+    (provider) => `"${provider.displayName}"`,
+  ).join(' and ');
   console.log(`
 Usage:
   subc t3 install [--provider NAME]... [--dry-run]
@@ -65,18 +67,19 @@ Usage:
   subc t3 uninstall [--provider NAME]...
   subc t3 help
 
-Adds a provider named "${T3_DISPLAY_NAME}" to T3 Code. T3 Code then runs
-Codex on your hosted Subconscious models. This works on macOS and Linux, with
-Codex only, and with the default profile only.
+Adds providers named ${names} to T3 Code.
+T3 Code then runs Codex or Claude Code on your hosted Subconscious models.
+This works on macOS and Linux, and with the default profile only.
 
-  install            Check Codex, the default profile's key, and the live
-                     model catalog. Then write the launcher, set up the
-                     compaction hooks, and add the provider to T3 Code.
+  install            Check each CLI, the default profile's key, and the live
+                     model catalog. Then write a launcher per provider, set
+                     up the Codex compaction hooks, and add the providers to
+                     T3 Code.
   install --dry-run  Run every check and print the plan. Change nothing.
   status             Show what is installed. Needs no network or key.
-  uninstall          Remove the provider and the launcher. The compaction
+  uninstall          Remove the providers and the launchers. The compaction
                      hooks in ~/.codex stay, because subc codex uses them.
-                     T3 Code threads stay.
+                     ~/.claude is never changed. T3 Code threads stay.
   --provider NAME    Act on this provider only. Repeat it to name more.
                      Available: ${available.join(', ')}.${pending.length ? ` Not available yet: ${pending.join(', ')}.` : ''}
                      Without it, install sets up every available provider
@@ -84,11 +87,13 @@ Codex only, and with the default profile only.
                      every available provider.
 
 How it works:
-  T3 Code runs ~/.subconscious/bin/subc-t3-codex as the Codex binary. Each
-  session reads the default profile again, so a new key or model takes effect
-  at the next launch. If the key-scoped catalog cannot be read, Codex does not
+  T3 Code runs ~/.subconscious/bin/subc-t3-codex as the Codex binary, and
+  ~/.subconscious/bin/subc-t3-claude as the Claude Code binary. Each session
+  reads the default profile again, so a new key or model takes effect at the
+  next launch. If the key-scoped catalog cannot be read, the agent does not
   start; there is no fallback to the public or packaged model list.
 
+Codex:
   The provider uses ~/.codex, the same Codex home as subc codex, so your
   AGENTS.md, skills, and MCP servers carry over. subc never edits your
   config.toml; its -c overrides route each session to Subconscious. Codex
@@ -100,6 +105,19 @@ How it works:
   they report only for Codex sessions that subc started. The hook env file
   holds the profile's key, mode 600. After subc codex uninstall removes
   them, run subc t3 install to set them up again.
+
+Claude Code (beta):
+  The provider uses your ~/.claude, as subc claude does, so your settings,
+  MCP servers, and project trust carry over. subc writes nothing there. It
+  needs Claude Code 2.1.280 or newer, and warns below 2.1.301.
+
+  T3 Code also lists its built-in Claude models on this provider. A model
+  that is not in your Subconscious catalog runs as the default profile's
+  model instead, and the launcher logs one line that names both models.
+
+  T3 Code's built-in Claude provider uses the same ~/.claude, so T3 Code
+  lets you switch a running thread between the two. The next turn then
+  sends the whole thread to the other backend: Anthropic or Subconscious.
 
   T3 Code reloads its settings on its own; subc never restarts it.
 `);
@@ -309,25 +327,42 @@ function notInstalledMessage(provider, agent) {
   return `${provider.label} CLI is not installed. Install it with npm i -g ${agent.install.package}, then retry.`;
 }
 
-/** The pinned binary path and its version. Throws T3LaunchError. */
-async function checkBinary(provider, agent, binDir) {
-  const binary = path.join(binDir, provider.binaryName);
-  // The probe gets a throwaway home, so the check, and a dry run, write
-  // nothing in the user's agent home.
+function higherVersion(left, right) {
+  if (!left || !right) return left || right || null;
+  return versionNeedsUpgrade(left, right) ? right : left;
+}
+
+/**
+ * The version of the agent binary in `binDir`, or null. The probe gets a
+ * throwaway home, so the check, a dry run, and status write nothing in the
+ * user's agent home.
+ */
+async function readBinaryVersion(provider, binDir) {
   const probeHome = await fs.mkdtemp(
     path.join(os.tmpdir(), `subc-t3-${provider.id}-`),
   );
-  let version;
   try {
-    version = readClaudeVersion(provider.binaryName, binDir, {
+    return readClaudeVersion(provider.binaryName, binDir, {
       env: provider.versionProbeEnv(probeHome),
     });
   } finally {
     await fs.rm(probeHome, { recursive: true, force: true });
   }
+}
+
+/** The pinned binary path and its version. Throws T3LaunchError. */
+async function checkBinary(provider, agent, binDir) {
+  // The path as found, not its real path: Claude Code's native installer
+  // links ~/.local/bin/claude to a versioned file that a later update
+  // removes.
+  const binary = path.join(binDir, provider.binaryName);
+  const version = await readBinaryVersion(provider, binDir);
   if (!version)
     throw new T3LaunchError(`Could not read the version of ${binary}.`);
-  const minimum = provider.minimumVersion ?? agent.install.minimum_version;
+  const minimum = higherVersion(
+    provider.minimumVersion,
+    agent.install.minimum_version,
+  );
   if (versionNeedsUpgrade(version, minimum))
     throw new T3LaunchError(
       `${provider.label} ${version} is older than ${minimum}, the oldest version this provider supports. Upgrade ${provider.label}, then retry.`,
@@ -394,6 +429,7 @@ function printPlan(item, single) {
       `${provider.label} home`,
       `${target.homePath} (shared with subc ${provider.id})`,
     );
+  else if (provider.homeNote) line('Config', provider.homeNote);
   line(
     'Model',
     `${launch.model} from the default profile, read again at each launch`,
@@ -570,6 +606,16 @@ async function launcherReport(paths, provider, file) {
     : 'current';
 }
 
+/** The binary the launcher pins and its version, or null with no launcher. */
+async function binaryReport(file, provider) {
+  const launcher = await readLauncher(file, provider);
+  const binary = launcher.pinned?.[provider.binaryName];
+  if (!binary) return null;
+  if (!(await exists(binary))) return `${binary} (missing)`;
+  const version = await readBinaryVersion(provider, path.dirname(binary));
+  return `${binary} (${version ?? 'version unknown'})`;
+}
+
 function entryReport(report) {
   if (report.state !== 'ok') return `${report.state}: ${report.problem}`;
   if (report.entry === 'absent') return 'not installed';
@@ -628,11 +674,14 @@ async function status({ providers }) {
       'Launcher',
       `${target.launcherPath}: ${await launcherReport(paths, provider, target.launcherPath)}`,
     );
+    const binary = await binaryReport(target.launcherPath, provider);
+    if (binary) line(provider.label, binary);
     if (target.homePath)
       line(
         `${provider.label} home`,
         `${target.homePath}${(await exists(target.homePath)) ? '' : ' (missing)'}`,
       );
+    else if (provider.homeNote) line('Config', provider.homeNote);
     if (provider.hooks)
       line('Hooks', hookReport(await hookStatus(target.homePath), report));
     const legacy = await legacyHome(paths, provider);

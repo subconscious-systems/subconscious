@@ -15,6 +15,7 @@
  * functions, after isolateLaunchEnv, so this file is cheap to load.
  */
 
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -68,9 +69,14 @@ const isolatedNames = new WeakMap();
 function isolatedEnvFor(provider) {
   let names = isolatedNames.get(provider);
   if (!names) {
-    const exact = new Set(
-      (agentById(provider.agentId).inputs ?? []).map((input) => input.name),
-    );
+    const agent = agentById(provider.agentId);
+    const exact = new Set((agent.inputs ?? []).map((input) => input.name));
+    if (provider.isolateAgentOverrides) {
+      for (const input of agent.inputs ?? [])
+        for (const alias of input.aliases ?? []) exact.add(alias);
+      for (const entry of agent.env ?? [])
+        for (const name of entry.override ?? []) exact.add(name);
+    }
     const prefixes = [];
     for (const name of provider.extraIsolatedEnv) {
       if (name.endsWith('*')) prefixes.push(name.slice(0, -1));
@@ -247,6 +253,187 @@ export async function t3CodexPlan({ args, codexPath, paths, launch }) {
       SUBC_CODEX_CATALOG_FILE: paths.catalogFile,
     },
     unset: SHELL_STARTUP_ENV,
+  };
+}
+
+// The only two variables that carry the key into Claude Code: the bearer
+// credential for /v1/messages and the header for OTEL log export.
+const CLAUDE_KEY_CARRIERS = new Set([
+  'ANTHROPIC_AUTH_TOKEN',
+  'OTEL_EXPORTER_OTLP_HEADERS',
+]);
+// Copies of the key, the catalog, or the picker that runbookEnv adds for an
+// ordinary subc claude launch. Claude Code reads none of them.
+const CLAUDE_LAUNCH_EXTRAS = Object.freeze([
+  'API_KEY',
+  'CLAUDE_CODE_API_KEY',
+  'SUBC_CLAUDE_SETTINGS',
+  'SUBCONSCIOUS_MODELS',
+  'SUBC_MODEL_METADATA',
+]);
+
+/**
+ * Replace each `--model` value that is not in the catalog with `model`. The
+ * flag wins over ANTHROPIC_MODEL in Claude Code, so the argv itself must
+ * name a model the key can call. Returns the new args and the first model
+ * that was replaced, or null.
+ */
+export function pinClaudeModel(args, catalog, model) {
+  const next = [];
+  let replaced = null;
+  const pick = (value) => {
+    if (catalog.includes(value)) return value;
+    replaced ??= value;
+    return model;
+  };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') {
+      next.push(...args.slice(i));
+      break;
+    }
+    if (arg === '--model' && i + 1 < args.length) {
+      next.push(arg, pick(args[++i]));
+    } else if (arg.startsWith('--model=')) {
+      next.push(`--model=${pick(arg.slice('--model='.length))}`);
+    } else {
+      next.push(arg);
+    }
+  }
+  return { args: next, replaced };
+}
+
+const SETTINGS_UNREADABLE =
+  'T3 Code passed a --settings value that is not a JSON object, or a file that does not hold one. The value is not shown, because it can hold secrets.';
+
+function readSettingsValue(value, cwd) {
+  const text = value.trim();
+  let parsed;
+  try {
+    parsed = JSON.parse(
+      text.startsWith('{')
+        ? text
+        : readFileSync(path.resolve(cwd, value), 'utf8'),
+    );
+  } catch {
+    throw new T3LaunchError(SETTINGS_UNREADABLE);
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    throw new T3LaunchError(SETTINGS_UNREADABLE);
+  return parsed;
+}
+
+/**
+ * Merge `picker` into the last `--settings` value in `args`, and drop the
+ * earlier ones, so Claude Code gets exactly one `--settings`. Claude Code
+ * keeps only the last flag, so a second flag beside T3 Code's would drop
+ * either T3 Code's keys or the picker. A value that starts with `{` is
+ * inline JSON, and any other value is a file path relative to `cwd`. With
+ * no `--settings` in `args`, one is added before any `--`.
+ */
+export function mergeClaudeSettings(args, picker, cwd = process.cwd()) {
+  const flags = [];
+  let end = args.length;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--') {
+      end = i;
+      break;
+    }
+    if (arg === '--settings') {
+      if (i + 1 >= args.length) throw new T3LaunchError(SETTINGS_UNREADABLE);
+      flags.push({ index: i, words: 2, value: args[i + 1] });
+      i++;
+    } else if (arg.startsWith('--settings=')) {
+      flags.push({ index: i, words: 1, value: arg.slice(11) });
+    }
+  }
+  if (!flags.length)
+    return [
+      ...args.slice(0, end),
+      '--settings',
+      JSON.stringify(picker),
+      ...args.slice(end),
+    ];
+  const last = flags.at(-1);
+  const merged = JSON.stringify({
+    ...readSettingsValue(last.value, cwd),
+    ...picker,
+  });
+  const drop = new Set();
+  for (const flag of flags)
+    for (let word = 0; word < flag.words; word++) drop.add(flag.index + word);
+  const next = [];
+  for (let i = 0; i < args.length; i++) {
+    if (i === last.index) next.push('--settings', merged);
+    else if (!drop.has(i)) next.push(args[i]);
+  }
+  return next;
+}
+
+/**
+ * The command the launcher execs for a Claude Code protocol launch: the
+ * claude-code runbook, as subc claude builds it, with T3 Code's args kept
+ * in order. Three changes make it fit T3 Code:
+ *
+ * - The template's own `--settings` picker is merged into T3 Code's last
+ *   `--settings` value.
+ * - A `--model` outside the key-scoped catalog becomes the profile model.
+ * - Only ANTHROPIC_AUTH_TOKEN and OTEL_EXPORTER_OTLP_HEADERS carry the key.
+ *
+ * `fallback` names the replaced model, or is null.
+ */
+export async function t3ClaudePlan({
+  args,
+  claudePath,
+  launch,
+  cwd = process.cwd(),
+}) {
+  const [{ runbookEnv }, { launchPlan }, { planCommand }] = await Promise.all([
+    import('./agents.js'),
+    import('./agent-launch.js'),
+    import('./agent-spawn.js'),
+  ]);
+  const binDir = path.dirname(claudePath);
+  const env = runbookEnv(
+    launch.apiKey,
+    launch.model,
+    binDir,
+    launch.profile,
+    launch.agent,
+    launch.catalog.defaultModels,
+    launch.catalog.entries,
+  );
+  const pinned = pinClaudeModel(args, launch.catalog.models, launch.model);
+  // A leading `--` stops subc flag parsing, so every word T3 Code sent
+  // reaches Claude Code.
+  const plan = launchPlan(launch.agent, {
+    env,
+    args: ['--', ...pinned.args],
+  });
+  const command = planCommand(launch.agent, plan, binDir);
+  // The template starts with `--settings PICKER`. It is merged below instead.
+  if (command.args[0] !== '--settings')
+    throw new T3LaunchError(
+      'The claude-code launch template no longer starts with --settings. Update subc.',
+    );
+  const picker = JSON.parse(command.args[1]);
+  const claudeEnv = { ...command.env };
+  for (const name of CLAUDE_LAUNCH_EXTRAS) delete claudeEnv[name];
+  // A profile value can hold another copy of the key, such as an
+  // OPENCODE_API_KEY line. Every tool Claude Code runs inherits this env.
+  for (const [name, value] of Object.entries(claudeEnv))
+    if (value === launch.apiKey && !CLAUDE_KEY_CARRIERS.has(name))
+      delete claudeEnv[name];
+  return {
+    argv: [
+      claudePath,
+      ...mergeClaudeSettings(command.args.slice(2), picker, cwd),
+    ],
+    env: claudeEnv,
+    fallback: pinned.replaced
+      ? { requested: pinned.replaced, model: launch.model }
+      : null,
   };
 }
 

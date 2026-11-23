@@ -180,10 +180,10 @@ The packaged integrations live in `bin/runbook`.
 
 ## T3 Code
 
-`subc t3 install` adds a provider named "Subconscious (Codex)" to T3 Code. T3 Code then runs Codex on your hosted Subconscious models. The integration has these limits:
+`subc t3 install` adds providers named "Subconscious (Codex)" and "Subconscious (Claude)" to T3 Code. T3 Code then runs Codex or Claude Code on your hosted Subconscious models. The Claude Code provider is in beta. The integration has these limits:
 
 - It supports macOS and Linux. On Windows, `subc t3` fails with an error.
-- It supports Codex only, and the default profile only. `--provider codex` selects the provider by name on install, status, and uninstall. The names `claude` and `opencode` are reserved for providers that are not available yet. Without `--provider`, install sets up every available provider whose CLI it finds.
+- It supports the default profile only. `--provider codex` or `--provider claude` selects a provider by name on install, status, and uninstall. The name `opencode` is reserved for a provider that is not available yet. Without `--provider`, install sets up every available provider whose CLI it finds.
 - It needs the T3 Code settings file, `~/.t3/userdata/settings.json` (or `$T3CODE_HOME/userdata/settings.json`). Open T3 Code once to create it.
 
 ```bash
@@ -218,6 +218,24 @@ Limits of this first version:
 - subc keeps no state file. `subc t3 status` reads the launcher, the T3 Code entry, and the hook files each time it runs. If `subc codex uninstall` removed the hooks, status says that they are missing. Run `subc t3 install` to set them up again.
 
 `subc t3 uninstall` removes the `subconscious-codex` entry, the launcher, and the catalog. It also removes `~/.subconscious/t3/state.json`, which subc 8.2.0 wrote and nothing reads now. It keeps the compaction hooks in `~/.codex`, because `subc codex` uses them too. It also keeps the T3 Code threads and the other providers.
+
+### Claude Code provider (beta)
+
+Install finds `claude` and pins the path it finds, such as the `~/.local/bin/claude` link that the native installer writes, so a Claude Code update keeps the launcher working. It reads the version with a throwaway `CLAUDE_CONFIG_DIR`, so the check writes nothing in `~/.claude`. It refuses Claude Code older than 2.1.280, and warns below 2.1.301, the version that T3 Code 0.1.11 recommends. Then it writes `~/.subconscious/bin/subc-t3-claude` and adds the `subconscious-claude` entry, with that launcher as the binary and no `homePath`. Install clears the entry's launch arguments, because they can carry `--settings` or `--model`.
+
+The provider uses your `~/.claude` and `~/.claude.json`, as `subc claude` does, so your settings, MCP servers, and project trust carry over. subc never writes there. If you set a Claude home on the provider in T3 Code, the launcher keeps the `CLAUDE_CONFIG_DIR` that T3 Code passes.
+
+The launcher handles each Claude Code command in one of three ways:
+
+- A command with `--input-format`, `--output-format`, `-p`, or `--print` gets the same setup as `subc claude`, from the default profile only. These are T3 Code's probe, its sessions, and its title and commit message generation. The launcher ignores `SUBC_*`, `SUBCONSCIOUS_*`, `ANTHROPIC_*`, `OTEL_*`, the Claude Code inputs and overrides that `subc claude` reads, `CLAUDE_CODE_OAUTH_TOKEN`, and the Bedrock, Vertex, and Foundry switches in the T3 Code environment. It merges the Subconscious model picker into T3 Code's own `--settings` value, so Claude Code gets exactly one `--settings`. Only `ANTHROPIC_AUTH_TOKEN` and `OTEL_EXPORTER_OTLP_HEADERS` carry the key.
+- `--version`, `-v`, `-h`, `--help`, and `update` run the real Claude Code unchanged. They read no profile and make no request.
+- Every other Claude Code command fails with an error.
+
+T3 Code also lists its built-in Claude models on this provider. A model that is not in your key-scoped catalog runs as the default profile's model instead. The launcher then writes one line to T3 Code's log that names both models.
+
+T3 Code's built-in Claude provider uses the same `~/.claude`, so T3 Code lets you switch a running thread between "Claude" and "Subconscious (Claude)". The next turn then sends the whole thread to the other backend, Anthropic or Subconscious. subc allows this switch, so pick the provider you want before you send a thread anything private.
+
+`subc t3 uninstall` removes the `subconscious-claude` entry and the launcher. It never changes `~/.claude`.
 
 Builds of `subc t3` from before 8.2.0 gave the provider its own Codex home, `~/.subconscious/t3/codex/default`. When that folder exists, install, status, and uninstall report it. It holds a key file, `subconscious-hooks.env`, and the threads made before 8.2.0. subc does not delete it. Remove the key file with the `rm` command that subc prints. The threads are your data, so delete the folder yourself when you no longer need them.
 
