@@ -56,13 +56,10 @@
  *   `homeDir`, the same way `subc codex` does.
  * - `ownedDirs`: directories under `<config dir>/t3`, as `/` paths, that
  *   launches create and uninstall removes.
- * - `legacyHome`: a directory under `<config dir>/t3` that an older subc
- *   used as the agent home, or `null`. Install, status, and uninstall report
- *   it and never delete it.
  * - `watchdog`: true when the launcher can start a background watchdog that
  *   stops the agent after T3 Code's server dies. It is for a long-lived
  *   helper that T3 Code may fail to stop. The adapter turns it on for each
- *   launch with a `watch` record, and status lists the helpers it watches.
+ *   launch with a `watch` record.
  * - `builtInInstanceId`: the instance ID of T3 Code's own provider for the
  *   same agent, such as `claudeAgent`, or `null`. When it is set, install
  *   writes a hide list for subc's instance: every model in T3 Code's model
@@ -103,8 +100,6 @@ const CODEX = Object.freeze({
   recommendedVersion: null,
   hooks: true,
   ownedDirs: Object.freeze(['codex/catalog']),
-  // Before 8.2.0, the provider had its own Codex home here.
-  legacyHome: 'codex/default',
   watchdog: false,
   builtInInstanceId: null,
 });
@@ -154,7 +149,6 @@ const CLAUDE = Object.freeze({
   recommendedVersion: '2.1.301',
   hooks: false,
   ownedDirs: Object.freeze([]),
-  legacyHome: null,
   watchdog: false,
   // T3 Code lists its built-in Claude models on every claudeAgent instance.
   builtInInstanceId: 'claudeAgent',
@@ -215,7 +209,6 @@ const OPENCODE = Object.freeze({
   recommendedVersion: null,
   hooks: false,
   ownedDirs: Object.freeze([]),
-  legacyHome: null,
   // T3 Code runs `opencode serve` as a long-lived helper. When T3 Code's
   // server dies, the helper keeps running with the key in its env until
   // T3 Code's next start reaps it, so the launcher stops it sooner.

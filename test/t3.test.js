@@ -19,7 +19,6 @@ import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   exportedFunctions,
   fakeGateway,
-  fakeT3Server,
   GOOD_KEY,
   MODELS,
   readRecords,
@@ -923,44 +922,14 @@ test('status reads the hooks from disk after subc codex uninstall', {
   );
 });
 
-test('install, status, and uninstall report the old Codex home and keep it', {
+test('uninstall removes the state file that subc 8.2.0 wrote', {
   skip,
 }, async () => {
   const sandbox = await installedBox();
-  const old = sandbox.legacyCodexHome;
-  const keyFile = path.join(old, 'subconscious-hooks.env');
-  const thread = path.join(old, 'sessions', 'rollout-old.jsonl');
-  await fs.mkdir(path.dirname(thread), { recursive: true });
-  await fs.writeFile(keyFile, 'API_KEY=sk-old-home-fake\n', { mode: 0o600 });
-  await fs.writeFile(thread, '{}\n');
   await fs.writeFile(sandbox.state, '{"schema":1}\n');
-  for (const args of [
-    ['t3', 'status'],
-    ['t3', 'install', '--dry-run'],
-    ['t3', 'uninstall'],
-  ]) {
-    const result = await subc(sandbox, args);
-    assert.equal(result.code, 0, `${args.join(' ')}: ${result.stderr}`);
-    const out = result.stdout.replace(/\s+/g, ' ');
-    assert.ok(
-      out.includes(
-        `${old} is the separate Codex home from subc before 8.2.0. subc no longer uses it and does not delete it.`,
-      ),
-      args.join(' '),
-    );
-    assert.ok(
-      out.includes(`It holds a key file. Remove it with: rm '${keyFile}'`),
-      args.join(' '),
-    );
-    assert.match(out, /threads made before 8\.2\.0\. They are your data/);
-    assert.ok(!out.includes('sk-old-home-fake'));
-  }
-  // The legacy state file is gone; the old home is kept.
+  const result = await subc(sandbox, ['t3', 'uninstall']);
+  assert.equal(result.code, 0, result.stderr);
   await assert.rejects(fs.access(sandbox.state));
-  await fs.access(keyFile);
-  await fs.access(thread);
-  const after = await subc(sandbox, ['t3', 'status']);
-  assert.match(after.stdout, /Old home/);
 });
 
 test('--provider selects a provider, and refuses one that is not available', {
@@ -1243,35 +1212,6 @@ test("status shows T3 Code's failed check, says how to fix the key, and exits 1"
   // Install cannot fix a rejected key, so status does not suggest it.
   assert.doesNotMatch(failed.stdout, /To repair it, run/);
   assert.ok(!failed.stdout.includes(GOOD_KEY));
-});
-
-test('status notes that a T3 Code project can override text generation', {
-  skip,
-}, async () => {
-  const sandbox = await box();
-  const result = await subc(sandbox, ['t3', 'status']);
-  assert.match(
-    result.stdout,
-    /A T3 Code project can override them in its own settings/,
-  );
-});
-
-test('install waits for the T3 Code check only while a T3 Code server runs', {
-  skip,
-}, async () => {
-  const { t3ServerRunning } = await import('../bin/t3-settings.js');
-  const sandbox = await box();
-  assert.equal(await t3ServerRunning(sandbox.t3Home), false);
-  const stop = await fakeT3Server(sandbox);
-  assert.equal(await t3ServerRunning(sandbox.t3Home), true);
-  await stop();
-  // A file that a crashed server left names a PID that has ended.
-  const ended = await run(process.execPath, ['-e', '']);
-  const runtime = path.join(sandbox.t3Home, 'userdata', 'server-runtime.json');
-  await fs.writeFile(runtime, JSON.stringify({ version: 1, pid: ended.pid }));
-  assert.equal(await t3ServerRunning(sandbox.t3Home), false);
-  await fs.writeFile(runtime, JSON.stringify({ managedPolicy: null }));
-  assert.equal(await t3ServerRunning(sandbox.t3Home), false);
 });
 
 test('status exits 1 when the pinned CLI is older than install accepts', {

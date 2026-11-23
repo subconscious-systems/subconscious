@@ -84,30 +84,6 @@ async function managedPolicy(file) {
   }
 }
 
-/**
- * True when a T3 Code server for `home` is running. T3 Code 0.1.11 writes
- * its PID to `userdata/server-runtime.json` when its server starts and
- * removes the file when it stops (`serverRuntimeState.ts`). A file left by
- * a server that crashed names a PID that no longer runs.
- */
-export async function t3ServerRunning(home) {
-  let runtime;
-  try {
-    runtime = JSON.parse((await readText(t3Files(home).runtime)) ?? 'null');
-  } catch {
-    return false;
-  }
-  const pid = runtime?.pid;
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // EPERM: the PID runs, under another user.
-    return error.code === 'EPERM';
-  }
-}
-
 async function t3Version(files) {
   const desktop = (await readText(files.version))?.trim();
   if (desktop) return desktop;

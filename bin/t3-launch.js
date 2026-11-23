@@ -584,11 +584,8 @@ const SHELL_NAME = /^[a-z][a-z0-9_]*$/;
 const LAUNCHER_WORD = /^[a-z0-9][a-z0-9-]*$/;
 const ADAPTER_FLAG = /^--[a-z][a-z-]*$/;
 
-/**
- * The name the watchdog runs under, as its `$0`. Status finds the running
- * helpers by this name and the config dir after it.
- */
-export function watchdogName(provider) {
+/** The name the watchdog runs under, as its `$0`, so `ps` shows its launcher. */
+function watchdogName(provider) {
   return `${provider.launcherName}-watchdog`;
 }
 

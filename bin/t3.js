@@ -35,10 +35,8 @@ import {
   LAUNCHER_SHEBANG,
   launcherScript,
   resolveT3Launch,
-  shellQuote,
   T3LaunchError,
   t3Paths,
-  watchdogName,
 } from './t3-launch.js';
 import { T3_PROVIDER_KEYS, T3_PROVIDERS } from './t3-providers.js';
 import {
@@ -50,7 +48,6 @@ import {
   removeT3Provider,
   settingsBlockers,
   t3HomeDir,
-  t3ServerRunning,
   writeT3HideList,
 } from './t3-settings.js';
 
@@ -109,10 +106,10 @@ Shared homes:
 
 Status:
   Status reads the entries, the launchers, the CLI versions, and the Codex
-  hooks on every run. It also shows the Claude hide list, the running
-  OpenCode helpers, and where T3 Code sends thread titles and commit
-  messages. From T3 Code's cache files, it shows the result of T3 Code's
-  last check of each provider, with T3 Code's message.
+  hooks on every run. It also shows the Claude hide list and where T3 Code
+  sends thread titles and commit messages. From T3 Code's cache files, it
+  shows the result of T3 Code's last check of each provider, with T3 Code's
+  message.
   Exit codes:
     0  Every installed provider works, or nothing is installed.
     1  A provider is broken: a conflict, a missing or foreign launcher,
@@ -338,29 +335,6 @@ function installHooks(codexHome, launch) {
   return result.status ?? 1;
 }
 
-/** The separate agent home an older subc used, when it is still there. */
-async function legacyHome(paths, provider) {
-  if (!provider.legacyHome) return null;
-  const dir = paths.underRoot(provider.legacyHome);
-  if (!(await exists(dir))) return null;
-  const keyFile = path.join(dir, HOOK_ENV_FILE);
-  return { dir, keyFile: (await exists(keyFile)) ? keyFile : null };
-}
-
-function legacyHomeLines(legacy, provider) {
-  const lines = [
-    `${legacy.dir} is the separate ${provider.label} home from subc before 8.2.0. subc no longer uses it and does not delete it.`,
-  ];
-  if (legacy.keyFile)
-    lines.push(
-      `It holds a key file. Remove it with: rm ${shellQuote(legacy.keyFile)}`,
-    );
-  lines.push(
-    'It also holds the threads made before 8.2.0. They are your data, so delete the folder yourself when you no longer need them.',
-  );
-  return lines;
-}
-
 function line(label, value) {
   console.log(`  ${c.dim}${label.padEnd(14)}${c.reset}${value}`);
 }
@@ -490,7 +464,6 @@ async function prepare(paths, item) {
     configDir: paths.configDir,
     version: await packageVersion(),
   });
-  item.legacy = await legacyHome(paths, provider);
 }
 
 function printPlan(item, single) {
@@ -522,7 +495,6 @@ function printPlan(item, single) {
       'Hooks',
       'compaction hooks in that Codex home, as subc codex sets them up, inert until trusted',
     );
-  if (item.legacy) lines('Old home', legacyHomeLines(item.legacy, provider));
 }
 
 /** What stayed in place when the settings write failed. */
@@ -549,8 +521,7 @@ const HIDE_LIST_HINT =
 const HIDE_LIST_FALLBACK =
   "Until then, a model outside the catalog runs as the default profile's model.";
 // How long install waits for T3 Code to probe the new entry and write its
-// model cache. T3 Code probes about 1 s after a settings change. When no
-// T3 Code server is running, nothing probes, so install does not wait.
+// model cache. T3 Code probes about 1 s after a settings change.
 const CACHE_WAIT_MS = 30_000;
 const CACHE_POLL_MS = 250;
 
@@ -689,7 +660,7 @@ async function installOne(paths, item, single) {
     // from that probe counts.
     await installHideList(paths, item, {
       since: result.changed ? since : null,
-      waitMs: item.cacheWaitMs,
+      waitMs: CACHE_WAIT_MS,
     });
   console.log(
     `${single ? '\n' : ''}  ${c.green}${c.bold}✓ ${provider.displayName} is ${result.changed ? 'ready' : 'already set up'} in T3 Code.${c.reset}`,
@@ -715,11 +686,9 @@ async function install({ dryRun, providers, explicit }) {
   if (!found.length || (explicit && missing.length))
     return failWith(missing.map((item) => item.message));
 
-  const serverRunning = await t3ServerRunning(t3HomeDir());
   for (const item of found) {
     item.target = context(item.provider).target;
     item.report = await inspectT3(item.target);
-    item.cacheWaitMs = serverRunning ? CACHE_WAIT_MS : 0;
   }
   const blockers = [
     ...new Set(found.flatMap((item) => settingsBlockers(item.report))),
@@ -971,57 +940,10 @@ function hookReport(hooks, report, provider) {
   };
 }
 
-function runPs(args) {
-  const result = spawnSync('ps', args, {
-    encoding: 'utf8',
-    env: { PATH: process.env.PATH ?? '', LC_ALL: 'C' },
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
-  return result.error ? null : result;
-}
-
-/**
- * The helpers that this config dir's launcher started and still watches,
- * as `{ pid, started }`, or null when ps fails. Each watchdog runs as
- * `bash -p -c SCRIPT <name> <helper pid> <parent pid> <config dir>`, so
- * one ps call finds the helpers, and a second reads their start times.
- * Only the PID and the start time are read, never the env.
- */
-function runningHelpers(provider, configDir) {
-  const list = runPs(['-A', '-ww', '-o', 'pid=,command=']);
-  if (list?.status !== 0) return null;
-  const marker = new RegExp(`\\s${watchdogName(provider)} (\\d+) \\d+ $`);
-  const pids = new Set();
-  for (const row of list.stdout.split('\n')) {
-    const command = row.trim().replace(/^\d+\s+/, '');
-    if (!command.endsWith(` ${configDir}`)) continue;
-    const match = marker.exec(command.slice(0, -configDir.length));
-    if (match) pids.add(match[1]);
-  }
-  if (!pids.size) return [];
-  // ps exits 1 when one of the PIDs has ended since the first call.
-  const info = runPs(['-o', 'pid=,lstart=', '-p', [...pids].join(',')]);
-  if (!info) return null;
-  return info.stdout
-    .split('\n')
-    .map((row) => /^\s*(\d+)\s+(\S.*?)\s*$/.exec(row))
-    .filter(Boolean)
-    .map(([, pid, started]) => ({ pid: Number(pid), started }));
-}
-
-function helperLines(helpers) {
-  if (helpers === null) return ['unknown, because ps failed'];
-  if (!helpers.length) return ['none running'];
-  return helpers.map(({ pid, started }) => `PID ${pid}, started ${started}`);
-}
-
 const TEXT_GENERATION_HINT =
   'To change it, open Settings in T3 Code, then Text generation, and pick a Subconscious provider. subc never changes this setting.';
 const COMMIT_WRITER_HINT =
   'Commit messages have their own model in Settings, Commits & pull requests.';
-// Both settings are in PROJECT_SCOPED_SERVER_SETTING_KEYS in T3 Code 0.1.11.
-const PROJECT_OVERRIDE_NOTE =
-  'These are the global settings. A T3 Code project can override them in its own settings, and status does not read those.';
 
 // How long a T3 Code message in status can be.
 const MAX_T3_MESSAGE = 300;
@@ -1119,7 +1041,6 @@ async function textGenerationLines(home) {
     if (commits && commits.kind !== 'subconscious')
       lines.push(COMMIT_WRITER_HINT);
   }
-  lines.push(PROJECT_OVERRIDE_NOTE);
   return lines;
 }
 
@@ -1200,8 +1121,6 @@ async function status({ providers, explicit }) {
       );
     else if (provider.homeNote) line('Config', provider.homeNote);
     if (provider.freshnessNote) line('Freshness', provider.freshnessNote);
-    if (provider.watchdog)
-      lines('Helpers', helperLines(runningHelpers(provider, paths.configDir)));
     if (provider.hooks) {
       item.hooks = hookReport(
         await hookStatus(target.homePath),
@@ -1216,8 +1135,6 @@ async function status({ providers, explicit }) {
     }
     item.check = await t3CheckReport(target.home, provider, report);
     if (item.check) lines('T3 check', item.check.lines);
-    const legacy = await legacyHome(paths, provider);
-    if (legacy) lines('Old home', legacyHomeLines(legacy, provider));
     const { reasons, repair } = brokenReasons(item, explicit);
     if (reasons.length) broken.push({ provider, reasons, repair });
   }
@@ -1293,8 +1210,6 @@ async function uninstall({ providers }) {
     }
     for (const dir of provider.ownedDirs)
       await fs.rm(paths.underRoot(dir), { recursive: true, force: true });
-    const legacy = await legacyHome(paths, provider);
-    if (legacy) notes.push(...legacyHomeLines(legacy, provider));
   }
   // subc 8.2.0 wrote this file. Nothing reads it now.
   await fs.rm(paths.state, { force: true });

@@ -311,8 +311,6 @@ export async function t3Sandbox({
     catalogDir: path.join(subc, 't3', 'codex', 'catalog'),
     // subc 8.2.0 wrote this file; nothing reads it now.
     state: path.join(subc, 't3', 'state.json'),
-    // The separate Codex home of subc t3 builds before 8.2.0.
-    legacyCodexHome: path.join(subc, 't3', 'codex', 'default'),
     claudeDir,
     claudeJson,
     claudeBin,
@@ -533,32 +531,9 @@ export async function writeT3ModelCache(box, options) {
 }
 
 /**
- * Mark a T3 Code server as running for `box`, the way T3 Code 0.1.11 does:
- * `userdata/server-runtime.json` with a live PID, here this test process.
- * Returns a function that removes the file, as a server that stops does.
- */
-export async function fakeT3Server(box) {
-  const file = path.join(box.t3Home, 'userdata', 'server-runtime.json');
-  await fs.writeFile(
-    file,
-    `${JSON.stringify({
-      version: 1,
-      pid: process.pid,
-      port: 1,
-      origin: 'http://127.0.0.1:1',
-      startedAt: new Date().toISOString(),
-      serverVersion: '0.1.11',
-    })}\n`,
-  );
-  return () => fs.rm(file, { force: true });
-}
-
-/**
  * Play T3 Code's probe: once the settings name `instanceId`, write that
  * instance's model cache with a fresh checkedAt, as T3 Code does about 1 s
- * after a settings change. The caller marks the server as running with
- * fakeT3Server, so that install waits for the probe. Returns a stop
- * function.
+ * after a settings change. Returns a stop function.
  */
 export function fakeT3Probe(
   box,

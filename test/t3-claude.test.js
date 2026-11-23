@@ -8,7 +8,6 @@ import {
   BUILT_IN_CLAUDE_MODELS,
   fakeGateway,
   fakeT3Probe,
-  fakeT3Server,
   GOOD_KEY,
   MODELS,
   readRecords,
@@ -1115,7 +1114,6 @@ function settingsWith(preferences) {
 
 /** Install with T3 Code playing its probe of the new entry. */
 async function installWithProbe(sandbox, extraEnv = {}) {
-  const stopServer = await fakeT3Server(sandbox);
   const stop = fakeT3Probe(sandbox, { reported: MODELS });
   try {
     return await subc(
@@ -1125,7 +1123,6 @@ async function installWithProbe(sandbox, extraEnv = {}) {
     );
   } finally {
     stop();
-    await stopServer();
   }
 }
 
@@ -1236,23 +1233,12 @@ test('install skips the hide list when providerModelPreferences is null or missi
   }
 });
 
-test('with no T3 Code server, install does not wait for a cache', {
-  skip,
-}, async () => {
-  const sandbox = await box({ settings: tabbed(settingsWith({})) });
-  await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
-  const started = Date.now();
-  const result = await subc(sandbox, ['t3', 'install', '--provider', 'claude']);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /hid 14 models/);
-  assert.ok(Date.now() - started < 10_000, 'no 30 s wait');
-});
-
 test('with no fresh cache, install uses the built-in cache, or skips the hide list', {
   skip,
 }, async () => {
-  // No T3 Code server runs here, so install does not wait for a probe. A
-  // cache an earlier install left does not count for a new entry.
+  // Nothing plays T3 Code's probe here, so install waits 30 s and then
+  // falls back. A cache an earlier install left does not count for a new
+  // entry.
   const sandbox = await box({ settings: tabbed(settingsWith({})) });
   await writeT3ModelCache(sandbox, {
     instanceId: OURS,
