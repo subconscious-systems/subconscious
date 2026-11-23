@@ -200,6 +200,12 @@ function isOwnedEntry(entry, target) {
   );
 }
 
+const ENVELOPE_FIELDS = Object.freeze({
+  driver: true,
+  displayName: true,
+  enabled: true,
+});
+
 /** The managed fields that differ from what subc writes. */
 function driftOf(entry, target) {
   const provider = providerOf(target);
@@ -207,9 +213,11 @@ function driftOf(entry, target) {
   if (entry.displayName !== provider.displayName) drift.push('displayName');
   if (entry.enabled === false) drift.push('enabled');
   // binaryPath decides ownership, so a ~ path or a symlink is not drift.
+  // A config field with an envelope field's name, such as OpenCode's
+  // config.enabled, is reported with its config. prefix.
   for (const [field, value] of Object.entries(provider.managedConfig(target))) {
     if (field !== 'binaryPath' && entry.config?.[field] !== value)
-      drift.push(field);
+      drift.push(field in ENVELOPE_FIELDS ? `config.${field}` : field);
   }
   for (const field of provider.clearedFields) {
     const value = entry.config?.[field];

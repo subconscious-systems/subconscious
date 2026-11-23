@@ -687,7 +687,7 @@ test('help explains the scope and limits', { skip }, async () => {
   for (const args of [['t3', 'help'], ['help', 't3'], ['t3']]) {
     const result = await subc(sandbox, args);
     assert.equal(result.code, 0, result.stderr);
-    assert.match(result.stdout, /Codex or Claude Code/);
+    assert.match(result.stdout, /Codex, Claude Code, or OpenCode/);
     assert.match(result.stdout, /default profile only/);
     assert.match(result.stdout, /uses your ~\/\.claude/);
     assert.match(result.stdout, /switch a running thread/);
@@ -948,15 +948,7 @@ test('--provider selects a provider, and refuses one that is not available', {
   for (const [args, message] of [
     [
       ['t3', 'install', '--provider', 'opencode'],
-      /opencode provider is not available yet/,
-    ],
-    [
-      ['t3', 'status', '--provider', 'opencode'],
-      /opencode provider is not available yet/,
-    ],
-    [
-      ['t3', 'uninstall', '--provider=opencode'],
-      /opencode provider is not available yet/,
+      /OpenCode CLI is not installed/,
     ],
     [['t3', 'install', '--provider', 'cursor'], /Unknown provider: cursor/],
     [['t3', 'status', '--provider'], /--provider needs a name/],
@@ -999,10 +991,8 @@ test('--provider selects a provider, and refuses one that is not available', {
 
   const help = await subc(sandbox, ['t3', 'help']);
   assert.match(help.stdout, /--provider NAME/);
-  assert.match(
-    help.stdout,
-    /Available: codex, claude\. Not available yet: opencode\./,
-  );
+  assert.match(help.stdout, /Available: codex, claude, opencode\./);
+  assert.doesNotMatch(help.stdout, /Not available yet/);
 });
 
 test('status reports a launcher in an older format, and install rewrites it', {
@@ -1043,7 +1033,8 @@ test('a launcher with a watchdog stops the agent after T3 Code dies', {
   timeout: 30_000,
 }, async () => {
   const sandbox = installed;
-  // No provider sets watchdog yet, so the test renders one from Codex.
+  // OpenCode sets watchdog. This test renders it for Codex too, so the
+  // watchdog also works for an agent that is not a server.
   const file = path.join(sandbox.root, 'watchdog launcher');
   await fs.writeFile(
     file,

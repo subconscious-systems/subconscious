@@ -5,8 +5,8 @@
  * descriptor here, so the settings edit (`t3-settings.js`), the launch and
  * launcher (`t3-launch.js`), and the commands (`t3.js`) stay shared.
  *
- * This file is plain data with no imports, so every other t3 module can load
- * it first.
+ * This file is plain data. It imports only `node:path`, so every other t3
+ * module can load it first.
  *
  * Descriptor fields:
  *
@@ -28,6 +28,9 @@
  *   that the entry names as its `homePath`. `null` writes no `homePath`.
  * - `homeNote`: one sentence that install and status print about the agent
  *   home when `homeDir` is `null`, or `null` for no sentence.
+ * - `freshnessNote`: one sentence that install and status print about when
+ *   a new key or model applies, or `null` when it applies at the next
+ *   launch, as the general help says.
  * - `managedConfig(target)`: every `config` field subc sets on its entry,
  *   in write order, `binaryPath` included. `target` holds `launcherPath` and,
  *   when `homeDir` is set, `homePath`. Status reports a changed value as
@@ -66,6 +69,8 @@
  *   cache is the fallback when subc's instance has no cache yet.
  */
 
+import path from 'node:path';
+
 const CODEX = Object.freeze({
   id: 'codex',
   agentId: 'codex',
@@ -81,6 +86,7 @@ const CODEX = Object.freeze({
   // get the user's own AGENTS.md, skills, and MCP servers.
   homeDir: '.codex',
   homeNote: null,
+  freshnessNote: null,
   managedConfig: ({ launcherPath, homePath }) => ({
     setupMode: 'existing',
     binaryPath: launcherPath,
@@ -118,6 +124,7 @@ const CLAUDE = Object.freeze({
   homeDir: null,
   homeNote:
     "Claude Code uses your ~/.claude, the same config as subc claude and T3 Code's built-in Claude provider.",
+  freshnessNote: null,
   managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
   clearedFields: Object.freeze(['launchArgs']),
   // Each of these routes Claude Code away from the default profile, signs
@@ -152,8 +159,74 @@ const CLAUDE = Object.freeze({
   builtInInstanceId: 'claudeAgent',
 });
 
+const OPENCODE = Object.freeze({
+  id: 'opencode',
+  agentId: 'opencode',
+  label: 'OpenCode',
+  instanceId: 'subconscious-opencode',
+  displayName: 'Subconscious (OpenCode)',
+  driver: 'opencode',
+  launcherName: 'subc-t3-opencode',
+  adapterFile: 't3-opencode.js',
+  binaryName: 'opencode',
+  binaryFlag: '--opencode',
+  // OpenCode keeps its config and sessions in the user's own folders, as
+  // plain subc opencode does. subc writes nothing there.
+  homeDir: null,
+  homeNote:
+    'OpenCode uses your ~/.config/opencode and ~/.local/share/opencode, as subc opencode does. subc writes nothing there.',
+  // T3 Code shares one OpenCode helper across the instance's threads, and
+  // the helper reads the key and the catalog once, when it starts.
+  freshnessNote:
+    'A new key or model applies after the OpenCode helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes.',
+  // T3 Code 0.1.11 decodes a missing config.enabled as false, and the
+  // envelope flag alone does not turn the instance on.
+  managedConfig: ({ launcherPath }) => ({
+    enabled: true,
+    binaryPath: launcherPath,
+  }),
+  // A Server URL makes T3 Code connect to that server and skip the
+  // launcher, so the key-scoped launch never runs. A password only makes
+  // sense with a Server URL.
+  clearedFields: Object.freeze(['serverUrl', 'serverPassword']),
+  // OPENCODE_CONFIG and OPENCODE_CONFIG_DIR add config beside the launch
+  // config, and that config can define a provider that reads the key.
+  // T3 Code sets OPENCODE_CONFIG_CONTENT to {}, and the launch replaces it.
+  // API_KEY, GATEWAY_URL, and MODEL are profile names that runbookEnv
+  // exports, so a value from T3 Code must not reach the launch.
+  extraIsolatedEnv: Object.freeze([
+    'OPENCODE_CONFIG',
+    'OPENCODE_CONFIG_DIR',
+    'OPENCODE_CONFIG_CONTENT',
+    'API_KEY',
+    'GATEWAY_URL',
+    'MODEL',
+  ]),
+  isolateAgentOverrides: true,
+  // OpenCode writes a log under XDG_DATA_HOME and a runtime library under
+  // TMPDIR even for --version.
+  versionProbeEnv: (dir) => ({
+    XDG_DATA_HOME: path.join(dir, 'data'),
+    XDG_STATE_HOME: path.join(dir, 'state'),
+    XDG_CACHE_HOME: path.join(dir, 'cache'),
+    TMPDIR: path.join(dir, 'tmp'),
+  }),
+  // T3 Code 0.1.11 supports OpenCode 2.0.18 and newer. subc supports 2.x
+  // only, because 1.x cannot load the Subconscious plugin.
+  minimumVersion: '2.0.18',
+  recommendedVersion: null,
+  hooks: false,
+  ownedDirs: Object.freeze([]),
+  legacyHome: null,
+  // T3 Code runs `opencode serve` as a long-lived helper. When T3 Code's
+  // server dies, the helper keeps running with the key in its env until
+  // T3 Code's next start reaps it, so the launcher stops it sooner.
+  watchdog: true,
+  builtInInstanceId: null,
+});
+
 /** Every provider this subc version can install, in a fixed order. */
-export const T3_PROVIDERS = Object.freeze([CODEX, CLAUDE]);
+export const T3_PROVIDERS = Object.freeze([CODEX, CLAUDE, OPENCODE]);
 
 /**
  * Every provider key that `--provider` accepts, in a fixed order. A key here
@@ -163,6 +236,7 @@ export const T3_PROVIDER_KEYS = Object.freeze(['codex', 'claude', 'opencode']);
 
 export const CODEX_PROVIDER = CODEX;
 export const CLAUDE_PROVIDER = CLAUDE;
+export const OPENCODE_PROVIDER = OPENCODE;
 
 /** The registered descriptor for `key`, or null. */
 export function providerByKey(key) {

@@ -11,6 +11,7 @@ import { encodePlan, SHELL_STARTUP_ENV } from '../bin/t3-plan.js';
 import {
   CLAUDE_PROVIDER,
   CODEX_PROVIDER,
+  OPENCODE_PROVIDER,
   providerByKey,
   T3_PROVIDER_KEYS,
   T3_PROVIDERS,
@@ -21,7 +22,7 @@ test('the provider table is frozen and has a fixed order', () => {
   assert.ok(Object.isFrozen(T3_PROVIDERS));
   assert.deepEqual(
     T3_PROVIDERS.map((provider) => provider.id),
-    ['codex', 'claude'],
+    ['codex', 'claude', 'opencode'],
   );
   assert.deepEqual(T3_PROVIDER_KEYS, ['codex', 'claude', 'opencode']);
   for (const provider of T3_PROVIDERS) {
@@ -35,7 +36,7 @@ test('the provider table is frozen and has a fixed order', () => {
     });
     assert.equal(config.binaryPath, '/x/launcher', provider.id);
   }
-  assert.equal(providerByKey('opencode'), null);
+  assert.equal(providerByKey('opencode'), OPENCODE_PROVIDER);
   assert.equal(providerByKey('cursor'), null);
 });
 

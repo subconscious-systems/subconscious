@@ -141,6 +141,10 @@ function gatewayOrigin(baseUrl) {
   }
 }
 
+// The longest a launch waits for the catalog. T3 Code allows 30 s for an
+// OpenCode helper to start and 25 s for a Claude probe.
+const T3_CATALOG_DEADLINE_MS = 4000;
+
 /**
  * Resolve the launch of the agent `agentId` from the default profile alone:
  * its saved key, its gateway, and the key-scoped catalog. The public list,
@@ -164,16 +168,29 @@ export async function resolveT3Launch({ agentId = 'codex', ...options } = {}) {
       'The default subc profile has no saved API key. Run subc login, then retry.',
     );
   const baseUrl = agents.launchGatewayUrl(profile);
+  const origin = gatewayOrigin(baseUrl);
   const { model: requested, modelSource } = agents.extractModel([], profile);
-  const catalog = await models.resolveModelCatalog({
-    baseUrl,
-    apiKey: auth.key,
-    selectedModel: requested,
-    fallbackModels: data.PACKAGED_MODELS,
-    ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-  });
+  // When the key-scoped fetch fails, resolveModelCatalog also asks for the
+  // public list, so a slow gateway could hold the launch for two fetch
+  // timeouts. The deadline keeps the whole lookup inside 4 s.
+  const deadline = AbortSignal.timeout(T3_CATALOG_DEADLINE_MS);
+  let catalog;
+  try {
+    catalog = await models.resolveModelCatalog({
+      baseUrl,
+      apiKey: auth.key,
+      selectedModel: requested,
+      fallbackModels: data.PACKAGED_MODELS,
+      signal: deadline,
+      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+    });
+  } catch (error) {
+    if (!deadline.aborted) throw error;
+    throw new T3LaunchError(
+      `Could not read the model catalog from ${origin} within ${T3_CATALOG_DEADLINE_MS / 1000} s.`,
+    );
+  }
   if (catalog.source !== 'catalog') {
-    const origin = gatewayOrigin(baseUrl);
     const why =
       catalog.source === 'public'
         ? `${origin} did not return the model catalog for this key. Check the key with subc whoami.`
@@ -434,6 +451,83 @@ export async function t3ClaudePlan({
     fallback: pinned.replaced
       ? { requested: pinned.replaced, model: launch.model }
       : null,
+  };
+}
+
+// Values that runbookEnv adds for an ordinary subc opencode launch, which
+// the launch config already holds. OpenCode reads none of them, and every
+// tool that the OpenCode helper runs would inherit them.
+const OPENCODE_LAUNCH_EXTRAS = Object.freeze([
+  'API_KEY',
+  'GATEWAY_URL',
+  'MODEL',
+  'SUBCONSCIOUS_MODELS',
+  'SUBC_MODEL_METADATA',
+  'OPENCODE_CONTEXT_LIMIT',
+  'OPENCODE_OUTPUT_LIMIT',
+]);
+
+/**
+ * The command the launcher execs for an `opencode serve` launch: the
+ * opencode runbook, as subc opencode builds it, with T3 Code's serve args
+ * kept in order at the end. OPENCODE_CONFIG_CONTENT holds the whole launch
+ * config, with `enabled_providers: ["subconscious"]`.
+ *
+ * run.sh passes `serve` through unchanged, without `--standalone`. That is
+ * right for T3 Code: `opencode serve` without `--service` is a private
+ * server with its own env and config, and it never starts or joins
+ * OpenCode's shared background service. `--standalone` exists for the TUI
+ * and `run`, which are clients that would otherwise use that service. run.sh
+ * execs OpenCode, so the process T3 Code started becomes `opencode serve`,
+ * and its command line ends with T3 Code's serve args, which T3 Code's
+ * orphan reaper matches.
+ *
+ * Only SUBCONSCIOUS_API_KEY carries the key. The config reads it through
+ * `{env:SUBCONSCIOUS_API_KEY}`.
+ */
+export async function t3OpenCodePlan({ args, opencodePath, launch }) {
+  const [{ runbookEnv }, { launchPlan }, { planCommand }] = await Promise.all([
+    import('./agents.js'),
+    import('./agent-launch.js'),
+    import('./agent-spawn.js'),
+  ]);
+  const binDir = path.dirname(opencodePath);
+  const env = runbookEnv(
+    launch.apiKey,
+    launch.model,
+    binDir,
+    launch.profile,
+    launch.agent,
+    launch.catalog.defaultModels,
+    launch.catalog.entries,
+  );
+  // A leading `--` stops subc flag parsing, so every word T3 Code sent
+  // reaches OpenCode unchanged.
+  const plan = launchPlan(launch.agent, { env, args: ['--', ...args] });
+  const command = planCommand(launch.agent, plan, binDir);
+  // run.sh gets `opencode` and T3 Code's args, and execs them unchanged.
+  const expected = ['opencode', ...args];
+  const passed = command.args.slice(1);
+  if (
+    passed.length !== expected.length ||
+    passed.some((word, i) => word !== expected[i])
+  )
+    throw new T3LaunchError(
+      'The opencode launch template no longer passes the serve args through unchanged. Update subc.',
+    );
+  const openCodeEnv = { ...command.env };
+  for (const name of OPENCODE_LAUNCH_EXTRAS) delete openCodeEnv[name];
+  // A profile value can hold another copy of the key, such as an
+  // OPENCODE_API_KEY line under another name.
+  for (const [name, value] of Object.entries(openCodeEnv))
+    if (value === launch.apiKey && name !== 'SUBCONSCIOUS_API_KEY')
+      delete openCodeEnv[name];
+  // run.sh is a bash script, and T3 Code reads the helper's stdout.
+  for (const name of SHELL_STARTUP_ENV) delete openCodeEnv[name];
+  return {
+    argv: [command.file, ...command.args],
+    env: openCodeEnv,
+    unset: SHELL_STARTUP_ENV,
   };
 }
 

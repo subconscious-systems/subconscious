@@ -180,7 +180,7 @@ The packaged integrations live in `bin/runbook`.
 
 ## T3 Code
 
-`subc t3 install` adds providers named "Subconscious (Codex)" and "Subconscious (Claude)" to T3 Code. T3 Code then runs Codex or Claude Code on your hosted Subconscious models. The Claude Code provider is in beta. The integration has these limits:
+`subc t3 install` adds providers named "Subconscious (Codex)", "Subconscious (Claude)", and "Subconscious (OpenCode)" to T3 Code. T3 Code then runs Codex, Claude Code, or OpenCode on your hosted Subconscious models. The Claude Code and OpenCode providers are in beta. The integration has these limits:
 
 - It supports macOS and Linux. On Windows, `subc t3` fails with an error.
 - It supports the default profile only. `--provider codex` or `--provider claude` selects a provider by name on install, status, and uninstall. The name `opencode` is reserved for a provider that is not available yet. Without `--provider`, install sets up every available provider whose CLI it finds.
@@ -244,6 +244,22 @@ The hide list applies to T3 Code's model picker, not to `t3 thread start --model
 T3 Code's built-in Claude provider uses the same `~/.claude`, so T3 Code lets you switch a running thread between "Claude" and "Subconscious (Claude)". The next turn then sends the whole thread to the other backend, Anthropic or Subconscious. subc allows this switch, so pick the provider you want before you send a thread anything private.
 
 `subc t3 uninstall` removes the `subconscious-claude` entry, its hide list, and the launcher. It never changes `~/.claude`.
+
+### OpenCode provider (beta)
+
+Install finds `opencode` and pins the path it finds. It reads the version with `XDG_DATA_HOME`, `XDG_STATE_HOME`, `XDG_CACHE_HOME`, and `TMPDIR` in a throwaway folder, so the check writes nothing in your OpenCode folders. It refuses OpenCode older than 2.0.18. Then it writes `~/.subconscious/bin/subc-t3-opencode` and adds the `subconscious-opencode` entry, with that launcher as the binary. The entry sets both `enabled` and `config.enabled`, and it keeps `config.serverUrl` and `config.serverPassword` empty. With a Server URL, T3 Code connects to that server and never runs the launcher, so `subc t3 status` reports either field as drift, and install removes it.
+
+T3 Code starts one OpenCode helper, `opencode serve --hostname=127.0.0.1 --port=<port>`, for all threads of the provider. The launcher handles each OpenCode command in one of three ways:
+
+- `serve` with only `--hostname`, `--port`, `--cors`, `--log-level`, and `--print-logs` gets the same config as `subc opencode`, from the default profile only. The config lists only the Subconscious provider and your catalog models, with `enabled_providers: ["subconscious"]`. The launcher ignores `SUBC_*`, `SUBCONSCIOUS_*`, the OpenCode inputs that `subc opencode` reads (`SUBC_OPENCODE_API_KEY`, `OPENCODE_API_KEY`, and the context and output limits), `OPENCODE_CONFIG`, and `OPENCODE_CONFIG_DIR` in the T3 Code environment. It replaces T3 Code's empty `OPENCODE_CONFIG_CONTENT`, and keeps `OPENCODE_PASSWORD`, which T3 Code uses to reach its helper. Only `SUBCONSCIOUS_API_KEY` carries the key.
+- `--version`, `--help`, and `serve --help` run the real OpenCode unchanged, without reading the profile or the network.
+- `serve --service`, `serve --stdio`, `upgrade`, and every other command are refused with exit code 64.
+
+`opencode serve` is a private server with its own config. It never starts or joins OpenCode's shared background service. The process that T3 Code started becomes `opencode serve`, and its command line ends with T3 Code's own arguments, so T3 Code's cleanup at its next start can find a helper that a crash left behind. The launcher also stops the helper within about 10 s after T3 Code's server dies.
+
+The helper reads the key, the model, and the catalog once, when it starts. A new key or model applies after the OpenCode helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes. `subc t3 status` prints this rule.
+
+OpenCode uses your `~/.config/opencode` and `~/.local/share/opencode`, as `subc opencode` does, so T3 Code threads also appear in OpenCode. subc writes nothing there. `subc t3 uninstall` removes the `subconscious-opencode` entry and the launcher, and never changes those folders.
 
 Builds of `subc t3` from before 8.2.0 gave the provider its own Codex home, `~/.subconscious/t3/codex/default`. When that folder exists, install, status, and uninstall report it. It holds a key file, `subconscious-hooks.env`, and the threads made before 8.2.0. subc does not delete it. Remove the key file with the `rm` command that subc prints. The threads are your data, so delete the folder yourself when you no longer need them.
 

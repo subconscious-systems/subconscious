@@ -71,20 +71,77 @@ process.stdout.write(JSON.stringify(line) + '\\n');
 if (process.env.FAKE_CLAUDE_SLEEP) setTimeout(() => {}, Number(process.env.FAKE_CLAUDE_SLEEP));
 `;
 
+// A fake opencode. --version prints `opencode v<FAKE_OPENCODE_VERSION>`
+// (default 2.3.0) and, like the real OpenCode, writes its log under
+// XDG_DATA_HOME (or ~/.local/share), so a test can see which dir a version
+// check used. --help prints a usage line. Any other call records its argv,
+// env, pid, ppid, cwd, and the parsed OPENCODE_CONFIG_CONTENT to
+// FAKE_OPENCODE_LOG. For `serve`, it then listens on --port (0 picks a
+// port), answers GET /api/info, and prints exactly one line on stdout:
+// `server listening on http://127.0.0.1:<port>`. It exits at once, or after
+// FAKE_OPENCODE_SLEEP ms, or on SIGTERM.
+export const FAKE_OPENCODE = `#!/usr/bin/env node
+const fs = require('fs');
+const path = require('path');
+const http = require('http');
+const args = process.argv.slice(2);
+if (args.length === 1 && (args[0] === '--version' || args[0] === '-v')) {
+  const data = process.env.XDG_DATA_HOME || path.join(require('os').homedir(), '.local', 'share');
+  fs.mkdirSync(path.join(data, 'opencode', 'log'), { recursive: true });
+  fs.appendFileSync(path.join(data, 'opencode', 'log', 'opencode.log'), 'version check\\n');
+  process.stdout.write('opencode v' + (process.env.FAKE_OPENCODE_VERSION || '2.3.0') + '\\n');
+  process.exit(0);
+}
+let config = null;
+try {
+  config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
+} catch {}
+const record = { args, env: process.env, pid: process.pid, ppid: process.ppid, cwd: process.cwd(), config };
+if (process.env.FAKE_OPENCODE_LOG)
+  fs.appendFileSync(process.env.FAKE_OPENCODE_LOG, JSON.stringify(record) + '\\n');
+if (args[0] !== 'serve' || args.includes('--help') || args.includes('-h')) {
+  process.stdout.write('opencode ' + args.join(' ') + ': usage\\n');
+  process.exit(0);
+}
+const portArg = args.find((arg) => arg.startsWith('--port='));
+const port = portArg ? Number(portArg.slice('--port='.length)) : 0;
+const server = http.createServer((req, res) => {
+  res.setHeader('content-type', 'application/json');
+  res.end(JSON.stringify({ version: '2.3.0', pid: process.pid }));
+});
+process.on('SIGTERM', () => process.exit(0));
+server.listen(port, '127.0.0.1', () => {
+  process.stdout.write('server listening on http://127.0.0.1:' + server.address().port + '\\n');
+  const sleep = Number(process.env.FAKE_OPENCODE_SLEEP || 0);
+  if (sleep > 0) setTimeout(() => process.exit(0), sleep);
+  else server.close();
+});
+`;
+
 // The user's own Claude Code files. Install and launches must leave them as
 // they are.
 export const USER_CLAUDE_SETTINGS = `${JSON.stringify({ model: 'opus', env: { USER_SETTING: '1' } }, null, 2)}\n`;
 export const USER_CLAUDE_JSON = `${JSON.stringify({ projects: { '/x': { hasTrustDialogAccepted: true } } }, null, 2)}\n`;
 
-/** A local gateway: the canonical catalog for GOOD_KEY, 401 for any other. */
+const shellWord = (text) => `'${text.replaceAll("'", "'\\''")}'`;
+
+/**
+ * A local gateway: the canonical catalog for GOOD_KEY, 401 for any other.
+ * Set `delayMs` on the returned object to make each answer wait that long.
+ */
 export async function fakeGateway() {
   const requests = [];
+  const gateway = { delayMs: 0 };
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
     });
-    req.on('end', () => {
+    req.on('end', async () => {
+      if (gateway.delayMs)
+        await new Promise((resolve) =>
+          setTimeout(resolve, gateway.delayMs).unref(),
+        );
       requests.push({
         method: req.method,
         url: req.url,
@@ -114,11 +171,15 @@ export async function fakeGateway() {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
-  return {
+  return Object.assign(gateway, {
     url,
     requests,
-    close: () => new Promise((resolve) => server.close(resolve)),
-  };
+    close: () =>
+      new Promise((resolve) => {
+        server.closeAllConnections?.();
+        server.close(resolve);
+      }),
+  });
 }
 
 /**
@@ -131,6 +192,7 @@ export async function t3Sandbox({
   apiKey = GOOD_KEY,
   settings,
   withClaude = false,
+  withOpenCode = false,
 } = {}) {
   const root = await fs.realpath(
     await fs.mkdtemp(path.join(os.tmpdir(), 'subc-t3-test-')),
@@ -138,10 +200,21 @@ export async function t3Sandbox({
   const home = path.join(root, 'home with space');
   const bin = path.join(root, 'fake bin');
   const tmp = path.join(root, 'tmp');
+  // Only node, not the rest of its directory: an npm-installed opencode or
+  // npm itself there would let install find the real OpenCode.
+  const nodeBin = path.join(root, 'node bin');
   const t3Home = path.join(home, '.t3');
   const subc = path.join(home, '.subconscious');
-  for (const dir of [bin, tmp, path.join(t3Home, 'userdata')])
+  for (const dir of [bin, tmp, nodeBin, path.join(t3Home, 'userdata')])
     await fs.mkdir(dir, { recursive: true });
+  await fs.symlink(process.execPath, path.join(nodeBin, 'node'));
+  // subc looks for agents in the npm global bin. The real npm would name
+  // the prefix of the Node that runs it, where a real OpenCode can live.
+  await fs.writeFile(
+    path.join(bin, 'npm'),
+    `#!/bin/sh\nif [ "$1" = prefix ] && [ "$2" = -g ]; then echo ${shellWord(path.join(root, 'npm global'))}; exit 0; fi\nexit 1\n`,
+    { mode: 0o755 },
+  );
   await fs.mkdir(path.join(subc, 'profiles'), { recursive: true });
   await fs.writeFile(path.join(bin, 'codex'), FAKE_CODEX, { mode: 0o755 });
   await fs.writeFile(
@@ -197,9 +270,13 @@ export async function t3Sandbox({
     );
     await fs.writeFile(claudeJson, USER_CLAUDE_JSON);
   }
+  // With withOpenCode, a fake OpenCode installed by npm into the fake bin.
+  const opencodeBin = path.join(bin, 'opencode');
+  if (withOpenCode)
+    await fs.writeFile(opencodeBin, FAKE_OPENCODE, { mode: 0o755 });
   const PATH = [
     bin,
-    path.dirname(process.execPath),
+    nodeBin,
     '/usr/local/bin',
     '/opt/homebrew/bin',
     '/usr/bin',
@@ -232,6 +309,13 @@ export async function t3Sandbox({
     claudeJson,
     claudeBin,
     claudeLauncher: path.join(subc, 'bin', 'subc-t3-claude'),
+    opencodeBin,
+    opencodeLauncher: path.join(subc, 'bin', 'subc-t3-opencode'),
+    // The user's own OpenCode folders. Install and launches write nothing
+    // there.
+    opencodeConfigDir: path.join(home, '.config', 'opencode'),
+    opencodeDataDir: path.join(home, '.local', 'share', 'opencode'),
+    opencodeStateDir: path.join(home, '.local', 'state', 'opencode'),
   };
   return {
     ...paths,
@@ -266,6 +350,17 @@ export async function t3Sandbox({
         CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL: '1',
         MISE_OFFLINE: '1',
         T3CODE_THREAD_ID: 'thread-1',
+        ...extra,
+      };
+    },
+    // How T3 Code 0.1.11 starts its OpenCode helper: its own env, the
+    // password it made for the helper, and an empty config.
+    openCodeT3Env(extra = {}) {
+      return {
+        ...env,
+        T3CODE_HOME: t3Home,
+        OPENCODE_PASSWORD: 't3-helper-password-0123',
+        OPENCODE_CONFIG_CONTENT: '{}',
         ...extra,
       };
     },

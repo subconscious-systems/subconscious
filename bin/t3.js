@@ -7,7 +7,8 @@
  * key-scoped catalog, then writes a launcher, sets up the provider's hooks
  * (for Codex, the compaction hooks in ~/.codex, the way `subc codex` does),
  * and adds one entry to T3's settings. Every launch reads the default
- * profile again, so a new key or model needs no reinstall.
+ * profile again, so a new key or model needs no reinstall. For OpenCode, a
+ * launch is the start of T3 Code's shared OpenCode helper.
  *
  * subc keeps no state file. Status reads the launcher, the settings entry,
  * and the hook files on every run.
@@ -61,8 +62,8 @@ export function printT3Help() {
   const available = T3_PROVIDERS.map((provider) => provider.id);
   const pending = T3_PROVIDER_KEYS.filter((key) => !providerByKey(key));
   const names = T3_PROVIDERS.map(
-    (provider) => `"${provider.displayName}"`,
-  ).join(' and ');
+    (provider) => `  ${provider.displayName}`,
+  ).join('\n');
   console.log(`
 Usage:
   subc t3 install [--provider NAME]... [--dry-run]
@@ -70,8 +71,10 @@ Usage:
   subc t3 uninstall [--provider NAME]...
   subc t3 help
 
-Adds providers named ${names} to T3 Code.
-T3 Code then runs Codex or Claude Code on your hosted Subconscious models.
+Adds these providers to T3 Code:
+${names}
+T3 Code then runs Codex, Claude Code, or OpenCode on your hosted Subconscious
+models.
 This works on macOS and Linux, and with the default profile only.
 
   install            Check each CLI, the default profile's key, and the live
@@ -82,7 +85,8 @@ This works on macOS and Linux, and with the default profile only.
   status             Show what is installed. Needs no network or key.
   uninstall          Remove the providers and the launchers. The compaction
                      hooks in ~/.codex stay, because subc codex uses them.
-                     ~/.claude is never changed. T3 Code threads stay.
+                     ~/.claude and your OpenCode folders are never
+                     changed. T3 Code threads stay.
   --provider NAME    Act on this provider only. Repeat it to name more.
                      Available: ${available.join(', ')}.${pending.length ? ` Not available yet: ${pending.join(', ')}.` : ''}
                      Without it, install sets up every available provider
@@ -90,11 +94,13 @@ This works on macOS and Linux, and with the default profile only.
                      every available provider.
 
 How it works:
-  T3 Code runs ~/.subconscious/bin/subc-t3-codex as the Codex binary, and
-  ~/.subconscious/bin/subc-t3-claude as the Claude Code binary. Each session
-  reads the default profile again, so a new key or model takes effect at the
-  next launch. If the key-scoped catalog cannot be read, the agent does not
-  start; there is no fallback to the public or packaged model list.
+  T3 Code runs ~/.subconscious/bin/subc-t3-codex as the Codex binary,
+  ~/.subconscious/bin/subc-t3-claude as the Claude Code binary, and
+  ~/.subconscious/bin/subc-t3-opencode as the OpenCode binary. Each Codex and
+  Claude Code session reads the default profile again, so a new key or model
+  takes effect at the next launch. OpenCode reads it when its helper starts.
+  If the key-scoped catalog cannot be read, the agent does not start; there
+  is no fallback to the public or packaged model list.
 
 Codex:
   The provider uses ~/.codex, the same Codex home as subc codex, so your
@@ -126,6 +132,20 @@ Claude Code (beta):
   T3 Code's built-in Claude provider uses the same ~/.claude, so T3 Code
   lets you switch a running thread between the two. The next turn then
   sends the whole thread to the other backend: Anthropic or Subconscious.
+
+OpenCode (beta):
+  T3 Code starts one OpenCode helper, opencode serve, for all threads of the
+  provider. Its config lists only the Subconscious provider and the models
+  in your catalog. OpenCode uses your ~/.config/opencode and
+  ~/.local/share/opencode, as subc opencode does, and subc writes nothing
+  there. It needs OpenCode 2.0.18 or newer.
+
+  A new key or model applies after the OpenCode helper restarts: restart
+  T3 Code, or wait until its OpenCode threads have been idle for 30 minutes.
+  Keep the provider's Server URL and Server password empty in T3 Code. With
+  a Server URL, T3 Code skips the launcher, and status reports it as drift.
+  When T3 Code's server dies, the launcher stops the helper within about
+  10 s.
 
   T3 Code reloads its settings on its own; subc never restarts it.
 `);
@@ -440,12 +460,13 @@ function printPlan(item, single) {
   else if (provider.homeNote) line('Config', provider.homeNote);
   line(
     'Model',
-    `${launch.model} from the default profile, read again at each launch`,
+    `${launch.model} from the default profile, read again ${provider.freshnessNote ? 'when the helper starts' : 'at each launch'}`,
   );
   line(
     'Catalog',
     `${launch.catalog.models.length} models, key-scoped, from ${new URL(launch.baseUrl).origin}`,
   );
+  if (provider.freshnessNote) line('Freshness', provider.freshnessNote);
   if (provider.hooks)
     line(
       'Hooks',
@@ -877,6 +898,7 @@ async function status({ providers }) {
         `${target.homePath}${(await exists(target.homePath)) ? '' : ' (missing)'}`,
       );
     else if (provider.homeNote) line('Config', provider.homeNote);
+    if (provider.freshnessNote) line('Freshness', provider.freshnessNote);
     if (provider.hooks)
       line('Hooks', hookReport(await hookStatus(target.homePath), report));
     if (provider.builtInInstanceId)
