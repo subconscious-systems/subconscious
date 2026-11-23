@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { isolateLaunchEnv } from '../bin/t3-launch.js';
 import { OPENCODE_PROVIDER } from '../bin/t3-providers.js';
 import {
+  exportedFunctions,
   fakeGateway,
   GOOD_KEY,
   MODELS,
@@ -444,6 +445,26 @@ test('a hostile T3 Code env cannot steer the launch', { skip }, async () => {
     launches.every((request) => request.authorization === `Bearer ${GOOD_KEY}`),
     'only the profile key reached the gateway',
   );
+});
+
+test('an exported shell function in the env never runs, and stdout stays clean', {
+  skip,
+}, async () => {
+  const sandbox = installed;
+  const marker = path.join(sandbox.root, 'opencode-function-ran');
+  const log = logFile(sandbox, 'bash-func');
+  const result = await launch(sandbox, SERVE_ARGS, {
+    log,
+    env: exportedFunctions(marker),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(
+    result.stdout,
+    /^server listening on http:\/\/127\.0\.0\.1:\d+\n$/,
+  );
+  const [record] = await readRecords(log);
+  assert.deepEqual(record.args, SERVE_ARGS);
+  await assert.rejects(fs.lstat(marker), { code: 'ENOENT' });
 });
 
 test('the helper command line ends with T3 Code serve args, for the orphan reaper', {

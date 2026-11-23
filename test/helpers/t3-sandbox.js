@@ -547,3 +547,17 @@ export function fakeT3Probe(
     clearInterval(timer);
   };
 }
+
+/**
+ * Exported bash functions as T3 Code's env could carry them, for example
+ * from `export -f cd`. Each one writes a marker file and prints, so a test
+ * sees whether any shell ran it.
+ */
+export function exportedFunctions(marker) {
+  const body = (name) =>
+    `() { echo ${name} >> '${marker}'; echo HIJACKED-${name}; }`;
+  return {
+    'BASH_FUNC_cd%%': body('cd'),
+    'BASH_FUNC_dirname%%': body('dirname'),
+  };
+}

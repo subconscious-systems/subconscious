@@ -229,6 +229,23 @@ async function removeStaleCatalogTemps(dir) {
 }
 
 /**
+ * The argv that runs a runbook script, such as run.sh, with privileged bash
+ * (`bash -p`). The launcher's own `-p` covers only the launcher's shell.
+ * An exported function, such as `BASH_FUNC_cd%%`, stays in the env, and a
+ * plain `bash run.sh` would import it and run it while the key is in the
+ * env. Privileged mode stops that import, and it also skips BASH_ENV and
+ * ENV, so run.sh cannot print on T3 Code's protocol stream before it
+ * execs. Plain `subc codex` and `subc opencode` keep `bash run.sh`.
+ */
+function privilegedScriptArgv(command) {
+  if (command.file !== 'bash')
+    throw new T3LaunchError(
+      'The launch template no longer runs a bash runbook script. Update subc.',
+    );
+  return [command.file, '-p', ...command.args];
+}
+
+/**
  * The command the launcher execs for an app-server or exec launch: the
  * Codex runbook, with the args T3 passed kept in order after the root
  * Subconscious config.
@@ -263,7 +280,7 @@ export async function t3CodexPlan({ args, codexPath, paths, launch }) {
   // run.sh is a bash script, and its stdout is the app-server protocol.
   for (const name of SHELL_STARTUP_ENV) delete codexEnv[name];
   return {
-    argv: [command.file, ...command.args],
+    argv: privilegedScriptArgv(command),
     env: {
       ...codexEnv,
       SUBC_CODEX_PROTOCOL_LAUNCH: '1',
@@ -572,7 +589,7 @@ export async function t3OpenCodePlan({ args, opencodePath, launch }) {
   // run.sh is a bash script, and T3 Code reads the helper's stdout.
   for (const name of SHELL_STARTUP_ENV) delete openCodeEnv[name];
   return {
-    argv: [command.file, ...command.args],
+    argv: privilegedScriptArgv(command),
     env: openCodeEnv,
     unset: SHELL_STARTUP_ENV,
     // The helper is long-lived, so the launcher starts its watchdog.
@@ -591,9 +608,15 @@ export function shellQuote(value) {
  * The launcher's first line. Bash sources the file in BASH_ENV before it
  * reads a script, and stdout is T3 Code's protocol stream, so a BASH_ENV
  * that prints would break the session before the script's first command
- * runs. Privileged mode (`-p`) makes bash skip BASH_ENV and ENV, and also
- * skip shell functions and SHELLOPTS from the env. `env -S` splits the two
- * words, because a shebang passes one argument.
+ * runs. In privileged mode (`-p`), bash does not read BASH_ENV or ENV, does
+ * not import shell functions from the env, and ignores SHELLOPTS, CDPATH,
+ * GLOBIGNORE, and, in bash 4.1 and newer, BASHOPTS from the env.
+ *
+ * This covers the launcher's shell only. Bash leaves those names in the env,
+ * and each child gets them. So the plan runs a runbook script with `bash -p`
+ * too (privilegedScriptArgv). The agent and the tools it runs get the same
+ * env as in a plain launch. `env -S` splits the two words, because a
+ * shebang passes one argument.
  */
 export const LAUNCHER_SHEBANG = '#!/usr/bin/env -S bash -p';
 

@@ -17,6 +17,7 @@ import {
 } from '../bin/t3-launch.js';
 import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
+  exportedFunctions,
   fakeGateway,
   GOOD_KEY,
   MODELS,
@@ -859,8 +860,28 @@ test('the configured plan unsets BASH_ENV and ENV before run.sh', {
     ),
   );
   const args = records.filter(([kind]) => kind === 'arg').map(([, v]) => v);
-  assert.equal(args[0], 'bash');
-  assert.match(args[1], /runbook[/\\]codex[/\\]run\.sh$/);
+  // Privileged bash, so run.sh imports no function from T3 Code's env.
+  assert.deepEqual(args.slice(0, 2), ['bash', '-p']);
+  assert.match(args[2], /runbook[/\\]codex[/\\]run\.sh$/);
+});
+
+test('an exported shell function in the env never runs, and stdout stays clean', {
+  skip,
+}, async () => {
+  const sandbox = installed;
+  const marker = path.join(sandbox.root, 'codex-function-ran');
+  const log = logFile(sandbox, 'bash-func');
+  const result = await launch(sandbox, ['app-server'], {
+    log,
+    env: exportedFunctions(marker),
+  });
+  assert.equal(result.code, 0, result.stderr);
+  const [record] = await readRecords(log);
+  assert.equal(
+    result.stdout,
+    `${JSON.stringify({ fake: 'codex', args: record.args })}\n`,
+  );
+  await assert.rejects(fs.lstat(marker), { code: 'ENOENT' });
 });
 
 test('status reads the hooks from disk after subc codex uninstall', {
