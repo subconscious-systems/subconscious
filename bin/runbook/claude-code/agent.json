@@ -238,9 +238,13 @@
         "modelPicker": {
           "replaceBuiltInOptions": true,
           "options": "one entry per catalog model"
+        },
+        "env": {
+          "ANTHROPIC_BASE_URL": "${ANTHROPIC_BASE_URL}",
+          "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT": "${OTEL_EXPORTER_OTLP_LOGS_ENDPOINT}"
         }
       },
-      "description": "Replaces the built-in model picker with the live catalog and allowlists only those models."
+      "description": "Replaces the built-in model picker with the live catalog and allowlists only those models. Its env pins ANTHROPIC_BASE_URL and the log endpoint to the launch values. Flag settings win over every settings file, so a repo's or the user's settings cannot send the key to another host. Neither value is a secret."
     },
     {
       "kind": "file",

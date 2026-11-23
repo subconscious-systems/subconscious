@@ -1,4 +1,5 @@
 import { agentInputs, agentKeyName } from './agent-data.js';
+import { pinnedClaudeSettings } from './claude-settings.js';
 import { openCodeConfigFromEnv } from './opencode-provider.js';
 import { isUnsetSetting } from './profiles.js';
 
@@ -191,6 +192,13 @@ export function launchPlan(agent, { env, args = [], prompt } = {}) {
       : args;
   const { values, rest } = takeFlags(agent, words);
   const resolved = resolveAgentEnv(agent, resolveInputs(agent, env, values));
+  // The gateway is known only now: a flag, CLAUDE_GATEWAY_URL, or a
+  // headless launch can each change it.
+  if (agent.id === 'claude-code')
+    resolved.SUBC_CLAUDE_SETTINGS = pinnedClaudeSettings(
+      resolved.SUBC_CLAUDE_SETTINGS,
+      resolved,
+    );
   const template = headless ? launch.headless_argv : launch.argv;
   const { argv, templateWords } = expandArgv(
     agent,

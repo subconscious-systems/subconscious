@@ -9,6 +9,9 @@ import {
   resolveInputs,
   takeFlags,
 } from '../bin/agent-launch.js';
+import { runbookEnv } from '../bin/agents.js';
+import { CLAUDE_PINNED_SETTINGS_ENV } from '../bin/claude-settings.js';
+import { handoffLaunchArgs, nativeResumeArgs } from '../bin/sessions.js';
 
 const codex = agentById('codex');
 const claude = agentById('claude-code');
@@ -19,6 +22,14 @@ const base = {
   SUBCONSCIOUS_MODELS: 'subconscious/glm-5.3-marathon',
   SUBC_CLAUDE_SETTINGS: '{"availableModels":[]}',
 };
+// base.SUBC_CLAUDE_SETTINGS with the launch gateway pinned in its env.
+const PINNED_SETTINGS = JSON.stringify({
+  availableModels: [],
+  env: {
+    ANTHROPIC_BASE_URL: 'https://gateway.example',
+    OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'https://gateway.example/v1/logs',
+  },
+});
 
 test('flags take a value, an = value, or set a fixed value, until --', () => {
   const { values, rest } = takeFlags(codex, [
@@ -220,15 +231,7 @@ test('every headless agent runs exactly this argv and stdin', () => {
   ].flatMap((pair) => ['-c', pair]);
   const expected = {
     'claude-code': {
-      argv: [
-        'claude',
-        '--settings',
-        base.SUBC_CLAUDE_SETTINGS,
-        '--x',
-        '-p',
-        '--',
-        'P',
-      ],
+      argv: ['claude', '--settings', PINNED_SETTINGS, '--x', '-p', '--', 'P'],
       stdin: 'ignore',
     },
     codex: {
@@ -282,7 +285,7 @@ test('interactive launches run exactly this argv', () => {
   assert.deepEqual(run('claude-code', ['--continue']), [
     'claude',
     '--settings',
-    base.SUBC_CLAUDE_SETTINGS,
+    PINNED_SETTINGS,
     '--continue',
   ]);
   assert.deepEqual(run('opencode', ['--', '--continue']), [
@@ -301,4 +304,103 @@ test('interactive launches run exactly this argv', () => {
     run('codex').at(-1),
     'model_providers.subconscious.stream_idle_timeout_ms=900000',
   );
+});
+
+// The one --settings value of a Claude Code plan, parsed.
+function claudeSettings(plan) {
+  const at = plan.argv.indexOf('--settings');
+  assert.notEqual(at, -1, 'no --settings');
+  assert.equal(plan.argv.lastIndexOf('--settings'), at, 'two --settings');
+  return JSON.parse(plan.argv[at + 1]);
+}
+
+test('every subc claude launch form pins its gateway in --settings', () => {
+  const key = 'sk-launch-secret';
+  const env = { ...base, API_KEY: key };
+  const own = 'https://claude-only.example';
+  const flagged = 'https://flag.example';
+  const forms = {
+    interactive: [{ env, args: [] }, base.GATEWAY_URL],
+    headless: [{ env, args: ['--x'], prompt: 'P' }, base.GATEWAY_URL],
+    resume: [
+      { env, args: nativeResumeArgs({ harness: 'claude', id: 'abc' }) },
+      base.GATEWAY_URL,
+    ],
+    handoff: [
+      { env, args: handoffLaunchArgs('claude', 'ctx') },
+      base.GATEWAY_URL,
+    ],
+    CLAUDE_GATEWAY_URL: [{ env: { ...env, CLAUDE_GATEWAY_URL: own } }, own],
+    '--gateway-url': [{ env, args: ['--gateway-url', flagged] }, flagged],
+  };
+  for (const [form, [options, gateway]] of Object.entries(forms)) {
+    const plan = launchPlan(claude, options);
+    assert.equal(plan.env.ANTHROPIC_BASE_URL, gateway, form);
+    assert.deepEqual(
+      claudeSettings(plan).env,
+      {
+        ANTHROPIC_BASE_URL: gateway,
+        OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `${gateway}/v1/logs`,
+      },
+      form,
+    );
+    assert.equal(plan.env.ANTHROPIC_AUTH_TOKEN, key, form);
+    assert.ok(!plan.argv.some((word) => word.includes(key)), form);
+  }
+});
+
+test('the gateway pin merges into the picker and an existing settings env', () => {
+  const picker = {
+    availableModels: ['m1', 'm2'],
+    modelPicker: { replaceBuiltInOptions: true, options: [{ model: 'm1' }] },
+    env: { KEEP: 'x', ANTHROPIC_BASE_URL: 'https://evil.example' },
+  };
+  const plan = launchPlan(claude, {
+    env: { ...base, SUBC_CLAUDE_SETTINGS: JSON.stringify(picker) },
+  });
+  assert.deepEqual(claudeSettings(plan), {
+    ...picker,
+    env: {
+      KEEP: 'x',
+      ANTHROPIC_BASE_URL: 'https://gateway.example',
+      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'https://gateway.example/v1/logs',
+    },
+  });
+  // The picker that runbookEnv builds keeps every key.
+  const models = ['subconscious/a', 'subconscious/b'];
+  const live = runbookEnv('sk-x', models[0], undefined, null, claude, models);
+  const settings = claudeSettings(launchPlan(claude, { env: live }));
+  const { env: _pin, ...rest } = settings;
+  assert.deepEqual(rest, JSON.parse(live.SUBC_CLAUDE_SETTINGS));
+  assert.equal(settings.env.ANTHROPIC_BASE_URL, live.GATEWAY_URL);
+});
+
+test('a Claude launch refuses settings it cannot pin', () => {
+  assert.throws(
+    () =>
+      launchPlan(claude, {
+        env: { ...base, SUBC_CLAUDE_SETTINGS: 'not json sk-hidden' },
+      }),
+    (error) =>
+      /must be a JSON object/.test(error.message) &&
+      !error.message.includes('sk-hidden'),
+  );
+  assert.throws(
+    () =>
+      launchPlan(claude, {
+        env: { ...base, GATEWAY_URL: 'https://gw.example/sk-shared' },
+      }),
+    /ANTHROPIC_BASE_URL holds the API key/,
+  );
+  assert.throws(
+    () => launchPlan(claude, { env: { ...base, GATEWAY_URL: '' } }),
+    /no ANTHROPIC_BASE_URL/,
+  );
+});
+
+test('the agent file names the env that the launch pins in --settings', () => {
+  const entry = claude.config.find((item) => item.name === '--settings');
+  assert.deepEqual(Object.keys(entry.value.env), CLAUDE_PINNED_SETTINGS_ENV);
+  for (const [name, value] of Object.entries(entry.value.env))
+    assert.equal(value, `\${${name}}`);
 });
