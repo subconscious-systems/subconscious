@@ -7,7 +7,9 @@
 # directory next to it. This strips only the entries whose command names our
 # hook script and keeps every other hook. It never touches config.toml.
 
-CODEX_DIR="${CODEX_DIR:-${HOME}/.codex}"
+# Older hooks lived in the Codex home of the launch that wrote them, which is
+# CODEX_HOME when set, so the cleanup looks there too.
+CODEX_DIR="${CODEX_DIR:-${CODEX_HOME:-${HOME}/.codex}}"
 HOOKS_JSON="${HOOKS_JSON:-${CODEX_DIR}/hooks.json}"
 LEGACY_MARKER="subconscious-hook.sh"
 LEGACY_FILES=(

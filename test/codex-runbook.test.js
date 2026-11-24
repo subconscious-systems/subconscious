@@ -359,6 +359,23 @@ for (const how of ['launch', 'install', 'uninstall'])
     assert.deepEqual(await fs.readdir(codexDir), ['hooks.json']);
   });
 
+// Older hooks honored CODEX_HOME, so a session with its own Codex home left its
+// hook files there.
+test('Codex uninstall removes old hooks under CODEX_HOME', async () => {
+  const codexDir = path.join(testDir, 'codex-old-home');
+  const user = { PreToolUse: [userGroup('/usr/local/bin/guard.sh')] };
+  await writeOldInstall(codexDir, user);
+  const env = { ...setupEnv, CODEX_HOME: codexDir };
+  delete env.CODEX_DIR;
+  const result = runSync(setupCommand('codex', ['uninstall'], env));
+  assert.equal(result.status, 0, result.stderr);
+  const document = JSON.parse(
+    await fs.readFile(path.join(codexDir, 'hooks.json'), 'utf8'),
+  );
+  assert.deepEqual(document, { hooks: user });
+  assert.deepEqual(await fs.readdir(codexDir), ['hooks.json']);
+});
+
 test('Codex launch does not rewrite a hooks.json without Subconscious hooks', async () => {
   const codexDir = path.join(testDir, 'codex-untouched');
   const hooksJson = path.join(codexDir, 'hooks.json');
