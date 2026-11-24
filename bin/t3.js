@@ -474,28 +474,15 @@ const HIDE_LIST_HINT =
   'In T3 Code, hide or reorder any model once, then run subc t3 install again.';
 const HIDE_LIST_FALLBACK =
   "Until then, a model outside the catalog runs as the default profile's model.";
-// How long install waits for T3 Code to probe the new entry and write its
-// model cache. T3 Code probes about 1 s after a settings change.
-const CACHE_WAIT_MS = 30_000;
-const CACHE_POLL_MS = 250;
-
 /**
- * The model cache to build the hide list from. With `since`, only a cache
- * of subc's instance that T3 Code wrote at or after `since` counts, because
- * an earlier install may have left an old one. Without it, any cache of
- * subc's instance counts. When none appears within `waitMs`, the built-in
- * instance's cache is used, or null when it is missing too.
+ * The model cache to build the hide list from: the cache of subc's
+ * instance, else the built-in instance's, or null when both are missing.
  */
-async function hideListCache(provider, home, { since, waitMs }) {
-  const deadline = Date.now() + waitMs;
-  for (;;) {
-    const cache = await readT3ModelCache(home, provider.instanceId);
-    if (cache && (since === null || (cache.checkedAt ?? 0) >= since))
-      return cache;
-    if (Date.now() >= deadline) break;
-    await new Promise((resolve) => setTimeout(resolve, CACHE_POLL_MS));
-  }
-  return readT3ModelCache(home, provider.builtInInstanceId);
+async function hideListCache(provider, home) {
+  return (
+    (await readT3ModelCache(home, provider.instanceId)) ??
+    readT3ModelCache(home, provider.builtInInstanceId)
+  );
 }
 
 /**
@@ -503,13 +490,13 @@ async function hideListCache(provider, home, { since, waitMs }) {
  * key-scoped catalog, so it never hides a catalog model. `state` is
  * `ready`, `unmigrated`, `invalid`, `unreadable`, or `no-cache`.
  */
-async function planHideList(item, { since, waitMs }) {
+async function planHideList(item) {
   const { provider, target, launch } = item;
   const prefs = await readT3ModelPreferences(target);
   if (prefs.state === 'unmigrated' || prefs.state === 'invalid')
     return { state: prefs.state };
   if (prefs.state === 'unreadable') return { state: 'unreadable' };
-  const cache = await hideListCache(provider, target.home, { since, waitMs });
+  const cache = await hideListCache(provider, target.home);
   if (!cache) return { state: 'no-cache' };
   const catalog = new Set(launch.catalog.models);
   return {
@@ -519,7 +506,7 @@ async function planHideList(item, { since, waitMs }) {
   };
 }
 
-function hideListSkipLines(plan, provider, waitMs) {
+function hideListSkipLines(plan, provider) {
   if (plan.state === 'unmigrated')
     return [
       `Skipped: T3 Code has no model preferences yet. ${HIDE_LIST_HINT}`,
@@ -532,7 +519,7 @@ function hideListSkipLines(plan, provider, waitMs) {
     ];
   if (plan.state === 'no-cache')
     return [
-      `Skipped: T3 Code wrote no model cache for ${provider.instanceId} or ${provider.builtInInstanceId}${waitMs ? ` within ${Math.round(waitMs / 1000)} s` : ''}. Open T3 Code, then run subc t3 install again.`,
+      `Skipped: T3 Code wrote no model cache for ${provider.instanceId} or ${provider.builtInInstanceId}. Open T3 Code, then run subc t3 install again.`,
       HIDE_LIST_FALLBACK,
     ];
   return ['Skipped: the T3 Code settings could not be read.'];
@@ -544,9 +531,9 @@ function modelList(models) {
 
 /** Print the hide list that install would write. Writes nothing. */
 async function printHideListPlan(item) {
-  const plan = await planHideList(item, { since: null, waitMs: 0 });
+  const plan = await planHideList(item);
   if (plan.state !== 'ready') {
-    lines('Hide list', hideListSkipLines(plan, item.provider, 0));
+    lines('Hide list', hideListSkipLines(plan, item.provider));
     return;
   }
   lines('Hide list', [
@@ -560,11 +547,11 @@ async function printHideListPlan(item) {
  * leaves the provider installed, because the launcher's fallback covers
  * the models the list would hide.
  */
-async function installHideList(paths, item, { since, waitMs }) {
+async function installHideList(paths, item) {
   const { provider, target } = item;
-  const plan = await planHideList(item, { since, waitMs });
+  const plan = await planHideList(item);
   if (plan.state !== 'ready') {
-    lines('Hide list', hideListSkipLines(plan, provider, waitMs));
+    lines('Hide list', hideListSkipLines(plan, provider));
     return;
   }
   try {
@@ -579,7 +566,7 @@ async function installHideList(paths, item, { since, waitMs }) {
     else
       lines(
         'Hide list',
-        hideListSkipLines({ state: 'unmigrated' }, provider, waitMs),
+        hideListSkipLines({ state: 'unmigrated' }, provider),
       );
   } catch (error) {
     lines('Hide list', [
@@ -606,8 +593,6 @@ async function installOne(paths, item, single) {
     console.log(
       `  ${c.yellow}Could not remove the old Subconscious hooks from ${target.homePath}. The provider works without removing them.${c.reset}`,
     );
-  // T3 Code's cache records each probe's time at second precision.
-  const since = Math.floor(Date.now() / 1000) * 1000;
   let result;
   try {
     result = await installT3Provider(target, { backupDir: paths.backups });
@@ -615,13 +600,7 @@ async function installOne(paths, item, single) {
     return settingsFailure(item, error);
   }
   if (result.backup) line('Backup', result.backup);
-  if (provider.builtInInstanceId)
-    // A new or repaired entry makes T3 Code probe it again, so only a cache
-    // from that probe counts.
-    await installHideList(paths, item, {
-      since: result.changed ? since : null,
-      waitMs: CACHE_WAIT_MS,
-    });
+  if (provider.builtInInstanceId) await installHideList(paths, item);
   console.log(
     `${single ? '\n' : ''}  ${c.green}${c.bold}✓ ${provider.displayName} is ${result.changed ? 'ready' : 'already set up'} in T3 Code.${c.reset}`,
   );

@@ -274,7 +274,7 @@ Each provider uses the same folders as the matching subc command, so your settin
 | Pinned gateway | Each launch pins `ANTHROPIC_BASE_URL` in the `env` of its `--settings` value. Claude Code applies that value over every settings file, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host. The URL is not a secret, so the key stays out of the argv. |
 | Repo settings | Claude Code still loads a repo's project settings, as it does in `subc claude`. Hooks in a repo's `.claude/settings.json` and the repo's project MCP servers run with the key in their env. Open only repos that you trust with this provider. |
 
-Install waits up to 30 s for T3 Code to write `~/.t3/caches/subconscious-claude.json`, and uses `caches/claudeAgent.json` if it does not appear. The hide list holds every model in that cache that is not in your catalog. T3 Code downloads its built-in model list at run time, so status can report new drift at any time.
+Install reads T3 Code's model cache, `~/.t3/caches/subconscious-claude.json`, or `caches/claudeAgent.json` when that file is missing. The hide list holds every model in that cache that is not in your catalog. T3 Code downloads its built-in model list at run time, so status can report new drift at any time.
 
 ### OpenCode provider (beta)
 
