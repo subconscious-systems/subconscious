@@ -17,7 +17,7 @@
  * T3 starts Codex for several jobs. A session (`app-server`) and a one-shot
  * run (`exec`) get the Subconscious launch. A capability query (`--version`,
  * help, `mcp list`) runs the real Codex unchanged, without reading the
- * profile, the network, or hooks. Any other command is refused.
+ * profile or the network. Any other command is refused.
  */
 
 import {

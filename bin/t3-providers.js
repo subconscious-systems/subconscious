@@ -52,8 +52,8 @@
  *   agent file's value alone.
  * - `recommendedVersion`: below this version install prints a warning and
  *   continues. `null` prints no warning.
- * - `hooks`: true when install sets up the Codex compaction hooks in
- *   `homeDir`, the same way `subc codex` does.
+ * - `legacyHooks`: true when install and uninstall remove the compaction
+ *   hooks that older subc versions left in `homeDir`, and status lists them.
  * - `ownedDirs`: directories under `<config dir>/t3`, as `/` paths, that
  *   launches create and uninstall removes.
  * - `watchdog`: true when the launcher can start a background watchdog that
@@ -98,7 +98,7 @@ const CODEX = Object.freeze({
   versionProbeEnv: (dir) => ({ CODEX_HOME: dir }),
   minimumVersion: null,
   recommendedVersion: null,
-  hooks: true,
+  legacyHooks: true,
   ownedDirs: Object.freeze(['codex/catalog']),
   watchdog: false,
   builtInInstanceId: null,
@@ -123,11 +123,10 @@ const CLAUDE = Object.freeze({
   freshnessNote: null,
   managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
   clearedFields: Object.freeze(['launchArgs']),
-  // Each of these routes Claude Code away from the default profile, signs
-  // it in another way, or changes the telemetry that carries the key.
+  // Each of these routes Claude Code away from the default profile, or
+  // signs it in another way.
   extraIsolatedEnv: Object.freeze([
     'ANTHROPIC_*',
-    'OTEL_*',
     'CLAUDE_CODE_OAUTH_TOKEN',
     'CLAUDE_CODE_USE_BEDROCK',
     'CLAUDE_CODE_USE_VERTEX',
@@ -147,7 +146,7 @@ const CLAUDE = Object.freeze({
   // 2.1.301. Install uses the higher of this and the agent file's minimum.
   minimumVersion: '2.1.280',
   recommendedVersion: '2.1.301',
-  hooks: false,
+  legacyHooks: false,
   ownedDirs: Object.freeze([]),
   watchdog: false,
   // T3 Code lists its built-in Claude models on every claudeAgent instance.
@@ -207,7 +206,7 @@ const OPENCODE = Object.freeze({
   // only, because 1.x cannot load the Subconscious plugin.
   minimumVersion: '2.0.18',
   recommendedVersion: null,
-  hooks: false,
+  legacyHooks: false,
   ownedDirs: Object.freeze([]),
   // T3 Code runs `opencode serve` as a long-lived helper. When T3 Code's
   // server dies, the helper keeps running with the key in its env until

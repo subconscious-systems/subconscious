@@ -153,13 +153,13 @@ and the native TUI use Windows paths and processes. Profile editing defaults to
 Notepad, honors `VISUAL`/`EDITOR`, and supports `code`/`code-insiders` with `--wait`.
 The existing profile location remains `%USERPROFILE%\.subconscious`.
 
-Copilot, Codex, and Pi setup use native JSON merges and Node hooks. Other
-providers and hooks are preserved; malformed configuration is left unchanged.
-Hook credentials are stored in `subconscious-windows.json` within the agent's
-user directory; treat that file as a secret. Copilot's model provider still uses
+Copilot and Pi setup use native JSON merges, and Copilot gets a Node prompt
+hook. Other providers and hooks are preserved; malformed configuration is left
+unchanged. Copilot's hook credentials are stored in
+`%USERPROFILE%\.copilot\subconscious-windows.json`; treat that file as a secret. Copilot's model provider still uses
 VS Code's secret store and prompts for its key. Its configuration goes under
 `%APPDATA%\Code\User` (or Code - Insiders/VSCodium). Rerun install after moving
-your Node installation, because hooks record the absolute Node executable path.
+your Node installation, because the hook records the absolute Node executable path.
 
 Run `npm run test:windows` from the repository root for the separate Windows suite. The
 Windows CI job also builds/tests the Go TUI. Existing Unix tests and runbooks
@@ -171,11 +171,11 @@ The packaged integrations live in `bin/runbook`.
 
 | Command | Behavior |
 | --- | --- |
-| `subc opencode` | Launch OpenCode with the runbook provider, client header, and context/output limits |
-| `subc claude` | Launch Claude Code with the runbook environment, context limits, subagent limits, and OTEL usage reporting |
-| `subc codex` | Launch Codex with the runbook provider, temporary model catalog, and surgically merged compaction hooks |
+| `subc opencode` | Launch OpenCode with the runbook provider, image window plugin, and context/output limits |
+| `subc claude` | Launch Claude Code with the runbook environment, context limits, and subagent limits |
+| `subc codex` | Launch Codex with the runbook provider and a temporary model catalog |
 | `subc pi` | Refresh the Pi provider from the live catalog, then launch |
-| `subc copilot install` | Install/update the VS Code custom endpoint and Copilot hooks |
+| `subc copilot install` | Install/update the VS Code custom endpoint and the Copilot prompt hook |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
 ### `subc opencode`
@@ -216,10 +216,9 @@ Install checks each CLI, the default profile's saved key, and the live key-scope
 | --- | --- |
 | One entry per provider | `subconscious-codex`, `subconscious-claude`, and `subconscious-opencode` in `~/.t3/userdata/settings.json` (or `$T3CODE_HOME/userdata/settings.json`) |
 | One launcher per provider | `~/.subconscious/bin/subc-t3-codex`, `subc-t3-claude`, and `subc-t3-opencode`. T3 Code runs the launcher as the CLI. |
-| The Codex compaction hooks | `~/.codex/hooks.json`, the same entries that `subc codex` writes |
 | The Claude hide list | `providerModelPreferences["subconscious-claude"]` in the T3 Code settings. This is the one write outside subc's own entries. |
 
-Before each change, install copies the settings file to `~/.subconscious/t3/backups/`. It refuses malformed settings, the old `providers` format, and settings under a managed policy. It also refuses an entry with subc's ID that subc did not write. A second install repairs subc's entries and changes nothing else. T3 Code reloads its settings by itself, and subc never restarts it.
+Before each change, install copies the settings file to `~/.subconscious/t3/backups/`. It refuses malformed settings, the old `providers` format, and settings under a managed policy. It also refuses an entry with subc's ID that subc did not write. A second install repairs subc's entries and changes nothing else. For Codex, install and uninstall also remove the compaction hooks that older subc versions left in `~/.codex`, and keep your own hooks. T3 Code reloads its settings by itself, and subc never restarts it.
 
 Each launcher pins this Node, this subc package, and the CLI path that install found. Node computes the launch, and then the launcher `exec`s, so the process that T3 Code started becomes the CLI. Every launch reads the default profile again. If the key-scoped catalog cannot be read, the CLI does not start. There is no fallback to the public or packaged model list.
 
@@ -229,7 +228,7 @@ Each provider uses the same folders as the matching subc command, so your settin
 
 | Provider | Home | What subc writes there |
 | --- | --- | --- |
-| Codex | `~/.codex` | Only the compaction hooks. subc never edits your `config.toml`. |
+| Codex | `~/.codex` | Nothing. subc never edits your `config.toml`. |
 | Claude Code | `~/.claude` and `~/.claude.json` | Nothing |
 | OpenCode | `~/.config/opencode` and `~/.local/share/opencode` | Nothing |
 
@@ -237,7 +236,7 @@ Each provider uses the same folders as the matching subc command, so your settin
 
 `subc t3 status` reads everything again on each run. subc keeps no state file. For each provider, it shows the entry, the launcher, the pinned CLI and its version, and the home. It also shows these items:
 
-- Codex: the compaction hooks, including when `subc codex uninstall` removed them.
+- Codex: any compaction hooks that an older subc left.
 - Claude: the hide list, and drift when T3 Code lists a built-in model that the hide list does not hide.
 - OpenCode: the freshness rule.
 - All providers: where T3 Code sends thread titles and commit messages. Status warns when that is not a Subconscious provider.
@@ -246,11 +245,11 @@ Each provider uses the same folders as the matching subc command, so your settin
 | Exit code | Meaning |
 | --- | --- |
 | 0 | Every installed provider works, or nothing is installed. |
-| 1 | A provider is broken: a conflict, a missing or foreign launcher, unreadable settings, drift, missing Codex hooks, a CLI version that install refuses, or a failed T3 Code check. For each problem that install can repair, status prints the `subc t3 install --provider <name>` command. |
+| 1 | A provider is broken: a conflict, a missing or foreign launcher, unreadable settings, drift, a CLI version that install refuses, or a failed T3 Code check. For each problem that install can repair, status prints the `subc t3 install --provider <name>` command. |
 
 ### Uninstall
 
-`subc t3 uninstall` removes subc's entries, the launchers, the Codex catalog file, and the Claude hide list. It also removes `~/.subconscious/t3/state.json`, which subc 8.2.0 wrote and nothing reads now. It keeps the Codex hooks, because `subc codex` uses them too. It keeps the shared homes, the other providers, and your T3 Code threads.
+`subc t3 uninstall` removes subc's entries, the launchers, the Codex catalog file, and the Claude hide list. It also removes `~/.subconscious/t3/state.json`, which subc 8.2.0 wrote, and old Codex compaction hooks. It keeps the shared homes, the other providers, and your T3 Code threads.
 
 ### Codex provider
 
@@ -259,7 +258,6 @@ Each provider uses the same folders as the matching subc command, so your settin
 | Commands | `app-server` and `exec` get the `subc codex` config, from the default profile only. `--version`, help, `mcp list`, and `mcp get` run the real Codex unchanged. Every other command fails. |
 | Key | Codex reads the key from `SUBCONSCIOUS_API_KEY`. It gets no `CODEX_API_KEY`. |
 | Apps and plugins | Off, unless the default profile sets `CODEX_EXTERNAL_TOOLS=true`. |
-| Hooks | Codex runs them only after you trust them with `/hooks`. The hook env file holds the key, with mode 600. |
 | History | Subconscious and OpenAI sessions share one Codex history. Plain `codex` does not resume a Subconscious session. |
 
 ### Claude Code provider (beta)
@@ -268,12 +266,12 @@ Each provider uses the same folders as the matching subc command, so your settin
 | --- | --- |
 | Versions | Claude Code 2.1.280 or newer. Install warns below 2.1.301, the version that T3 Code 0.1.11 recommends. |
 | Commands | A command with `--input-format`, `--output-format`, `-p`, or `--print` gets the `subc claude` setup. `--version`, help, and `update` run the real Claude Code. Every other command fails. |
-| Key | Only `ANTHROPIC_AUTH_TOKEN` and `OTEL_EXPORTER_OTLP_HEADERS` carry the key. |
+| Key | Only `ANTHROPIC_AUTH_TOKEN` carries the key. |
 | Built-in models | T3 Code also lists its built-in Claude models on this provider. The hide list hides them in T3 Code's model picker. |
 | Hide list hint | T3 Code creates `providerModelPreferences` only after you hide or reorder a model in its settings. Do that once, then run `subc t3 install` again. |
 | Off-catalog fallback | A model outside your catalog runs as the default profile's model. This also covers `t3 thread start --model`, which ignores the hide list. The launcher writes one line about it to stderr, but T3 Code does not show launcher stderr, so the thread runs the default model with no notice. |
 | Thread switch | T3 Code's built-in Claude provider uses the same `~/.claude`. You can switch a running thread between the two, and the next turn sends the whole thread to the other backend. |
-| Pinned gateway | Each launch pins `ANTHROPIC_BASE_URL` and `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` in the `env` of its `--settings` value. Claude Code applies that value over every settings file, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host. Neither value is a secret, so the key stays out of the argv. |
+| Pinned gateway | Each launch pins `ANTHROPIC_BASE_URL` in the `env` of its `--settings` value. Claude Code applies that value over every settings file, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host. The URL is not a secret, so the key stays out of the argv. |
 | Repo settings | Claude Code still loads a repo's project settings, as it does in `subc claude`. Hooks in a repo's `.claude/settings.json` and the repo's project MCP servers run with the key in their env. Open only repos that you trust with this provider. |
 
 Install waits up to 30 s for T3 Code to write `~/.t3/caches/subconscious-claude.json`, and uses `caches/claudeAgent.json` if it does not appear. The hide list holds every model in that cache that is not in your catalog. T3 Code downloads its built-in model list at run time, so status can report new drift at any time.
@@ -410,7 +408,7 @@ Coding agents resend every screenshot on every turn, so a long computer-use or s
 
 | Agent | How subc applies it |
 | --- | --- |
-| OpenCode | A plugin loaded from the launch config (`bin/runbook/opencode/subconscious-image-window.ts`) that gives the provider a trimming `fetch`. |
+| OpenCode | A plugin loaded from the launch config (`bin/runbook/opencode/plugin/server.ts`) that rewrites each request body before upload. |
 | Pi | An extension installed with the provider (`bin/runbook/image-window/index.ts`, on `before_provider_request`). |
 
 The rule is in `bin/runbook/image-window/window.js`. `SUBCONSCIOUS_IMAGE_WINDOW_SOFT_MIB` and `SUBCONSCIOUS_IMAGE_WINDOW_HARD_MIB` change the two limits (defaults 25 and 30). Text-only models are left alone, and a request the integrations do not recognize is sent unchanged.
@@ -457,14 +455,6 @@ gateway with a larger tool limit. It also defaults reasoning effort to `max`,
 which is the highest effort accepted by the Subconscious models; override it
 with `subc codex --reasoning-effort high` when desired.
 
-On macOS and Linux, the Codex compaction hook reports only for Codex sessions
-that subc started. subc sets `SUBCONSCIOUS_CODEX_LAUNCH` on each Codex launch,
-and the hook then uses the key and gateway of that launch. A plain `codex`
-session that reads the same `~/.codex/hooks.json` sends nothing. The Windows
-hook does not check for this variable yet. When a new subc release changes the
-hook script, the next `subc codex` replaces the script and leaves `hooks.json`
-unchanged, so hooks you already trusted stay trusted.
-
 Persistent writes are merge/unmerge only. They never replace a user's
 `config.toml`, `opencode.json`, `models.json`, `hooks.json`, or VS Code
 provider list. Remove Subconscious files with the matching uninstall command:
@@ -493,8 +483,21 @@ Manage Language Models UI. The install scripts print the relevant next steps.
 Its Custom Endpoint provider uses the Messages API at `/v1/messages` by
 default; rerun `subc copilot install` to migrate an older Chat Completions entry.
 
-The runbook scripts require Bash. Copilot, Pi, and Codex hook merge
-also require `jq`. Copilot and Codex hooks also require `curl`.
+The runbook scripts require Bash. Copilot and Pi setup also require `jq`, and
+the Copilot hook also requires `curl`.
+
+### Removing hooks from older versions
+
+Older versions also installed compaction reporting: Codex `PreCompact` and
+`PostCompact` hooks in `~/.codex/hooks.json`, a Copilot `PreCompact` hook, and
+a Pi compaction extension, each with its own env file. subc no longer installs
+them. `subc codex install`, `subc codex uninstall`, and every `subc codex`
+launch strip only the Subconscious entries from `hooks.json` and delete the
+hook script, its env file, and its log directory. `subc copilot install`
+rewrites the Copilot hooks file without `PreCompact` and deletes
+`~/.copilot/subconscious-compact-pending`. `subc pi install`, which every
+`subc pi` launch runs, deletes `subconscious-compaction.ts` and
+`subconscious.env`. The Windows setup does the same with its own files.
 
 `subc dsh` defaults to the DeepSeek Harness Web UI. It injects an ephemeral
 Cordis overlay containing the active gateway URL, selected model, token limits,

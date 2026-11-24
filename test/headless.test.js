@@ -650,10 +650,7 @@ test('subc claude pins the gateway it launches with in --settings', async () => 
     const settings = JSON.parse(argv[argv.indexOf('--settings') + 1]);
     assert.deepEqual(
       settings.env,
-      {
-        ANTHROPIC_BASE_URL: gateway,
-        OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `${gateway}/v1/logs`,
-      },
+      { ANTHROPIC_BASE_URL: gateway },
       args.join(' '),
     );
     assert.ok(settings.availableModels.length > 0, args.join(' '));

@@ -8,7 +8,6 @@ import {
 } from '../bin/t3-launch.js';
 import { encodePlan, SHELL_STARTUP_ENV } from '../bin/t3-plan.js';
 import {
-  CLAUDE_PROVIDER,
   CODEX_PROVIDER,
   OPENCODE_PROVIDER,
   providerByKey,
@@ -146,53 +145,4 @@ test('isolateLaunchEnv uses the agent inputs and extraIsolatedEnv', () => {
     extraIsolatedEnv: ['ANTHROPIC_*', 'OPENCODE_CONFIG'],
   });
   assert.deepEqual(Object.keys(other).sort(), ['PATH', 'SUBC_CONFIG_DIR']);
-});
-
-test('the Claude descriptor writes no homePath and keeps T3 Code protocol names', () => {
-  const claude = providerByKey('claude');
-  assert.equal(claude, CLAUDE_PROVIDER);
-  assert.equal(claude.instanceId, 'subconscious-claude');
-  assert.equal(claude.driver, 'claudeAgent');
-  assert.equal(claude.displayName, 'Subconscious (Claude)');
-  assert.equal(claude.homeDir, null);
-  assert.deepEqual(claude.managedConfig({ launcherPath: '/x/launcher' }), {
-    binaryPath: '/x/launcher',
-  });
-  assert.deepEqual(claude.clearedFields, ['launchArgs']);
-  assert.equal(claude.watchdog, false);
-  assert.equal(claude.hooks, false);
-  const env = isolateLaunchEnv(
-    {
-      PATH: '/bin',
-      CLAUDE_CONFIG_DIR: '/t3/claude-home',
-      CLAUDE_CODE_ENTRYPOINT: 't3-code',
-      CLAUDE_AGENT_SDK_VERSION: '0.3.321',
-      CLAUDE_CODE_SDK_READS_SESSION_STATE: '1',
-      T3CODE_THREAD_ID: 'thread',
-      MISE_OFFLINE: '1',
-      ANTHROPIC_API_KEY: 'sk-fake',
-      OTEL_EXPORTER_OTLP_HEADERS: 'x-api-key=sk-fake',
-      CLAUDE_CODE_OAUTH_TOKEN: 'sk-fake',
-      CLAUDE_CODE_USE_BEDROCK: '1',
-      CLAUDE_GATEWAY_URL: 'http://evil',
-      CLAUDE_CODE_ENABLE_TELEMETRY: '0',
-      COMPACT_WINDOW: '1',
-      MAX_CONTEXT_TOKENS: '1',
-      API_KEY: 'sk-fake',
-      GATEWAY_URL: 'http://evil',
-      MODEL: 'x',
-    },
-    '/nowhere',
-    claude,
-  );
-  assert.deepEqual(Object.keys(env).sort(), [
-    'CLAUDE_AGENT_SDK_VERSION',
-    'CLAUDE_CODE_ENTRYPOINT',
-    'CLAUDE_CODE_SDK_READS_SESSION_STATE',
-    'CLAUDE_CONFIG_DIR',
-    'MISE_OFFLINE',
-    'PATH',
-    'SUBC_CONFIG_DIR',
-    'T3CODE_THREAD_ID',
-  ]);
 });

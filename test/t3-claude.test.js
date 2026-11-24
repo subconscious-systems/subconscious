@@ -142,10 +142,6 @@ function assertPicker(settings) {
  */
 function assertPinnedEnv(settings) {
   assert.equal(settings.env?.ANTHROPIC_BASE_URL, gateway.url);
-  assert.equal(
-    settings.env?.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-    `${gateway.url}/v1/logs`,
-  );
   assert.ok(!JSON.stringify(settings).includes(GOOD_KEY), 'no key in argv');
 }
 
@@ -185,8 +181,6 @@ test('a probe launch routes Claude Code to the gateway with the shared ~/.claude
   assert.equal(env.ANTHROPIC_AUTH_TOKEN, GOOD_KEY);
   assert.equal(env.ANTHROPIC_MODEL, MODELS[0]);
   assert.equal(env.ANTHROPIC_API_KEY, undefined);
-  assert.equal(env.OTEL_EXPORTER_OTLP_HEADERS, `x-api-key=${GOOD_KEY}`);
-  assert.equal(env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, `${gateway.url}/v1/logs`);
   assert.equal(env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY, '0');
   // No CLAUDE_CONFIG_DIR and the user's HOME: Claude Code reads ~/.claude
   // and ~/.claude.json, so the user's settings and MCP servers apply, and
@@ -360,7 +354,6 @@ test("T3 Code's settings env is kept, except the names subc pins", {
         env: {
           T3_SETTING: 'kept',
           ANTHROPIC_BASE_URL: 'http://127.0.0.1:9/evil',
-          OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'http://127.0.0.1:9/logs',
         },
       }),
     ],

@@ -218,7 +218,8 @@ test('Copilot hook commands execute from home paths containing shell characters'
           'utf8',
         ),
       );
-      for (const event of ['UserPromptSubmit', 'PreCompact']) {
+      assert.deepEqual(Object.keys(hooks.hooks), ['UserPromptSubmit']);
+      for (const event of ['UserPromptSubmit']) {
         assert.equal(hooks.hooks[event].length, 1);
         const executed = spawnSync(
           'sh',
@@ -235,5 +236,149 @@ test('Copilot hook commands execute from home paths containing shell characters'
     }
   } finally {
     await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+// What an older install left: a hooks file with PreCompact next to
+// UserPromptSubmit, and a pending-compaction marker for one session.
+async function writeOldHooks(home) {
+  const hooksDir = path.join(home, '.copilot', 'hooks');
+  const command = `'${path.join(hooksDir, 'subconscious-hook.sh')}'`;
+  await fs.mkdir(hooksDir, { recursive: true });
+  await fs.writeFile(
+    path.join(hooksDir, 'subconscious-hooks.json'),
+    JSON.stringify({
+      version: 1,
+      hooks: {
+        UserPromptSubmit: [{ type: 'command', command, timeout: 2 }],
+        PreCompact: [{ type: 'command', command, timeout: 2 }],
+      },
+    }),
+  );
+  const pending = path.join(home, '.copilot', 'subconscious-compact-pending');
+  await fs.mkdir(pending, { recursive: true });
+  await fs.writeFile(path.join(pending, 'session'), '1\n');
+}
+
+test('Copilot install writes only the prompt hook and no compaction state', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-fresh-'));
+  try {
+    await createVsCodeUserDirectory(home);
+    const result = await runInstall(home);
+    assert.equal(result.code, 0, result.stderr);
+    const copilot = path.join(home, '.copilot');
+    assert.deepEqual((await fs.readdir(copilot)).sort(), [
+      'hooks',
+      'subconscious-hooks.env',
+    ]);
+    assert.deepEqual((await fs.readdir(path.join(copilot, 'hooks'))).sort(), [
+      'subconscious-hook.sh',
+      'subconscious-hooks.json',
+    ]);
+    const hooks = JSON.parse(
+      await fs.readFile(
+        path.join(copilot, 'hooks', 'subconscious-hooks.json'),
+        'utf8',
+      ),
+    );
+    assert.deepEqual(Object.keys(hooks.hooks), ['UserPromptSubmit']);
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('Copilot install over an old install drops PreCompact and its markers', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-old-'));
+  try {
+    await createVsCodeUserDirectory(home);
+    await writeOldHooks(home);
+    const result = await runInstall(home);
+    assert.equal(result.code, 0, result.stderr);
+    const hooks = JSON.parse(
+      await fs.readFile(
+        path.join(home, '.copilot', 'hooks', 'subconscious-hooks.json'),
+        'utf8',
+      ),
+    );
+    assert.deepEqual(Object.keys(hooks.hooks), ['UserPromptSubmit']);
+    await assert.rejects(
+      fs.access(path.join(home, '.copilot', 'subconscious-compact-pending')),
+    );
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('Copilot uninstall removes an old install with its markers', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-un-'));
+  try {
+    await createVsCodeUserDirectory(home);
+    await writeOldHooks(home);
+    const result = await runInstall(home, undefined, {}, 'uninstall');
+    assert.equal(result.code, 0, result.stderr);
+    assert.deepEqual(
+      await fs.readdir(path.join(home, '.copilot', 'hooks')),
+      [],
+    );
+    assert.deepEqual(await fs.readdir(path.join(home, '.copilot')), ['hooks']);
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
+  }
+});
+
+test('the Copilot hook ignores PreCompact and posts only conversation_ensure', async () => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-copilot-hook-'));
+  try {
+    const bin = path.join(home, 'bin');
+    const log = path.join(home, 'curl.log');
+    await fs.mkdir(bin);
+    // A curl stand-in that records each posted body.
+    await fs.writeFile(
+      path.join(bin, 'curl'),
+      `#!/bin/sh\nwhile [ $# -gt 0 ]; do [ "$1" = -d ] && printf '%s\\n---\\n' "$2" >> '${log}'; shift; done\n`,
+      { mode: 0o755 },
+    );
+    const hook = new URL('../bin/runbook/copilot/hook.sh', import.meta.url)
+      .pathname;
+    const fire = (event) =>
+      spawnSync('bash', [hook], {
+        encoding: 'utf8',
+        input: JSON.stringify({
+          hook_event_name: event,
+          session_id: 'session-1',
+          prompt: 'hello',
+          cwd: '/work/repo',
+        }),
+        env: {
+          ...process.env,
+          HOME: home,
+          PATH: `${bin}:${process.env.PATH}`,
+          SUBCONSCIOUS_GATEWAY_URL: 'https://gateway.example',
+          SUBCONSCIOUS_API_KEY: 'sk-test',
+        },
+      });
+    for (const event of ['PreCompact', 'UserPromptSubmit']) {
+      const result = fire(event);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(JSON.parse(result.stdout), { continue: true });
+    }
+    const posted = (await fs.readFile(log, 'utf8'))
+      .split('\n---\n')
+      .filter((body) => body.trim())
+      .map((body) => JSON.parse(body));
+    assert.deepEqual(posted, [
+      {
+        event: 'conversation_ensure',
+        conversation_id: 'session-1',
+        prompt: 'hello',
+        workspace: 'repo',
+        hook_event_name: 'UserPromptSubmit',
+      },
+    ]);
+    await assert.rejects(
+      fs.access(path.join(home, '.copilot', 'subconscious-compact-pending')),
+    );
+  } finally {
+    await fs.rm(home, { recursive: true, force: true });
   }
 });

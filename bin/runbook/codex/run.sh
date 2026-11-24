@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Write the temporary Codex model catalog and merge the compaction hooks, then
-# start the codex argv subc built. Nothing is written to ~/.codex/config.toml.
+# Write the temporary Codex model catalog, remove the hooks that older subc
+# versions installed, then start the codex argv subc built. Nothing is written
+# to ~/.codex/config.toml.
 #
 # This needs a gateway that round-trips Codex's namespaced tools. Codex sends
 # them as `type: "namespace"` and resolves an incoming call by namespace plus
@@ -94,9 +95,9 @@ replace_model_catalog() {
 
 # A protocol launch is one a host such as T3 Code starts many times to probe
 # Codex (`subc t3`). It sets SUBC_CODEX_PROTOCOL_LAUNCH=1 and
-# SUBC_CODEX_CATALOG_FILE. It must not rewrite hooks on each probe, because
-# `subc t3 install` set them up once, and it reuses one catalog file instead of
-# a new temp file per probe. Every other launch leaves both unset.
+# SUBC_CODEX_CATALOG_FILE, and reuses one catalog file instead of a new temp
+# file per probe. It skips the hook cleanup below: `subc t3 install` already
+# removed what older versions left. Every other launch leaves both unset.
 if [[ "${SUBC_CODEX_PROTOCOL_LAUNCH:-}" == "1" ]]; then
   CATALOG_FILE="${SUBC_CODEX_CATALOG_FILE:?protocol launches need SUBC_CODEX_CATALOG_FILE}"
   unset SUBC_CODEX_PROTOCOL_LAUNCH SUBC_CODEX_CATALOG_FILE
@@ -104,19 +105,13 @@ if [[ "${SUBC_CODEX_PROTOCOL_LAUNCH:-}" == "1" ]]; then
   subc_exec "{tempFile}" "$CATALOG_FILE" -- "$@"
 fi
 
-# The hooks library writes its env file from these two.
-API_KEY="$SUBCONSCIOUS_API_KEY"
-GATEWAY_URL="$SUBCONSCIOUS_GATEWAY_URL"
-
-# Merge compaction hooks without replacing ~/.codex/hooks.json or config.toml.
-# `codex_ensure_hooks` returns early when they are already current, so a launch
-# that changes nothing writes nothing: Codex decides what counts as a new hook
-# from what is on disk, and rewriting an identical one reset the trust the user
-# had already granted.
-HOOK_SRC="${SCRIPT_DIR}/hook.sh"
-# shellcheck source=hooks-lib.sh
-source "${SCRIPT_DIR}/hooks-lib.sh"
-codex_ensure_hooks best-effort >&2 || true
+# Remove the compaction hooks older subc versions merged into hooks.json.
+# This writes nothing when none are left.
+# shellcheck source=legacy-hooks.sh
+source "${SCRIPT_DIR}/legacy-hooks.sh"
+if codex_has_legacy_hooks; then
+  codex_remove_legacy_hooks quiet >&2 || true
+fi
 
 # Without a catalog Codex prints "model metadata not found", and a catalog
 # cannot be passed with -c. Codex replaces this shell, so the file outlives it.

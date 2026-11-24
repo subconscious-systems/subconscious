@@ -2,17 +2,11 @@
 // passes: plain subc claude (interactive, headless, resume, handoff, and
 // Windows) and the T3 Code provider.
 
-// The env names that a launch pins in the --settings value. Claude Code
-// applies the `env` of every settings source it loads, and a repo's
-// .claude/settings.json or the user's ~/.claude/settings.json can set these
-// names. The flag's settings win over both, so the key goes only to the
-// gateway of the launch. Neither value is a secret, so the argv stays free
-// of the key. The --settings entry in bin/runbook/claude-code/agent.json
-// lists the same names.
-export const CLAUDE_PINNED_SETTINGS_ENV = Object.freeze([
-  'ANTHROPIC_BASE_URL',
-  'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT',
-]);
+// A launch pins ANTHROPIC_BASE_URL in the env of its --settings value.
+// Claude Code applies the `env` of every settings source it loads, and a
+// repo's .claude/settings.json or the user's ~/.claude/settings.json can set
+// it. The flag's settings win over both, so the key goes only to the gateway
+// of the launch. The URL is not a secret, so the argv stays free of the key.
 
 export class ClaudeSettingsError extends Error {}
 
@@ -35,25 +29,20 @@ export function withSubcSettings(settings, extra) {
 
 /**
  * The pinned env block for a launch whose resolved env is `env`. It throws
- * when the launch has no ANTHROPIC_BASE_URL, or when a pinned value holds
- * `apiKey`, because the block goes in the argv.
+ * when the launch has no ANTHROPIC_BASE_URL, or when the URL holds `apiKey`,
+ * because the block goes in the argv.
  */
 export function claudeGatewayPin(env, apiKey) {
-  const pinned = {};
-  for (const name of CLAUDE_PINNED_SETTINGS_ENV) {
-    const value = env[name];
-    if (!value) continue;
-    if (apiKey && value.includes(apiKey))
-      throw new ClaudeSettingsError(
-        `${name} holds the API key, so it cannot go in the Claude Code argv. Check the profile.`,
-      );
-    pinned[name] = value;
-  }
-  if (!pinned.ANTHROPIC_BASE_URL)
+  const url = env.ANTHROPIC_BASE_URL;
+  if (!url)
     throw new ClaudeSettingsError(
       'The claude-code launch has no ANTHROPIC_BASE_URL. Update subc.',
     );
-  return pinned;
+  if (apiKey && url.includes(apiKey))
+    throw new ClaudeSettingsError(
+      'ANTHROPIC_BASE_URL holds the API key, so it cannot go in the Claude Code argv. Check the profile.',
+    );
+  return { ANTHROPIC_BASE_URL: url };
 }
 
 /**

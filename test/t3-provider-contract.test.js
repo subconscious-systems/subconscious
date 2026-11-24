@@ -138,17 +138,13 @@ const FIXTURES = {
         homePath: box.codexHome,
       },
     }),
-    installedFiles: (box) =>
-      ['hooks.json', 'subconscious-hook.sh', 'subconscious-hooks.env'].map(
-        (name) => path.join(box.codexHome, name),
-      ),
+    installedFiles: () => [],
     userFiles: (box) => [path.join(box.codexDir, 'config.toml')],
     planLines: (box) => [
       `${box.codexHome} (shared with subc codex)`,
       'read again at each launch',
-      'compaction hooks in that Codex home',
     ],
-    statusLines: ['2 entries, env file present (mode 600)'],
+    statusLines: [],
     async afterKills(box) {
       // A kill during the plan can leave a temp catalog; the next launch
       // removes the old ones, so they stay bounded.
@@ -194,7 +190,7 @@ const FIXTURES = {
       ['--resume', 'abc'],
       ['update', 'now'],
     ],
-    keyCarriers: ['ANTHROPIC_AUTH_TOKEN', 'OTEL_EXPORTER_OTLP_HEADERS'],
+    keyCarriers: ['ANTHROPIC_AUTH_TOKEN'],
     unset: [
       'ANTHROPIC_API_KEY',
       'API_KEY',
@@ -215,10 +211,7 @@ const FIXTURES = {
       CLAUDE_CODE_USE_FOUNDRY: '1',
       CLAUDE_GATEWAY_URL: 'http://127.0.0.1:9/evil-claude',
       CLAUDE_CODE_API_KEY: 'sk-evil-claude-key',
-      CLAUDE_CODE_ENABLE_TELEMETRY: '0',
       COMPACT_WINDOW: '123456',
-      OTEL_EXPORTER_OTLP_HEADERS: 'x-api-key=sk-evil-otel',
-      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'http://127.0.0.1:9/logs',
     }),
     steered({ env }, gateway) {
       assert.equal(env.ANTHROPIC_BASE_URL, gateway.url);
@@ -232,13 +225,7 @@ const FIXTURES = {
         'CLAUDE_GATEWAY_URL',
       ])
         assert.equal(env[name], undefined, name);
-      assert.equal(env.CLAUDE_CODE_ENABLE_TELEMETRY, '1');
       assert.equal(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '1000000');
-      assert.equal(env.OTEL_EXPORTER_OTLP_HEADERS, `x-api-key=${GOOD_KEY}`);
-      assert.equal(
-        env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-        `${gateway.url}/v1/logs`,
-      );
     },
     model: (record) => record.env.ANTHROPIC_MODEL,
     profileExtra:

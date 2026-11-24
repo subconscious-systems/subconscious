@@ -8,8 +8,8 @@
  * T3 is a host for the agent, not another coding agent. A Codex launch here
  * is an ordinary Codex launch (the codex agent file, runbookEnv, launchPlan,
  * and run.sh) with two differences: settings come only from the saved
- * default profile, and run.sh runs in protocol mode, which writes no hooks
- * and reuses one catalog file.
+ * default profile, and run.sh runs in protocol mode, which skips the
+ * old-hook cleanup and reuses one catalog file.
  *
  * Module imports that read the subc config directory happen inside the
  * functions, after isolateLaunchEnv, so this file is cheap to load.
@@ -294,12 +294,9 @@ export async function t3CodexPlan({ args, codexPath, paths, launch }) {
   };
 }
 
-// The only two variables that carry the key into Claude Code: the bearer
-// credential for /v1/messages and the header for OTEL log export.
-const CLAUDE_KEY_CARRIERS = new Set([
-  'ANTHROPIC_AUTH_TOKEN',
-  'OTEL_EXPORTER_OTLP_HEADERS',
-]);
+// The only variable that carries the key into Claude Code: the bearer
+// credential for /v1/messages.
+const CLAUDE_KEY_CARRIER = 'ANTHROPIC_AUTH_TOKEN';
 // Copies of the catalog or the picker that runbookEnv adds for an ordinary
 // subc claude launch. Claude Code reads none of them. Copies of the key,
 // such as API_KEY and CLAUDE_CODE_API_KEY, are removed by value instead.
@@ -419,7 +416,7 @@ export function mergeClaudeSettings(args, extra, cwd = process.cwd()) {
  *   subc claude launch (bin/claude-settings.js), so no other settings
  *   file can send the key to another host. T3 Code's own env names stay.
  * - A `--model` outside the key-scoped catalog becomes the profile model.
- * - Only ANTHROPIC_AUTH_TOKEN and OTEL_EXPORTER_OTLP_HEADERS carry the key.
+ * - Only ANTHROPIC_AUTH_TOKEN carries the key.
  *
  * `fallback` names the replaced model, or is null.
  */
@@ -469,7 +466,7 @@ export async function t3ClaudePlan({
   // it, such as an OPENCODE_API_KEY line. Every tool Claude Code runs
   // inherits this env.
   for (const [name, value] of Object.entries(claudeEnv))
-    if (value === launch.apiKey && !CLAUDE_KEY_CARRIERS.has(name))
+    if (value === launch.apiKey && name !== CLAUDE_KEY_CARRIER)
       delete claudeEnv[name];
   // Claude Code's tool shells are bash, and they would source these files.
   for (const name of SHELL_STARTUP_ENV) delete claudeEnv[name];

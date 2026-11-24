@@ -30,12 +30,15 @@
       ["help", "Show this help"],
       ["install", "Refresh the Subconscious provider without launching Pi"],
       ["status", "Inspect the persistent Pi provider"],
-      ["uninstall", "Remove only the Subconscious Pi provider and extension"],
+      ["uninstall", "Remove only the Subconscious Pi provider and extensions"],
       ["--model MODEL", "Override the profile model for this launch"]
     ],
     "args": ["ARGS...", "Pass arguments directly to Pi"]
   },
-  "sessions": { "key": "pi", "portable": true },
+  "sessions": {
+    "key": "pi",
+    "portable": true
+  },
   "prerequisites": [
     {
       "command": "jq",
@@ -115,22 +118,10 @@
       "description": "Subconscious provider, written by install.sh and merged in; other providers are kept. Mode 600; holds the key in plain text."
     },
     {
-      "kind": "file",
-      "path": "~/.pi/agent/subconscious.env",
-      "lifetime": "persistent",
-      "description": "SUBCONSCIOUS_GATEWAY_URL and SUBCONSCIOUS_API_KEY for the compaction extension (mode 600)."
-    },
-    {
-      "kind": "file",
-      "path": "~/.pi/agent/extensions/subconscious-compaction.ts",
-      "lifetime": "persistent",
-      "description": "Compaction reporting extension."
-    },
-    {
       "kind": "dir",
       "path": "~/.pi/agent/extensions/subconscious-image-window",
       "lifetime": "persistent",
-      "description": "Extension that keeps requests to the newest 30 images."
+      "description": "Extension that keeps requests to the newest 30 images within a byte budget. install also removes the compaction extension and subconscious.env that older versions wrote."
     }
   ],
   "capabilities": {
@@ -186,32 +177,8 @@
         "set_by_subc": true,
         "verified": false,
         "note": "Enabled by compat.sendSessionAffinityHeaders; the header name comes from an install.sh comment."
-      },
-      {
-        "name": "Authorization",
-        "value": "Bearer {apiKey}",
-        "on": "extension POSTs to {baseUrl}/v1/agent-hooks",
-        "set_by_subc": true,
-        "verified": true
       }
     ],
-    "hooks": [
-      {
-        "event": "session_before_compact",
-        "posts": "conversation_compaction phase=start",
-        "endpoint": "{baseUrl}/v1/agent-hooks",
-        "config": "~/.pi/agent/extensions/subconscious-compaction.ts",
-        "installed_by": ["launch", "install"],
-        "verified": true
-      },
-      {
-        "event": "session_compact",
-        "posts": "conversation_compaction phase=end",
-        "endpoint": "{baseUrl}/v1/agent-hooks",
-        "config": "~/.pi/agent/extensions/subconscious-compaction.ts",
-        "installed_by": ["launch", "install"],
-        "verified": true
-      }
-    ]
+    "hooks": []
   }
 }

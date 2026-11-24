@@ -75,27 +75,11 @@ export function mergeHooks(document, client, command) {
     if (kept.length) hooks[event] = kept;
     else delete hooks[event];
   }
-  if (command) {
-    const events = {
-      codex: ['PreCompact', 'PostCompact'],
-      copilot: ['UserPromptSubmit', 'PreCompact'],
-    }[client];
-    for (const event of events) {
-      const hook = {
-        type: 'command',
-        command,
-        timeout: client === 'copilot' ? 5 : 3,
-      };
-      const entry =
-        client === 'codex'
-          ? {
-              hooks: [
-                { ...hook, statusMessage: 'Reporting Subconscious compaction' },
-              ],
-            }
-          : hook;
-      hooks[event] = [...(hooks[event] || []), entry];
-    }
+  // Only Copilot still gets a hook: UserPromptSubmit. Codex hooks and the
+  // Copilot PreCompact hook from older versions are stripped above.
+  if (command && client === 'copilot') {
+    const hook = { type: 'command', command, timeout: 5 };
+    hooks.UserPromptSubmit = [...(hooks.UserPromptSubmit || []), hook];
   }
   result.hooks = hooks;
   return result;
@@ -134,19 +118,42 @@ export async function windowsSetup(
   const apiKey = options['--api-key'] || value(env, 'API_KEY');
   const installing = action === 'install';
   const removing = action === 'uninstall';
-  const needsKey = ['codex', 'copilot', 'pi'].includes(id);
+  const needsKey = ['copilot', 'pi'].includes(id);
   if (installing && needsKey && !apiKey)
     throw new Error('An API key is required for setup. Run subc login first.');
 
-  if (['codex', 'copilot'].includes(id)) {
-    const dir =
-      id === 'codex'
-        ? env.CODEX_DIR || env.CODEX_HOME || path.join(home, '.codex')
-        : path.join(home, `.${id}`);
-    const hooksFile =
-      id === 'copilot'
-        ? path.join(dir, 'hooks', 'subconscious-hooks.json')
-        : path.join(dir, 'hooks.json');
+  if (id === 'codex') {
+    // Codex is launch-only. Older versions merged compaction hooks into
+    // hooks.json; install and uninstall both remove them and keep the user's.
+    const dir = env.CODEX_DIR || env.CODEX_HOME || path.join(home, '.codex');
+    const hooksFile = path.join(dir, 'hooks.json');
+    const legacy = [
+      path.join(dir, 'hooks', 'subconscious-hook.cjs'),
+      path.join(dir, 'subconscious-windows.json'),
+    ];
+    const present = await exists(hooksFile);
+    const document = present ? await readJson(hooksFile, {}) : {};
+    const merged = mergeHooks(document, id, null);
+    const changed =
+      present && JSON.stringify(merged) !== JSON.stringify(document);
+    const leftovers = [];
+    for (const file of legacy) if (await exists(file)) leftovers.push(file);
+    if (action === 'status') {
+      log(
+        `codex: ${changed || leftovers.length ? 'old Subconscious hooks present' : 'no Subconscious hooks'} (${hooksFile})`,
+      );
+      return 0;
+    }
+    if (changed) await writeJson(hooksFile, merged);
+    for (const file of legacy) await fs.rm(file, { force: true });
+    log('codex: launch-only; old Subconscious hooks removed.');
+    return 0;
+  }
+  if (id === 'copilot') {
+    const dir = path.join(home, '.copilot');
+    const hooksFile = path.join(dir, 'hooks', 'subconscious-hooks.json');
+    // Pending-compaction markers from the PreCompact hook of older versions.
+    const pending = path.join(dir, 'subconscious-compact-pending');
     const script = path.join(dir, 'hooks', 'subconscious-hook.cjs');
     const config = path.join(dir, 'subconscious-windows.json');
     const document = await readJson(hooksFile, {});
@@ -156,63 +163,65 @@ export async function windowsSetup(
       id,
       installing ? windowsHookCommand(id, script, config) : null,
     );
-    let providerFile, providers;
-    if (id === 'copilot') {
-      const apps = ['Code', 'Code - Insiders', 'VSCodium'];
-      const appData = env.APPDATA || path.join(home, 'AppData', 'Roaming');
-      let app = options['--vscode-app'] || env.VSCODE_APP;
-      if (app && !apps.includes(app))
-        throw new Error(
-          '--vscode-app must be Code, Code - Insiders, or VSCodium',
-        );
-      if (!app) {
-        for (const candidate of apps)
-          if (await exists(path.join(appData, candidate, 'User'))) {
-            app = candidate;
-            break;
-          }
-        app ||= 'Code';
-      }
-      providerFile = path.join(appData, app, 'User', 'chatLanguageModels.json');
-      const current = await readJson(providerFile, []);
-      if (!Array.isArray(current))
-        throw new Error(
-          `${providerFile} must be a JSON array; leaving it unchanged`,
-        );
-      for (const provider of current)
-        object(provider, 'language model provider');
-      providers = current.filter((provider) => provider.name !== providerName);
-      if (installing) {
-        const context = positiveInteger(
-          options['--max-input-tokens'] ||
-            value(env, 'COPILOT_MAX_INPUT_TOKENS'),
-          'max-input-tokens',
-        );
-        const maxTokens = positiveInteger(
-          options['--max-output-tokens'] ||
-            value(env, 'COPILOT_MAX_OUTPUT_TOKENS'),
-          'max-output-tokens',
-        );
-        providers.push({
-          name: providerName,
-          vendor: 'customendpoint',
-          // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code secret input, not a JS template
-          apiKey: '${input:chat.lm.secret.subconscious-gateway}',
-          apiType: 'messages',
-          models: modelIds(env).map((id) => ({
-            id,
-            name: `Subconscious ${id}`,
-            url: `${gatewayUrl}/v1/messages`,
-            toolCalling: true,
-            vision: modelSupportsVision(id),
-            maxInputTokens: context,
-            maxOutputTokens: maxTokens,
-            thinking: true,
-            streaming: true,
-            requestHeaders: { 'x-subconscious-client': 'copilot' },
-          })),
-        });
-      }
+    const apps = ['Code', 'Code - Insiders', 'VSCodium'];
+    const appData = env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    let app = options['--vscode-app'] || env.VSCODE_APP;
+    if (app && !apps.includes(app))
+      throw new Error(
+        '--vscode-app must be Code, Code - Insiders, or VSCodium',
+      );
+    if (!app) {
+      for (const candidate of apps)
+        if (await exists(path.join(appData, candidate, 'User'))) {
+          app = candidate;
+          break;
+        }
+      app ||= 'Code';
+    }
+    const providerFile = path.join(
+      appData,
+      app,
+      'User',
+      'chatLanguageModels.json',
+    );
+    const current = await readJson(providerFile, []);
+    if (!Array.isArray(current))
+      throw new Error(
+        `${providerFile} must be a JSON array; leaving it unchanged`,
+      );
+    for (const provider of current) object(provider, 'language model provider');
+    const providers = current.filter(
+      (provider) => provider.name !== providerName,
+    );
+    if (installing) {
+      const context = positiveInteger(
+        options['--max-input-tokens'] || value(env, 'COPILOT_MAX_INPUT_TOKENS'),
+        'max-input-tokens',
+      );
+      const maxTokens = positiveInteger(
+        options['--max-output-tokens'] ||
+          value(env, 'COPILOT_MAX_OUTPUT_TOKENS'),
+        'max-output-tokens',
+      );
+      providers.push({
+        name: providerName,
+        vendor: 'customendpoint',
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: VS Code secret input, not a JS template
+        apiKey: '${input:chat.lm.secret.subconscious-gateway}',
+        apiType: 'messages',
+        models: modelIds(env).map((id) => ({
+          id,
+          name: `Subconscious ${id}`,
+          url: `${gatewayUrl}/v1/messages`,
+          toolCalling: true,
+          vision: modelSupportsVision(id),
+          maxInputTokens: context,
+          maxOutputTokens: maxTokens,
+          thinking: true,
+          streaming: true,
+          requestHeaders: { 'x-subconscious-client': 'copilot' },
+        })),
+      });
     }
     if (action === 'status') {
       const hasHook = Object.values(document.hooks || {}).some((entries) =>
@@ -225,7 +234,7 @@ export async function windowsSetup(
       log(
         `${id}: ${hasHook ? 'Subconscious hooks installed' : 'no Subconscious hooks'} (${hooksFile})`,
       );
-      if (providerFile) log(`Model configuration: ${providerFile}`);
+      log(`Model configuration: ${providerFile}`);
       return 0;
     }
     if (installing) {
@@ -235,13 +244,14 @@ export async function windowsSetup(
     }
     if (installing || (await exists(hooksFile)))
       await writeJson(hooksFile, merged);
-    if (providerFile && (installing || (await exists(providerFile))))
+    if (installing || (await exists(providerFile)))
       await writeJson(providerFile, providers);
     if (removing) {
       await fs.rm(script, { force: true });
       await fs.rm(config, { force: true });
     }
-    if (installing && id === 'copilot')
+    await fs.rm(pending, { recursive: true, force: true });
+    if (installing)
       log(
         'Restart VS Code, select a Subconscious model, and enter your API key when prompted.',
       );
@@ -259,18 +269,17 @@ export async function windowsSetup(
       );
       return 0;
     }
-    const extension = path.join(
-      dir,
-      'extensions',
-      'subconscious-compaction.ts',
-    );
     // Keeps requests at the newest 30 images; same files as the shell runbook.
     const imageWindow = path.join(
       dir,
       'extensions',
       'subconscious-image-window',
     );
-    const config = path.join(dir, 'subconscious-windows.json');
+    // The compaction extension and its config from older versions.
+    const legacy = [
+      path.join(dir, 'extensions', 'subconscious-compaction.ts'),
+      path.join(dir, 'subconscious-windows.json'),
+    ];
     if (installing) {
       const context = positiveInteger(
         options['--context-window'] || value(env, 'PI_CONTEXT_WINDOW'),
@@ -296,24 +305,18 @@ export async function windowsSetup(
           ...(modelSupportsVision(id) ? { input: ['text', 'image'] } : {}),
         })),
       };
-      await fs.mkdir(path.dirname(extension), { recursive: true });
-      await fs.copyFile(
-        new URL('./pi-compaction.ts', import.meta.url),
-        extension,
-      );
+      await fs.mkdir(path.dirname(imageWindow), { recursive: true });
       await fs.rm(imageWindow, { recursive: true, force: true });
       await fs.cp(
         new URL('../runbook/image-window', import.meta.url),
         imageWindow,
         { recursive: true },
       );
-      await writeJson(config, { gatewayUrl, apiKey });
     } else {
       delete providers.subconscious;
-      await fs.rm(extension, { force: true });
       await fs.rm(imageWindow, { recursive: true, force: true });
-      await fs.rm(config, { force: true });
     }
+    for (const file of legacy) await fs.rm(file, { force: true });
     if (installing || (await exists(modelsFile)))
       await writeJson(modelsFile, { ...document, providers });
     log(`Pi: Windows integration ${installing ? 'installed' : 'removed'}.`);

@@ -9,8 +9,6 @@ import {
   resolveInputs,
   takeFlags,
 } from '../bin/agent-launch.js';
-import { runbookEnv } from '../bin/agents.js';
-import { CLAUDE_PINNED_SETTINGS_ENV } from '../bin/claude-settings.js';
 import { handoffLaunchArgs, nativeResumeArgs } from '../bin/sessions.js';
 
 const codex = agentById('codex');
@@ -25,10 +23,7 @@ const base = {
 // base.SUBC_CLAUDE_SETTINGS with the launch gateway pinned in its env.
 const PINNED_SETTINGS = JSON.stringify({
   availableModels: [],
-  env: {
-    ANTHROPIC_BASE_URL: 'https://gateway.example',
-    OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'https://gateway.example/v1/logs',
-  },
+  env: { ANTHROPIC_BASE_URL: 'https://gateway.example' },
 });
 
 test('flags take a value, an = value, or set a fixed value, until --', () => {
@@ -121,20 +116,23 @@ test('env entries take the first set override, else their value', () => {
     resolveInputs(claude, {
       ...base,
       CLAUDE_GATEWAY_URL: 'https://claude.example//',
-      OTEL_LOGS_EXPORTER: 'none',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '0',
       CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '1',
       CLAUDE_CODE_API_KEY: 'sk-claude',
     }),
   );
   assert.equal(env.ANTHROPIC_BASE_URL, 'https://claude.example//');
-  assert.equal(
-    env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-    'https://claude.example/v1/logs',
-  );
-  assert.equal(env.OTEL_LOGS_EXPORTER, 'none');
+  assert.equal(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, '0');
   assert.equal(env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY, '0');
   assert.equal(env.ANTHROPIC_AUTH_TOKEN, 'sk-claude');
-  assert.equal(env.OTEL_EXPORTER_OTLP_HEADERS, 'x-api-key=sk-claude');
+});
+
+test('claude-code exports no telemetry to the gateway', () => {
+  const env = resolveAgentEnv(claude, resolveInputs(claude, { ...base }));
+  for (const name of Object.keys(env)) {
+    assert.doesNotMatch(name, /^OTEL_/);
+  }
+  assert.equal(env.CLAUDE_CODE_ENABLE_TELEMETRY, undefined);
 });
 
 test('claude-code drops the mutating attribution header, unless the user keeps it', () => {
@@ -306,22 +304,17 @@ test('interactive launches run exactly this argv', () => {
   );
 });
 
-// The one --settings value of a Claude Code plan, parsed.
-function claudeSettings(plan) {
-  const at = plan.argv.indexOf('--settings');
-  assert.notEqual(at, -1, 'no --settings');
-  assert.equal(plan.argv.lastIndexOf('--settings'), at, 'two --settings');
-  return JSON.parse(plan.argv[at + 1]);
-}
-
-test('every subc claude launch form pins its gateway in --settings', () => {
+test('every subc claude launch pins its gateway in --settings', () => {
   const key = 'sk-launch-secret';
   const env = { ...base, API_KEY: key };
   const own = 'https://claude-only.example';
   const flagged = 'https://flag.example';
+  // A settings env of its own keeps its other names, and the pin wins.
+  const picker = JSON.stringify({
+    availableModels: ['m1'],
+    env: { KEEP: 'x', ANTHROPIC_BASE_URL: 'https://evil.example' },
+  });
   const forms = {
-    interactive: [{ env, args: [] }, base.GATEWAY_URL],
-    headless: [{ env, args: ['--x'], prompt: 'P' }, base.GATEWAY_URL],
     resume: [
       { env, args: nativeResumeArgs({ harness: 'claude', id: 'abc' }) },
       base.GATEWAY_URL,
@@ -332,75 +325,37 @@ test('every subc claude launch form pins its gateway in --settings', () => {
     ],
     CLAUDE_GATEWAY_URL: [{ env: { ...env, CLAUDE_GATEWAY_URL: own } }, own],
     '--gateway-url': [{ env, args: ['--gateway-url', flagged] }, flagged],
+    picker: [
+      { env: { ...env, SUBC_CLAUDE_SETTINGS: picker } },
+      base.GATEWAY_URL,
+    ],
   };
   for (const [form, [options, gateway]] of Object.entries(forms)) {
     const plan = launchPlan(claude, options);
-    assert.equal(plan.env.ANTHROPIC_BASE_URL, gateway, form);
+    const at = plan.argv.indexOf('--settings');
+    assert.equal(plan.argv.lastIndexOf('--settings'), at, form);
+    const { env: pinned } = JSON.parse(plan.argv[at + 1]);
     assert.deepEqual(
-      claudeSettings(plan).env,
-      {
-        ANTHROPIC_BASE_URL: gateway,
-        OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: `${gateway}/v1/logs`,
-      },
+      pinned,
+      form === 'picker'
+        ? { KEEP: 'x', ANTHROPIC_BASE_URL: gateway }
+        : { ANTHROPIC_BASE_URL: gateway },
       form,
     );
     assert.equal(plan.env.ANTHROPIC_AUTH_TOKEN, key, form);
     assert.ok(!plan.argv.some((word) => word.includes(key)), form);
   }
-});
-
-test('the gateway pin merges into the picker and an existing settings env', () => {
-  const picker = {
-    availableModels: ['m1', 'm2'],
-    modelPicker: { replaceBuiltInOptions: true, options: [{ model: 'm1' }] },
-    env: { KEEP: 'x', ANTHROPIC_BASE_URL: 'https://evil.example' },
-  };
-  const plan = launchPlan(claude, {
-    env: { ...base, SUBC_CLAUDE_SETTINGS: JSON.stringify(picker) },
-  });
-  assert.deepEqual(claudeSettings(plan), {
-    ...picker,
-    env: {
-      KEEP: 'x',
-      ANTHROPIC_BASE_URL: 'https://gateway.example',
-      OTEL_EXPORTER_OTLP_LOGS_ENDPOINT: 'https://gateway.example/v1/logs',
-    },
-  });
-  // The picker that runbookEnv builds keeps every key.
-  const models = ['subconscious/a', 'subconscious/b'];
-  const live = runbookEnv('sk-x', models[0], undefined, null, claude, models);
-  const settings = claudeSettings(launchPlan(claude, { env: live }));
-  const { env: _pin, ...rest } = settings;
-  assert.deepEqual(rest, JSON.parse(live.SUBC_CLAUDE_SETTINGS));
-  assert.equal(settings.env.ANTHROPIC_BASE_URL, live.GATEWAY_URL);
-});
-
-test('a Claude launch refuses settings it cannot pin', () => {
+  const refused = (extra) => () =>
+    launchPlan(claude, { env: { ...base, ...extra } });
   assert.throws(
-    () =>
-      launchPlan(claude, {
-        env: { ...base, SUBC_CLAUDE_SETTINGS: 'not json sk-hidden' },
-      }),
+    refused({ SUBC_CLAUDE_SETTINGS: 'not json sk-hidden' }),
     (error) =>
       /must be a JSON object/.test(error.message) &&
       !error.message.includes('sk-hidden'),
   );
   assert.throws(
-    () =>
-      launchPlan(claude, {
-        env: { ...base, GATEWAY_URL: 'https://gw.example/sk-shared' },
-      }),
+    refused({ GATEWAY_URL: 'https://gw.example/sk-shared' }),
     /ANTHROPIC_BASE_URL holds the API key/,
   );
-  assert.throws(
-    () => launchPlan(claude, { env: { ...base, GATEWAY_URL: '' } }),
-    /no ANTHROPIC_BASE_URL/,
-  );
-});
-
-test('the agent file names the env that the launch pins in --settings', () => {
-  const entry = claude.config.find((item) => item.name === '--settings');
-  assert.deepEqual(Object.keys(entry.value.env), CLAUDE_PINNED_SETTINGS_ENV);
-  for (const [name, value] of Object.entries(entry.value.env))
-    assert.equal(value, `\${${name}}`);
+  assert.throws(refused({ GATEWAY_URL: '' }), /no ANTHROPIC_BASE_URL/);
 });
