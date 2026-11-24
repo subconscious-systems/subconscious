@@ -180,7 +180,7 @@ The packaged integrations live in `bin/runbook`.
 
 ### `subc opencode`
 
-- The OpenCode key setting in a profile is now `SUBC_OPENCODE_API_KEY`. An old `OPENCODE_API_KEY` line is ignored, and the launch uses `API_KEY`.
+- The OpenCode key setting in a profile is now `SUBC_OPENCODE_API_KEY`. subc does not use an old `OPENCODE_API_KEY` line as the key, and never exports it to OpenCode. Plain launches of the other agents still pass every profile line to their env, so remove the old line.
 - An `OPENCODE_API_KEY` exported in your shell no longer reaches OpenCode. OpenCode uses that name for its own opencode.ai key.
 - OpenCode lists only Subconscious models, because the launch config sets `enabled_providers` to the Subconscious provider.
 

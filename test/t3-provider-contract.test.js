@@ -30,6 +30,14 @@ const PROFILE_COPIES = [
   'OPENCODE_API_KEY',
   'SUBC_OPENCODE_API_KEY',
 ];
+// Profile lines that hold other secrets, such as an old OpenCode key or
+// another agent's key. A tool shell that ran opencode would send the first
+// to opencode.ai.
+const PROFILE_SECRETS = {
+  OPENCODE_API_KEY: 'sk-old-opencode-key',
+  PI_API_KEY: 'sk-other-pi-key',
+  GITHUB_TOKEN: 'ghp-other-token',
+};
 
 /** What each provider brings to the shared checks. */
 const FIXTURES = {
@@ -370,6 +378,23 @@ for (const fixture of PROVIDERS) {
       !JSON.stringify([record.args, record.config ?? null]).includes(GOOD_KEY),
       'no key in argv or config',
     );
+    // Other secrets in the profile stay out of the agent env too.
+    const extra = Object.entries(PROFILE_SECRETS).map(
+      ([k, v]) => `${k}=${v}\n`,
+    );
+    await fs.writeFile(
+      profileFile(sandbox),
+      profile(gateway.url, GOOD_KEY, extra.join('')),
+      { mode: 0o600 },
+    );
+    const second = logFile(sandbox);
+    const again = await launch(fixture, sandbox, fixture.configured, {
+      log: second,
+    });
+    assert.equal(again.code, 0, again.stderr);
+    const [other] = await readRecords(second);
+    for (const name of Object.keys(PROFILE_SECRETS))
+      assert.equal(other.env[name], undefined, name);
   });
 
   test(name('a hostile T3 Code env cannot steer the launch'), {

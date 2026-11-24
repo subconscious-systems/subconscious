@@ -155,7 +155,12 @@ export async function resolveT3Launch({ agentId, ...options }) {
     throw new T3LaunchError(why);
   }
   const model = agents.selectLaunchModel(requested, modelSource, catalog);
-  return { agent, profile, apiKey: auth.key, baseUrl, model, catalog };
+  // Secret profile lines, such as an old OPENCODE_API_KEY or another
+  // agent's key. runbookEnv exports every profile line.
+  const secrets = Object.entries(profile.values ?? {}).filter(([name, value]) =>
+    profiles.isSecretKey(name, value),
+  );
+  return { agent, profile, apiKey: auth.key, baseUrl, model, catalog, secrets };
 }
 
 async function privateDir(dir) {
@@ -212,17 +217,20 @@ async function runbookCommand(launch, binaryPath, args) {
 
 /**
  * `env` without `drop`, without BASH_ENV, ENV, and exported bash functions,
- * and without every copy of the key except `carrier`. Every tool the agent
- * runs inherits this env, and a bash runbook script or tool shell would
- * source BASH_ENV or ENV and import the functions.
+ * without every copy of the key except `carrier`, and without the secret
+ * profile lines. Every tool the agent runs inherits this env, and a bash
+ * runbook script or tool shell would source BASH_ENV or ENV and import the
+ * functions.
  */
-function agentEnv(env, apiKey, carrier, drop = []) {
+function agentEnv(env, launch, carrier, drop = []) {
   const next = { ...env };
   for (const name of [...drop, ...SHELL_STARTUP_ENV]) delete next[name];
   for (const name of Object.keys(next))
     if (name.startsWith('BASH_FUNC_')) delete next[name];
+  for (const [name, value] of launch.secrets)
+    if (next[name] === value && name !== carrier) delete next[name];
   for (const [name, value] of Object.entries(next))
-    if (value === apiKey && name !== carrier) delete next[name];
+    if (value === launch.apiKey && name !== carrier) delete next[name];
   return next;
 }
 
@@ -247,7 +255,7 @@ export async function t3CodexPlan({ args, binaryPath, configDir, launch }) {
   return {
     argv: privilegedScriptArgv(command),
     env: {
-      ...agentEnv(command.env, launch.apiKey, 'SUBCONSCIOUS_API_KEY', [
+      ...agentEnv(command.env, launch, 'SUBCONSCIOUS_API_KEY', [
         'CODEX_API_KEY',
       ]),
       SUBC_CODEX_PROTOCOL_LAUNCH: '1',
@@ -321,7 +329,7 @@ export async function t3ClaudePlan({ args, binaryPath, launch }) {
       }),
     ],
     // Claude Code reads none of the catalog or picker copies.
-    env: agentEnv(command.env, launch.apiKey, 'ANTHROPIC_AUTH_TOKEN', [
+    env: agentEnv(command.env, launch, 'ANTHROPIC_AUTH_TOKEN', [
       'SUBC_CLAUDE_SETTINGS',
       'SUBCONSCIOUS_MODELS',
       'SUBC_MODEL_METADATA',
@@ -345,7 +353,7 @@ export async function t3OpenCodePlan({ args, binaryPath, launch }) {
   return {
     argv: privilegedScriptArgv(command),
     // The launch config holds these values already.
-    env: agentEnv(command.env, launch.apiKey, 'SUBCONSCIOUS_API_KEY', [
+    env: agentEnv(command.env, launch, 'SUBCONSCIOUS_API_KEY', [
       'GATEWAY_URL',
       'MODEL',
       'SUBCONSCIOUS_MODELS',

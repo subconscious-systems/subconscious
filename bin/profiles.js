@@ -231,7 +231,7 @@ function isTokenBudget(key, value) {
   );
 }
 
-function isSecretKey(key, value) {
+export function isSecretKey(key, value) {
   const upper = key.toUpperCase();
   return (
     upper.endsWith('API_KEY') ||
