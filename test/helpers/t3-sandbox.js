@@ -184,6 +184,14 @@ export async function t3Sandbox({
     `#!/bin/sh\nif [ "$1" = prefix ] && [ "$2" = -g ]; then echo ${shellWord(path.join(root, 'npm global'))}; exit 0; fi\nexit 1\n`,
     { mode: 0o755 },
   );
+  // A fake macOS `security`, first on PATH, so a launch with no key in the
+  // profile never reads the real Keychain. Exit 44 means "not found".
+  const keychainCalls = path.join(root, 'keychain calls');
+  await fs.writeFile(
+    path.join(bin, 'security'),
+    `#!/bin/sh\necho "$*" >> ${shellWord(keychainCalls)}\nexit 44\n`,
+    { mode: 0o755 },
+  );
   await fs.mkdir(path.join(subc, 'profiles'), { recursive: true });
   await fs.writeFile(path.join(bin, 'codex'), FAKE_CODEX, { mode: 0o755 });
   await fs.writeFile(
@@ -265,6 +273,7 @@ export async function t3Sandbox({
     tmp,
     t3Home,
     settingsPath,
+    keychainCalls,
     codexDir,
     subc,
     launcher: path.join(subc, 'bin', 'subc-t3-codex'),

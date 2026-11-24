@@ -529,6 +529,11 @@ for (const fixture of PROVIDERS) {
       assert.ok(!result.stderr.includes('sk-rejected-key'));
     }
     assert.deepEqual(await readRecords(log), []);
+    // The keyless profile made subc look in the Keychain: the fake one.
+    assert.match(
+      await fs.readFile(sandbox.keychainCalls, 'utf8'),
+      /^find-generic-password /m,
+    );
   });
 }
 
