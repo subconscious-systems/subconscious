@@ -46,18 +46,26 @@ export function passthroughPlan(binaryPath, args, env) {
 
 /**
  * The plan as records: unset, then env, then argv, then ok. A name in the env the adapter started with
- * that the plan leaves out is unset.
+ * that the plan leaves out is unset. Bash cannot unset a name that is not
+ * a shell word, such as an exported function's `BASH_FUNC_cd%%`, so the
+ * argv then starts with `/usr/bin/env -u NAME`.
  */
 export function encodePlan(plan, original) {
   const records = [];
+  const stuck = [];
   for (const name of Object.keys(original)) {
-    if (!(name in plan.env) && ENV_NAME.test(name)) records.push('unset', name);
+    if (name in plan.env) continue;
+    if (ENV_NAME.test(name)) records.push('unset', name);
+    else stuck.push('-u', name);
   }
   for (const [name, value] of Object.entries(plan.env)) {
     if (original[name] === value || !ENV_NAME.test(name)) continue;
     records.push('env', `${name}=${value}`);
   }
-  for (const word of plan.argv) records.push('arg', word);
+  const argv = stuck.length
+    ? ['/usr/bin/env', ...stuck, ...plan.argv]
+    : plan.argv;
+  for (const word of argv) records.push('arg', word);
   records.push('ok', '');
   if (records.some((record) => record.includes('\0')))
     throw new Error('A launch value contains a NUL byte');

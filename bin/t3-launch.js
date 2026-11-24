@@ -211,13 +211,16 @@ async function runbookCommand(launch, binaryPath, args) {
 }
 
 /**
- * `env` without `drop`, without BASH_ENV and ENV, and without every copy of
- * the key except `carrier`. Every tool the agent runs inherits this env, and
- * a bash runbook script or tool shell would source BASH_ENV or ENV.
+ * `env` without `drop`, without BASH_ENV, ENV, and exported bash functions,
+ * and without every copy of the key except `carrier`. Every tool the agent
+ * runs inherits this env, and a bash runbook script or tool shell would
+ * source BASH_ENV or ENV and import the functions.
  */
 function agentEnv(env, apiKey, carrier, drop = []) {
   const next = { ...env };
   for (const name of [...drop, ...SHELL_STARTUP_ENV]) delete next[name];
+  for (const name of Object.keys(next))
+    if (name.startsWith('BASH_FUNC_')) delete next[name];
   for (const [name, value] of Object.entries(next))
     if (value === apiKey && name !== carrier) delete next[name];
   return next;

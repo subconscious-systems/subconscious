@@ -439,6 +439,11 @@ for (const fixture of PROVIDERS) {
     assertStdout(fixture, result, record);
     assert.equal(record.env.BASH_ENV, undefined);
     assert.equal(record.env.ENV, undefined);
+    // The agent's tool shells would import an exported function.
+    assert.deepEqual(
+      Object.keys(record.env).filter((name) => name.startsWith('BASH_FUNC_')),
+      [],
+    );
     const version = await launch(fixture, sandbox, ['--version'], { env });
     assert.equal(version.stdout, fixture.versionOutput);
     await assert.rejects(fs.lstat(marker), { code: 'ENOENT' });
