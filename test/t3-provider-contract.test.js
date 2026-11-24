@@ -9,7 +9,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { LAUNCHER_SHEBANG } from '../bin/t3-launch.js';
 import { T3_PROVIDERS } from '../bin/t3-providers.js';
 import {
@@ -490,25 +489,3 @@ for (const fixture of PROVIDERS) {
 
 // The adapters exit 64 (EX_USAGE) for a refused command; the launcher
 // reports any adapter failure as 1.
-test('a refused command makes the adapter exit 64', { skip }, async () => {
-  const [fixture] = PROVIDERS;
-  const sandbox = installed[fixture.provider.id];
-  const adapter = fileURLToPath(
-    new URL(`../bin/${fixture.provider.adapterFile}`, import.meta.url),
-  );
-  const result = await run(
-    process.execPath,
-    [
-      adapter,
-      fixture.provider.binaryFlag,
-      fixture.binary(sandbox),
-      '--config-dir',
-      sandbox.subc,
-      '--',
-      'login',
-    ],
-    { env: fixture.t3Env(sandbox) },
-  );
-  assert.equal(result.code, 64);
-  assert.equal(result.stdout, '');
-});

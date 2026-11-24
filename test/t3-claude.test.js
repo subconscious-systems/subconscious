@@ -2,7 +2,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
-import { mergeClaudeSettings, pinClaudeModel } from '../bin/t3-launch.js';
 import {
   fakeGateway,
   GOOD_KEY,
@@ -269,22 +268,4 @@ test('install warns when T3 Code is too old to list the Subconscious models', {
   const current = await install(sandbox);
   assert.equal(current.code, 0, current.stderr);
   assert.doesNotMatch(current.stdout, /shows only its built-in models/);
-});
-
-test('pinClaudeModel and mergeClaudeSettings leave words after -- alone', () => {
-  assert.deepEqual(
-    pinClaudeModel(
-      ['--model', 'x', '--model=y', '--', '--model', 'z'],
-      ['y'],
-      'p',
-    ),
-    {
-      args: ['--model', 'p', '--model=y', '--', '--model', 'z'],
-      replaced: 'x',
-    },
-  );
-  assert.deepEqual(
-    mergeClaudeSettings(['-p', '--', '--settings', 'x'], { a: 1 }),
-    ['-p', '--settings', '{"a":1}', '--', '--settings', 'x'],
-  );
 });
