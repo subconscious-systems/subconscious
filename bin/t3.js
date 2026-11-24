@@ -58,7 +58,7 @@ const PROVIDER_KEYS = T3_PROVIDERS.map((provider) => provider.id);
 export function printT3Help() {
   console.log(`
 Usage:
-  subc t3 install [--provider NAME]... [--dry-run]
+  subc t3 install [--provider NAME]...
   subc t3 status [--provider NAME]...
   subc t3 uninstall [--provider NAME]...
   subc t3 help
@@ -70,7 +70,6 @@ models: Subconscious (Codex), Subconscious (Claude), and Subconscious
   install            Check each CLI, the default profile's key, and the live
                      model catalog. Then write a launcher per provider in
                      ~/.subconscious/bin and add its entry to T3 Code.
-  install --dry-run  Run every check and print the plan. Change nothing.
   status             Show what is installed. Needs no network or key.
   uninstall          Remove the entries and the launchers. Threads stay.
   --provider NAME    Act on one provider: codex, claude, or opencode.
@@ -345,7 +344,7 @@ async function installOne(paths, { provider, target, script }) {
   return 0;
 }
 
-async function install({ dryRun, providers, explicit }) {
+async function install({ providers, explicit }) {
   const paths = t3Paths(configDir());
   const found = [];
   const skipped = [];
@@ -399,7 +398,7 @@ async function install({ dryRun, providers, explicit }) {
 
   const { report } = ready[0];
   console.log(
-    `\n  ${c.bold}${dryRun ? 'Plan' : 'Installing'}: Subconscious providers in T3 Code${c.reset}\n`,
+    `\n  ${c.bold}Installing: Subconscious providers in T3 Code${c.reset}\n`,
   );
   line(
     'T3 Code',
@@ -414,10 +413,6 @@ async function install({ dryRun, providers, explicit }) {
       `${c.yellow}${item.provider.displayName}: ${item.message}${c.reset}`,
     );
   console.log('');
-  if (dryRun) {
-    console.log(`  ${c.dim}Dry run: nothing was changed.${c.reset}\n`);
-    return 0;
-  }
 
   await privateDir(paths.root);
   let code = 0;
@@ -570,12 +565,9 @@ async function uninstall({ providers }) {
 
 function parseOptions(action, args) {
   const keys = [];
-  let dryRun = false;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (action === 'install' && arg === '--dry-run') {
-      dryRun = true;
-    } else if (arg === '--provider') {
+    if (arg === '--provider') {
       const key = args[++i];
       if (!PROVIDER_KEYS.includes(key))
         throw new Error(
@@ -587,7 +579,6 @@ function parseOptions(action, args) {
     }
   }
   return {
-    dryRun,
     explicit: keys.length > 0,
     providers: keys.length
       ? T3_PROVIDERS.filter((provider) => keys.includes(provider.id))

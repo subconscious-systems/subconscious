@@ -63,20 +63,6 @@ after(async () => {
   await gateway?.close();
 });
 
-test('install --dry-run checks everything and writes nothing', {
-  skip,
-}, async () => {
-  const sandbox = await box();
-  const before = await snapshot(sandbox.home);
-  const requests = gateway.requests.length;
-  const result = await subc(sandbox, ['t3', 'install', '--dry-run']);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /Plan: Subconscious providers in T3 Code/);
-  assert.match(result.stdout, /Dry run: nothing was changed/);
-  assert.deepEqual(await snapshot(sandbox.home), before);
-  assert.ok(gateway.requests.length > requests, 'the live catalog was read');
-});
-
 test('a second install changes nothing', { skip }, async () => {
   const sandbox = await installedBox();
   const files = [sandbox.settingsPath, sandbox.launcher];
@@ -579,13 +565,19 @@ test('without --provider, an old or missing CLI is skipped; with it, install ref
   assert.match(none.stderr, /Codex 0\.142\.0 is older/);
 });
 
-test('--provider refuses an unknown name', { skip }, async () => {
-  const result = await subc(installed, [
+test('install refuses an unknown provider or option', { skip }, async () => {
+  const provider = await subc(installed, [
     't3',
     'install',
     '--provider',
     'cursor',
   ]);
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /Unknown provider: cursor/);
+  assert.equal(provider.code, 1);
+  assert.match(provider.stderr, /Unknown provider: cursor/);
+  const option = await subc(installed, ['t3', 'install', '--dry-run']);
+  assert.equal(option.code, 1);
+  assert.match(
+    option.stderr,
+    /Unknown argument for subc t3 install: --dry-run/,
+  );
 });

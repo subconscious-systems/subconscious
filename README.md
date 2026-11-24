@@ -193,7 +193,6 @@ Each launch pins the gateway in its `--settings` value, so a settings file canno
 `subc t3 install` adds three providers to T3 Code: Subconscious (Codex), Subconscious (Claude), and Subconscious (OpenCode). Each one runs that CLI on your hosted Subconscious models. The Claude and OpenCode providers are in beta. `subc t3` supports macOS and Linux, and the default profile only.
 
 ```bash
-subc t3 install --dry-run         # run every check and print the plan
 subc t3 install                   # every provider whose CLI is found
 subc t3 install --provider claude # one provider; repeat --provider for more
 subc t3 status                    # needs no network and no key
