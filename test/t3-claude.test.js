@@ -163,6 +163,16 @@ test('text generation keeps its argv order and its stdin', {
     ...args.slice(7),
   ]);
   assertSubcSettings(settingsOf(record.args)[0]);
+  // Words after -- are prompt text: the model pin and the settings merge
+  // leave them alone.
+  const tail = ['--', '--model', 'claude-opus-5-5', '--settings', 'x'];
+  const prompt = await launch(sandbox, ['-p', ...tail], { log });
+  assert.equal(prompt.code, 0, prompt.stderr);
+  assert.equal(prompt.stderr, '', 'no fallback line for a word after --');
+  const [, last] = await readRecords(log);
+  const head = last.args.slice(0, -tail.length);
+  assert.deepEqual(last.args.slice(-tail.length), tail);
+  assert.equal(head.filter((arg) => arg === '--settings').length, 1);
 });
 
 test('a --settings value cannot move the gateway, and its other keys stay', {
