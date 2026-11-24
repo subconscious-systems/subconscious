@@ -275,6 +275,12 @@ export async function t3CodexPlan({ args, codexPath, paths, launch }) {
   // switched the provider back to OpenAI must not find the Subconscious key
   // there.
   const { CODEX_API_KEY: _openaiKey, ...codexEnv } = command.env;
+  // run.sh reads the key from SUBCONSCIOUS_API_KEY alone. Every other copy,
+  // such as API_KEY or a profile line that holds the key, is removed, because
+  // every tool that Codex runs inherits this env.
+  for (const [name, value] of Object.entries(codexEnv))
+    if (value === launch.apiKey && name !== 'SUBCONSCIOUS_API_KEY')
+      delete codexEnv[name];
   // run.sh is a bash script, and its stdout is the app-server protocol.
   for (const name of SHELL_STARTUP_ENV) delete codexEnv[name];
   return {
@@ -465,12 +471,15 @@ export async function t3ClaudePlan({
   for (const [name, value] of Object.entries(claudeEnv))
     if (value === launch.apiKey && !CLAUDE_KEY_CARRIERS.has(name))
       delete claudeEnv[name];
+  // Claude Code's tool shells are bash, and they would source these files.
+  for (const name of SHELL_STARTUP_ENV) delete claudeEnv[name];
   return {
     argv: [
       claudePath,
       ...mergeClaudeSettings(command.args.slice(2), picker, cwd),
     ],
     env: claudeEnv,
+    unset: SHELL_STARTUP_ENV,
     fallback: pinned.replaced
       ? { requested: pinned.replaced, model: launch.model }
       : null,

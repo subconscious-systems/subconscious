@@ -85,16 +85,11 @@ const FIXTURES = {
       ['app-server', 'daemon', 'start'],
       ['-c', 'x=1', 'features', 'enable', 'apps'],
     ],
-    // Codex reads the key from SUBCONSCIOUS_API_KEY. The plan also keeps
-    // API_KEY, which runbookEnv sets to the key.
-    keyCarriers: ['API_KEY', 'SUBCONSCIOUS_API_KEY'],
-    // The Codex plan does not remove the other copies of the key that the
-    // default profile holds, as the Claude and OpenCode plans do. The check
-    // pins that, so a change shows up here. It is reported for review.
-    sweepsProfileCopies: false,
+    keyCarriers: ['SUBCONSCIOUS_API_KEY'],
     // Codex's OpenAI credential stays empty, so a launch switched back to
     // OpenAI has no key to send.
     unset: [
+      'API_KEY',
       'CODEX_API_KEY',
       'SUBCONSCIOUS_BASE_URL',
       'SUBCONSCIOUS_MODEL',
@@ -200,12 +195,6 @@ const FIXTURES = {
       ['update', 'now'],
     ],
     keyCarriers: ['ANTHROPIC_AUTH_TOKEN', 'OTEL_EXPORTER_OTLP_HEADERS'],
-    sweepsProfileCopies: true,
-    // The Claude plan runs no runbook script, so it unsets neither name, and
-    // a BASH_ENV line in the default profile reaches Claude Code like any
-    // other profile line. Its tool shells then source that file. The check
-    // pins that, and it is reported for review.
-    keepsProfileBashEnv: true,
     unset: [
       'ANTHROPIC_API_KEY',
       'API_KEY',
@@ -309,7 +298,6 @@ const FIXTURES = {
       ['--standalone'],
     ],
     keyCarriers: ['SUBCONSCIOUS_API_KEY'],
-    sweepsProfileCopies: true,
     unset: [
       'API_KEY',
       'OPENCODE_API_KEY',
@@ -1052,19 +1040,12 @@ for (const fixture of PROVIDERS) {
     const result = await launch(fixture, sandbox, fixture.configured, { log });
     assert.equal(result.code, 0, result.stderr);
     const [record] = await readRecords(log);
-    const copies = fixture.sweepsProfileCopies ? [] : PROFILE_COPIES;
-    assert.deepEqual(
-      keyHolders(record.env),
-      [...fixture.keyCarriers, ...copies].sort(),
-    );
+    assert.deepEqual(keyHolders(record.env), [...fixture.keyCarriers].sort());
     for (const key of fixture.unset)
       assert.equal(record.env[key], undefined, key);
     assert.ok(
       Object.keys(record.env).every(
-        (key) =>
-          !key.startsWith('SUBC_') ||
-          copies.includes(key) ||
-          fixture.subcNames?.includes(key),
+        (key) => !key.startsWith('SUBC_') || fixture.subcNames?.includes(key),
       ),
       'no SUBC_* name reaches the agent',
     );
@@ -1163,9 +1144,8 @@ for (const fixture of PROVIDERS) {
     assert.equal(result.code, 0, result.stderr);
     const [record] = await readRecords(log);
     assertStdout(fixture, result, record);
-    const kept = fixture.keepsProfileBashEnv ? startup : undefined;
-    assert.equal(record.env.BASH_ENV, kept);
-    assert.equal(record.env.ENV, kept);
+    assert.equal(record.env.BASH_ENV, undefined);
+    assert.equal(record.env.ENV, undefined);
   });
 
   test(name(
