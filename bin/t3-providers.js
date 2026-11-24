@@ -75,12 +75,15 @@ const CLAUDE = Object.freeze({
   clearedFields: Object.freeze(['launchArgs']),
   // Each of these routes Claude Code away from the default profile, or signs
   // it in another way. CLAUDE_CODE_USE_* and CLAUDE_CODE_SKIP_* pick and
-  // authenticate a provider, such as Bedrock, Mantle, or a gateway.
+  // authenticate a provider, such as Bedrock, Mantle, or a gateway. The last
+  // two let a host set Claude Code's endpoint or provider for it.
   extraIsolatedEnv: Object.freeze([
     'ANTHROPIC_*',
     'CLAUDE_CODE_OAUTH_TOKEN',
     'CLAUDE_CODE_USE_*',
     'CLAUDE_CODE_SKIP_*',
+    'CLAUDE_CODE_API_BASE_URL',
+    'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
   ]),
   // Claude Code --version writes nothing.
   versionProbeEnv: null,

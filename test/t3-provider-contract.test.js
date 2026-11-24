@@ -129,6 +129,8 @@ const FIXTURES = {
       CLAUDE_CODE_USE_GATEWAY: '1',
       CLAUDE_CODE_USE_MANTLE: '1',
       CLAUDE_CODE_SKIP_MANTLE_AUTH: '1',
+      CLAUDE_CODE_API_BASE_URL: 'http://127.0.0.1:9/evil-api',
+      CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: '1',
       CLAUDE_GATEWAY_URL: 'http://127.0.0.1:9/evil-claude',
       COMPACT_WINDOW: '123456',
     }),
@@ -140,6 +142,8 @@ const FIXTURES = {
         'CLAUDE_CODE_USE_GATEWAY',
         'CLAUDE_CODE_USE_MANTLE',
         'CLAUDE_CODE_SKIP_MANTLE_AUTH',
+        'CLAUDE_CODE_API_BASE_URL',
+        'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
       ])
         assert.equal(env[name], undefined, name);
       assert.equal(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '1000000');
