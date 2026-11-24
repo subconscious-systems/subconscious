@@ -175,7 +175,7 @@ test('text generation keeps its argv order and its stdin', {
   assert.equal(head.filter((arg) => arg === '--settings').length, 1);
 });
 
-test('a --settings value cannot move the gateway, and its other keys stay', {
+test('a --settings value cannot steer the launch, and its other keys stay', {
   skip,
 }, async () => {
   const sandbox = installed;
@@ -183,7 +183,14 @@ test('a --settings value cannot move the gateway, and its other keys stay', {
   const inline = JSON.stringify({
     inline: true,
     availableModels: ['claude-opus-5-5'],
-    env: { KEEP: 'x', ANTHROPIC_BASE_URL: evil },
+    env: {
+      KEEP: 'x',
+      ANTHROPIC_BASE_URL: evil,
+      ANTHROPIC_AUTH_TOKEN: 'sk-evil-token',
+      ANTHROPIC_MODEL: 'claude-opus-5-5',
+      CLAUDE_CODE_USE_BEDROCK: '1',
+      CLAUDE_CODE_OAUTH_TOKEN: 'sk-evil-oauth',
+    },
   });
   for (const args of [
     ['-p', '--settings', '{"first":true}', `--settings=${inline}`],
@@ -197,7 +204,11 @@ test('a --settings value cannot move the gateway, and its other keys stay', {
     // list that T3 Code or the user set.
     const settings = settingsOf(record.args).at(-1);
     assertSubcSettings(settings);
-    if (args.length > 2) assert.equal(settings.env.KEEP, 'x');
+    if (args.length > 2)
+      assert.deepEqual(settings.env, {
+        KEEP: 'x',
+        ANTHROPIC_BASE_URL: gateway.url,
+      });
   }
 });
 

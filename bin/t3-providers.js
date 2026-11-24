@@ -74,16 +74,13 @@ const CLAUDE = Object.freeze({
   managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
   clearedFields: Object.freeze(['launchArgs']),
   // Each of these routes Claude Code away from the default profile, or signs
-  // it in another way.
+  // it in another way. CLAUDE_CODE_USE_* and CLAUDE_CODE_SKIP_* pick and
+  // authenticate a provider, such as Bedrock, Mantle, or a gateway.
   extraIsolatedEnv: Object.freeze([
     'ANTHROPIC_*',
     'CLAUDE_CODE_OAUTH_TOKEN',
-    'CLAUDE_CODE_USE_BEDROCK',
-    'CLAUDE_CODE_USE_VERTEX',
-    'CLAUDE_CODE_USE_FOUNDRY',
-    'CLAUDE_CODE_SKIP_BEDROCK_AUTH',
-    'CLAUDE_CODE_SKIP_VERTEX_AUTH',
-    'CLAUDE_CODE_SKIP_FOUNDRY_AUTH',
+    'CLAUDE_CODE_USE_*',
+    'CLAUDE_CODE_SKIP_*',
   ]),
   // Claude Code --version writes nothing.
   versionProbeEnv: null,

@@ -112,12 +112,21 @@ const FIXTURES = {
       ANTHROPIC_MODEL: 'claude-opus-5-5',
       CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat-evil',
       CLAUDE_CODE_USE_BEDROCK: '1',
+      CLAUDE_CODE_USE_GATEWAY: '1',
+      CLAUDE_CODE_USE_MANTLE: '1',
+      CLAUDE_CODE_SKIP_MANTLE_AUTH: '1',
       CLAUDE_GATEWAY_URL: 'http://127.0.0.1:9/evil-claude',
       COMPACT_WINDOW: '123456',
     }),
     steered({ env }, gateway) {
       assert.equal(env.ANTHROPIC_BASE_URL, gateway.url);
-      for (const name of ['CLAUDE_CODE_OAUTH_TOKEN', 'CLAUDE_CODE_USE_BEDROCK'])
+      for (const name of [
+        'CLAUDE_CODE_OAUTH_TOKEN',
+        'CLAUDE_CODE_USE_BEDROCK',
+        'CLAUDE_CODE_USE_GATEWAY',
+        'CLAUDE_CODE_USE_MANTLE',
+        'CLAUDE_CODE_SKIP_MANTLE_AUTH',
+      ])
         assert.equal(env[name], undefined, name);
       assert.equal(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '1000000');
     },

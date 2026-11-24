@@ -15,15 +15,18 @@ const isPlainObject = (value) =>
 
 /**
  * `settings` with subc's keys from `extra` on top. `env` is merged name by
- * name, so the other env names in `settings` stay and subc's names win.
+ * name, so the other env names in `settings` stay and subc's names win. A
+ * name in `settings.env` that `dropEnv` matches is removed first.
  */
-export function withSubcSettings(settings, extra) {
+export function withSubcSettings(settings, extra, dropEnv = () => false) {
   const merged = { ...settings, ...extra };
-  if (extra.env)
-    merged.env = {
-      ...(isPlainObject(settings.env) ? settings.env : {}),
-      ...extra.env,
-    };
+  if (extra.env) {
+    const own = isPlainObject(settings.env) ? settings.env : {};
+    merged.env = Object.fromEntries(
+      Object.entries(own).filter(([name]) => !dropEnv(name)),
+    );
+    Object.assign(merged.env, extra.env);
+  }
   return merged;
 }
 
@@ -75,10 +78,10 @@ const SETTINGS_UNREADABLE =
 /**
  * Merge `extra` into the last `--settings` value before any `--` in `args`,
  * which is the value Claude Code uses. With none, add one there, unless
- * `add` is false. A value that is not a JSON object, such as a file path,
- * stops the launch.
+ * `add` is false. `dropEnv` removes names from that value's `env`. A value
+ * that is not a JSON object, such as a file path, stops the launch.
  */
-export function mergeClaudeSettings(args, extra, { add = true } = {}) {
+export function mergeClaudeSettings(args, extra, { add = true, dropEnv } = {}) {
   let end = args.indexOf('--');
   if (end < 0) end = args.length;
   let last = -1;
@@ -106,7 +109,7 @@ export function mergeClaudeSettings(args, extra, { add = true } = {}) {
   return [
     ...args.slice(0, last),
     '--settings',
-    JSON.stringify(withSubcSettings(settings, extra)),
+    JSON.stringify(withSubcSettings(settings, extra, dropEnv)),
     ...args.slice(last + (inline ? 1 : 2)),
   ];
 }
