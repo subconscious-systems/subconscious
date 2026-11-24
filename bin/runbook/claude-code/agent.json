@@ -198,12 +198,9 @@
         "modelPicker": {
           "replaceBuiltInOptions": true,
           "options": "one entry per catalog model"
-        },
-        "env": {
-          "ANTHROPIC_BASE_URL": "${ANTHROPIC_BASE_URL}"
         }
       },
-      "description": "Replaces the built-in model picker with the live catalog and allowlists only those models. Its env pins ANTHROPIC_BASE_URL to the launch value. Flag settings win over every settings file, so a repo's or the user's settings cannot send the key to another host. The URL is not a secret."
+      "description": "Replaces the built-in model picker with the live catalog and allowlists only those models."
     },
     {
       "kind": "file",

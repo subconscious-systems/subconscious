@@ -9,7 +9,6 @@ import {
   resolveInputs,
   takeFlags,
 } from '../bin/agent-launch.js';
-import { handoffLaunchArgs, nativeResumeArgs } from '../bin/sessions.js';
 
 const codex = agentById('codex');
 const claude = agentById('claude-code');
@@ -20,11 +19,6 @@ const base = {
   SUBCONSCIOUS_MODELS: 'subconscious/glm-5.3-marathon',
   SUBC_CLAUDE_SETTINGS: '{"availableModels":[]}',
 };
-// base.SUBC_CLAUDE_SETTINGS with the launch gateway pinned in its env.
-const PINNED_SETTINGS = JSON.stringify({
-  availableModels: [],
-  env: { ANTHROPIC_BASE_URL: 'https://gateway.example' },
-});
 
 test('flags take a value, an = value, or set a fixed value, until --', () => {
   const { values, rest } = takeFlags(codex, [
@@ -229,7 +223,15 @@ test('every headless agent runs exactly this argv and stdin', () => {
   ].flatMap((pair) => ['-c', pair]);
   const expected = {
     'claude-code': {
-      argv: ['claude', '--settings', PINNED_SETTINGS, '--x', '-p', '--', 'P'],
+      argv: [
+        'claude',
+        '--settings',
+        base.SUBC_CLAUDE_SETTINGS,
+        '--x',
+        '-p',
+        '--',
+        'P',
+      ],
       stdin: 'ignore',
     },
     codex: {
@@ -283,7 +285,7 @@ test('interactive launches run exactly this argv', () => {
   assert.deepEqual(run('claude-code', ['--continue']), [
     'claude',
     '--settings',
-    PINNED_SETTINGS,
+    base.SUBC_CLAUDE_SETTINGS,
     '--continue',
   ]);
   assert.deepEqual(run('opencode', ['--', '--continue']), [
@@ -302,83 +304,4 @@ test('interactive launches run exactly this argv', () => {
     run('codex').at(-1),
     'model_providers.subconscious.stream_idle_timeout_ms=900000',
   );
-});
-
-test('every subc claude launch pins its gateway in --settings', () => {
-  const key = 'sk-launch-secret';
-  const env = { ...base, API_KEY: key };
-  const own = 'https://claude-only.example';
-  const flagged = 'https://flag.example';
-  // A settings env of its own keeps its other names, and the pin wins.
-  const picker = JSON.stringify({
-    availableModels: ['m1'],
-    env: { KEEP: 'x', ANTHROPIC_BASE_URL: 'https://evil.example' },
-  });
-  const forms = {
-    resume: [
-      { env, args: nativeResumeArgs({ harness: 'claude', id: 'abc' }) },
-      base.GATEWAY_URL,
-    ],
-    handoff: [
-      { env, args: handoffLaunchArgs('claude', 'ctx') },
-      base.GATEWAY_URL,
-    ],
-    CLAUDE_GATEWAY_URL: [{ env: { ...env, CLAUDE_GATEWAY_URL: own } }, own],
-    '--gateway-url': [{ env, args: ['--gateway-url', flagged] }, flagged],
-    picker: [
-      { env: { ...env, SUBC_CLAUDE_SETTINGS: picker } },
-      base.GATEWAY_URL,
-    ],
-  };
-  for (const [form, [options, gateway]] of Object.entries(forms)) {
-    const plan = launchPlan(claude, options);
-    const at = plan.argv.indexOf('--settings');
-    assert.equal(plan.argv.lastIndexOf('--settings'), at, form);
-    const { env: pinned } = JSON.parse(plan.argv[at + 1]);
-    assert.deepEqual(
-      pinned,
-      form === 'picker'
-        ? { KEEP: 'x', ANTHROPIC_BASE_URL: gateway }
-        : { ANTHROPIC_BASE_URL: gateway },
-      form,
-    );
-    assert.equal(plan.env.ANTHROPIC_AUTH_TOKEN, key, form);
-    assert.ok(!plan.argv.some((word) => word.includes(key)), form);
-  }
-  // Claude Code uses the last --settings value, which is the user's own. The
-  // pin is merged into it, and its other keys stay.
-  const user = JSON.stringify({
-    theme: 'dark',
-    env: { ANTHROPIC_BASE_URL: 'https://evil.example' },
-  });
-  for (const [form, options] of Object.entries({
-    interactive: { env, args: ['--settings', user] },
-    inline: { env, args: [`--settings=${user}`, '-c'] },
-    headless: { env, args: ['--settings', user], prompt: 'hi' },
-  })) {
-    const { argv } = launchPlan(claude, options);
-    const last = JSON.parse(argv[argv.lastIndexOf('--settings') + 1]);
-    assert.equal(last.theme, 'dark', form);
-    assert.equal(last.env.ANTHROPIC_BASE_URL, base.GATEWAY_URL, form);
-    assert.ok(!argv.some((word) => word.startsWith('--settings=')), form);
-  }
-  assert.throws(
-    () => launchPlan(claude, { env, args: ['--settings', '/me/sk-hidden'] }),
-    (error) =>
-      /not a JSON object/.test(error.message) &&
-      !error.message.includes('sk-hidden'),
-  );
-  const refused = (extra) => () =>
-    launchPlan(claude, { env: { ...base, ...extra } });
-  assert.throws(
-    refused({ SUBC_CLAUDE_SETTINGS: 'not json sk-hidden' }),
-    (error) =>
-      /must be a JSON object/.test(error.message) &&
-      !error.message.includes('sk-hidden'),
-  );
-  assert.throws(
-    refused({ GATEWAY_URL: 'https://gw.example/sk-shared' }),
-    /ANTHROPIC_BASE_URL holds the API key/,
-  );
-  assert.throws(refused({ GATEWAY_URL: '' }), /no ANTHROPIC_BASE_URL/);
 });

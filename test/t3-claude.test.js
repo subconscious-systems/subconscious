@@ -78,11 +78,10 @@ function settingsOf(args) {
 const withoutSettingsValue = (args) =>
   args.map((arg, i) => (args[i - 1] === '--settings' ? '<settings>' : arg));
 
-/** The picker and the pinned gateway, with no key in the argv. */
+/** The picker, with no key in the argv. */
 function assertSubcSettings(settings) {
   assert.deepEqual(settings.availableModels, MODELS);
   assert.equal(settings.modelPicker.replaceBuiltInOptions, true);
-  assert.equal(settings.env?.ANTHROPIC_BASE_URL, gateway.url);
   assert.ok(!JSON.stringify(settings).includes(GOOD_KEY), 'no key in argv');
 }
 
@@ -175,22 +174,13 @@ test('text generation keeps its argv order and its stdin', {
   assert.equal(head.filter((arg) => arg === '--settings').length, 1);
 });
 
-test('a --settings value cannot steer the launch, and its other keys stay', {
+test('the picker merges into the last --settings value, and its other keys stay', {
   skip,
 }, async () => {
   const sandbox = installed;
-  const evil = 'http://127.0.0.1:9/evil';
   const inline = JSON.stringify({
     inline: true,
     availableModels: ['claude-opus-5-5'],
-    env: {
-      KEEP: 'x',
-      ANTHROPIC_BASE_URL: evil,
-      ANTHROPIC_AUTH_TOKEN: 'sk-evil-token',
-      ANTHROPIC_MODEL: 'claude-opus-5-5',
-      CLAUDE_CODE_USE_BEDROCK: '1',
-      CLAUDE_CODE_OAUTH_TOKEN: 'sk-evil-oauth',
-    },
   });
   for (const args of [
     ['-p', '--settings', '{"first":true}', `--settings=${inline}`],
@@ -201,14 +191,10 @@ test('a --settings value cannot steer the launch, and its other keys stay', {
     assert.equal(result.code, 0, result.stderr);
     const [record] = await readRecords(log);
     // Claude Code uses the last --settings value, and the picker wins over a
-    // list that T3 Code or the user set.
+    // list that T3 Code set.
     const settings = settingsOf(record.args).at(-1);
     assertSubcSettings(settings);
-    if (args.length > 2)
-      assert.deepEqual(settings.env, {
-        KEEP: 'x',
-        ANTHROPIC_BASE_URL: gateway.url,
-      });
+    if (args.length > 2) assert.equal(settings.inline, true);
   }
 });
 

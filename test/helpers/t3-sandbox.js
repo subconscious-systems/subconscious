@@ -77,14 +77,11 @@ const FAKE_CLAUDE = fakeAgent('claude', {
   ),
 });
 
-// A fake opencode. Its version check writes its log under XDG_DATA_HOME, as
-// the real OpenCode does. A launch records the parsed launch config. Only
-// `serve` prints the one line T3 Code waits for.
+// A fake opencode. A launch records the parsed launch config. Only `serve`
+// prints the one line T3 Code waits for.
 const FAKE_OPENCODE = fakeAgent('opencode', {
   version: '2.3.0',
   versionLine: "'opencode v' + version",
-  versionFile:
-    "path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'opencode', 'log', 'opencode.log')",
   record: `(() => {
   let config = null;
   try {
@@ -98,11 +95,6 @@ const FAKE_OPENCODE = fakeAgent('opencode', {
 }
 process.stdout.write('server listening on http://127.0.0.1:4096\\n');`,
 });
-
-// The user's own Claude Code files. Install and launches must leave them as
-// they are.
-const USER_CLAUDE_SETTINGS = `${JSON.stringify({ model: 'opus', env: { USER_SETTING: '1' } }, null, 2)}\n`;
-const USER_CLAUDE_JSON = `${JSON.stringify({ projects: { '/x': { hasTrustDialogAccepted: true } } }, null, 2)}\n`;
 
 const shellWord = (text) => `'${text.replaceAll("'", "'\\''")}'`;
 
@@ -224,8 +216,6 @@ export async function t3Sandbox({
   );
   // With withClaude, a fake Claude Code installed the way the native
   // installer does it: ~/.local/bin/claude links to a versioned file.
-  const claudeDir = path.join(home, '.claude');
-  const claudeJson = path.join(home, '.claude.json');
   const claudeBin = path.join(home, '.local', 'bin', 'claude');
   const claudeVersions = path.join(
     home,
@@ -240,12 +230,6 @@ export async function t3Sandbox({
     const versioned = path.join(claudeVersions, '2.1.326');
     await fs.writeFile(versioned, FAKE_CLAUDE, { mode: 0o755 });
     await fs.symlink(versioned, claudeBin);
-    await fs.mkdir(claudeDir, { recursive: true });
-    await fs.writeFile(
-      path.join(claudeDir, 'settings.json'),
-      USER_CLAUDE_SETTINGS,
-    );
-    await fs.writeFile(claudeJson, USER_CLAUDE_JSON);
   }
   // With withOpenCode, a fake OpenCode installed by npm into the fake bin.
   const opencodeBin = path.join(bin, 'opencode');
@@ -279,16 +263,10 @@ export async function t3Sandbox({
     launcher: path.join(subc, 'bin', 'subc-t3-codex'),
     codexHome: codexDir,
     catalogDir: path.join(subc, 't3', 'codex', 'catalog'),
-    claudeDir,
-    claudeJson,
     claudeBin,
     claudeLauncher: path.join(subc, 'bin', 'subc-t3-claude'),
     opencodeBin,
     opencodeLauncher: path.join(subc, 'bin', 'subc-t3-opencode'),
-    // The user's own OpenCode folders. Install and launches write nothing
-    // there.
-    opencodeConfigDir: path.join(home, '.config', 'opencode'),
-    opencodeDataDir: path.join(home, '.local', 'share', 'opencode'),
   };
   return {
     ...paths,
@@ -404,18 +382,4 @@ export async function snapshot(dir) {
   };
   await walk(dir);
   return entries;
-}
-
-/**
- * Exported bash functions as T3 Code's env could carry them, for example
- * from `export -f cd`. Each one writes a marker file and prints, so a test
- * sees whether any shell ran it.
- */
-export function exportedFunctions(marker) {
-  const body = (name) =>
-    `() { echo ${name} >> '${marker}'; echo HIJACKED-${name}; }`;
-  return {
-    'BASH_FUNC_cd%%': body('cd'),
-    'BASH_FUNC_dirname%%': body('dirname'),
-  };
 }

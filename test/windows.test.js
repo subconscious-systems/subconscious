@@ -309,10 +309,7 @@ test('Windows Claude launch retains model, subagent and picker settings', async 
   assert.equal(launch.command, 'claude');
   assert.deepEqual(launch.args, [
     '--settings',
-    JSON.stringify({
-      availableModels: [],
-      env: { ANTHROPIC_BASE_URL: 'https://gateway.example' },
-    }),
+    '{"availableModels":[]}',
     '--continue',
   ]);
   assert.equal(launch.env.ANTHROPIC_AUTH_TOKEN, 'sk-test');

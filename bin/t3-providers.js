@@ -2,7 +2,7 @@
  * The provider table for `subc t3`. A provider is one T3 Code integration
  * that subc owns: one T3 Code instance entry, one launcher, and one adapter.
  * Everything that differs between providers lives in its descriptor here.
- * This file imports only `node:path`, so every other t3 module can load it.
+ * This file is plain data, so every other t3 module can load it.
  *
  * Descriptor fields that need more than their name:
  *
@@ -17,9 +17,6 @@
  *   decides ownership instead.
  * - `clearedFields`: `config` fields subc removes, because they change how
  *   T3 Code starts the agent. A value in one is drift.
- * - `extraIsolatedEnv`: env names the launch removes from T3 Code's env, on
- *   top of `SUBC_*`, `SUBCONSCIOUS_*`, and every input, alias, and override
- *   name in the agent file. A trailing `*` removes a prefix.
  * - `versionProbeEnv(dir)`: env for the `--version` check, so that it writes
  *   into the throwaway `dir` and not into the user's agent home, or `null`.
  * - `minimumVersion`: the oldest version install accepts, on top of the
@@ -29,8 +26,6 @@
  * - `t3Version`: the oldest T3 Code that lists the provider's Subconscious
  *   models. Install warns below it.
  */
-
-import path from 'node:path';
 
 const CODEX = Object.freeze({
   id: 'codex',
@@ -50,7 +45,6 @@ const CODEX = Object.freeze({
     homePath,
   }),
   clearedFields: Object.freeze(['shadowHomePath', 'launchArgs']),
-  extraIsolatedEnv: Object.freeze([]),
   // Codex writes helper files under CODEX_HOME/tmp even for --version.
   versionProbeEnv: (dir) => ({ CODEX_HOME: dir }),
   minimumVersion: null,
@@ -72,20 +66,7 @@ const CLAUDE = Object.freeze({
   // the user's ~/.claude, as plain subc claude does.
   homeDir: null,
   managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
-  clearedFields: Object.freeze(['launchArgs']),
-  // Each of these routes Claude Code away from the default profile, or signs
-  // it in another way. CLAUDE_CODE_USE_* and CLAUDE_CODE_SKIP_* pick and
-  // authenticate a provider, such as Bedrock, Mantle, or a gateway. The last
-  // two let a host set Claude Code's endpoint or provider for it.
-  extraIsolatedEnv: Object.freeze([
-    'ANTHROPIC_*',
-    'CLAUDE_CODE_OAUTH_TOKEN',
-    'CLAUDE_CODE_USE_*',
-    'CLAUDE_CODE_SKIP_*',
-    'CLAUDE_CODE_API_BASE_URL',
-    'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
-  ]),
-  // Claude Code --version writes nothing.
+  clearedFields: Object.freeze([]),
   versionProbeEnv: null,
   // T3 Code 0.1.11 supports Claude Code 2.1.280 and newer.
   minimumVersion: '2.1.280',
@@ -109,19 +90,8 @@ const OPENCODE = Object.freeze({
   homeDir: null,
   // No config.enabled: T3 Code 0.1.11 removes it and keeps the envelope flag.
   managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
-  // A Server URL makes T3 Code connect to that server and skip the launcher.
-  clearedFields: Object.freeze(['serverUrl', 'serverPassword']),
-  // These add config beside the launch config, and that config can define a
-  // provider that reads the key.
-  extraIsolatedEnv: Object.freeze(['OPENCODE_CONFIG', 'OPENCODE_CONFIG_DIR']),
-  // OpenCode writes a log under XDG_DATA_HOME and a library under TMPDIR
-  // even for --version.
-  versionProbeEnv: (dir) => ({
-    XDG_DATA_HOME: path.join(dir, 'data'),
-    XDG_STATE_HOME: path.join(dir, 'state'),
-    XDG_CACHE_HOME: path.join(dir, 'cache'),
-    TMPDIR: path.join(dir, 'tmp'),
-  }),
+  clearedFields: Object.freeze([]),
+  versionProbeEnv: null,
   // T3 Code 0.1.11 supports 2.0.18 and newer, and 1.x cannot load the
   // Subconscious plugin.
   minimumVersion: '2.0.18',

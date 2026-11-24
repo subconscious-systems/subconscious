@@ -24,13 +24,6 @@ import path from 'node:path';
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
- * Bash sources the file in BASH_ENV when it starts a script, and stdout is
- * T3 Code's protocol stream, so a BASH_ENV that prints breaks the session.
- * ENV is the POSIX name for the same kind of file.
- */
-export const SHELL_STARTUP_ENV = Object.freeze(['BASH_ENV', 'ENV']);
-
-/**
  * The real agent with T3 Code's args and env unchanged, except that the
  * agent's own directory joins PATH when it is missing, because an
  * npm-installed agent is a Node script that finds `node` there.
@@ -45,27 +38,19 @@ export function passthroughPlan(binaryPath, args, env) {
 }
 
 /**
- * The plan as records: unset, then env, then argv, then ok. A name in the env the adapter started with
- * that the plan leaves out is unset. Bash cannot unset a name that is not
- * a shell word, such as an exported function's `BASH_FUNC_cd%%`, so the
- * argv then starts with `/usr/bin/env -u NAME`.
+ * The plan as records: unset, then env, then argv, then ok. A name in the
+ * env the adapter started with that the plan leaves out is unset.
  */
 export function encodePlan(plan, original) {
   const records = [];
-  const stuck = [];
   for (const name of Object.keys(original)) {
-    if (name in plan.env) continue;
-    if (ENV_NAME.test(name)) records.push('unset', name);
-    else stuck.push('-u', name);
+    if (!(name in plan.env) && ENV_NAME.test(name)) records.push('unset', name);
   }
   for (const [name, value] of Object.entries(plan.env)) {
     if (original[name] === value || !ENV_NAME.test(name)) continue;
     records.push('env', `${name}=${value}`);
   }
-  const argv = stuck.length
-    ? ['/usr/bin/env', ...stuck, ...plan.argv]
-    : plan.argv;
-  for (const word of argv) records.push('arg', word);
+  for (const word of plan.argv) records.push('arg', word);
   records.push('ok', '');
   if (records.some((record) => record.includes('\0')))
     throw new Error('A launch value contains a NUL byte');

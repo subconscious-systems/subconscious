@@ -89,9 +89,7 @@ test('a serve launch gets only the Subconscious provider and keeps T3 Code names
   assert.equal(env.OPENCODE_SERVER_PASSWORD, 'v1-password-4567');
 });
 
-test('an entry as T3 Code rewrites it is current, and a server URL is drift', {
-  skip,
-}, async () => {
+test('an entry as T3 Code rewrites it is current', { skip }, async () => {
   const sandbox = await box();
   assert.equal((await install(sandbox)).code, 0);
   // T3 Code 0.1.11 rewrites the file on start and removes config.enabled.
@@ -100,25 +98,12 @@ test('an entry as T3 Code rewrites it is current, and a server URL is drift', {
     binaryPath: sandbox.opencodeLauncher,
   };
   await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings, null, 2));
-  const status = () =>
-    subc(sandbox, ['t3', 'status', '--provider', 'opencode']);
-  const current = await status();
+  const current = await subc(sandbox, [
+    't3',
+    'status',
+    '--provider',
+    'opencode',
+  ]);
   assert.equal(current.code, 0, current.stdout);
   assert.match(current.stdout, /subconscious-opencode: installed\n/);
-
-  // With a Server URL, T3 Code skips the launcher.
-  settings.providerInstances[OURS].config.serverUrl = 'http://127.0.0.1:4096';
-  settings.providerInstances[OURS].config.serverPassword = { secretRef: 'x' };
-  await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings));
-  assert.match(
-    (await status()).stdout,
-    /installed, changed in T3 \(serverUrl, serverPassword\); run subc t3 install/,
-  );
-  assert.equal((await install(sandbox)).code, 0);
-  assert.deepEqual(
-    (await readSettings(sandbox)).providerInstances[OURS].config,
-    {
-      binaryPath: sandbox.opencodeLauncher,
-    },
-  );
 });

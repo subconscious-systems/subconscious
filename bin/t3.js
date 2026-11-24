@@ -82,10 +82,6 @@ folders as the matching subc command, such as ~/.codex and ~/.claude.
 Install and uninstall remove the Codex hooks older subc versions left.
 T3 Code reloads its settings on its own; subc never restarts it.
 
-Claude Code: each launch pins ANTHROPIC_BASE_URL in --settings, so a
-settings file cannot send the key to another host. Hooks and MCP servers
-from a repo's .claude settings still run with the key in their env.
-
 OpenCode: T3 Code shares one helper across threads, so a new key or model
 applies after the helper restarts.
 

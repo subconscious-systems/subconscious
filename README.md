@@ -184,10 +184,6 @@ The packaged integrations live in `bin/runbook`.
 - An `OPENCODE_API_KEY` exported in your shell no longer reaches OpenCode. OpenCode uses that name for its own opencode.ai key.
 - OpenCode lists only Subconscious models, because the launch config sets `enabled_providers` to the Subconscious provider.
 
-### `subc claude`
-
-Each launch pins the gateway in its `--settings` value, so a settings file cannot redirect requests. A repo's hooks and MCP servers still run with the key in their env.
-
 ## T3 Code
 
 `subc t3 install` adds three providers to T3 Code: Subconscious (Codex), Subconscious (Claude), and Subconscious (OpenCode). Each one runs that CLI on your hosted Subconscious models. The Claude and OpenCode providers are in beta. `subc t3` supports macOS and Linux, and the default profile only.
@@ -215,8 +211,6 @@ Claude Code notes:
 
 - Use T3 Code 0.1.11 or newer. Older versions list only the built-in Claude models on this provider, and install warns about that.
 - T3 Code also lists its built-in Claude models on this provider. A model outside your catalog runs as the default profile's model, and T3 Code shows no notice of that.
-- Each launch pins `ANTHROPIC_BASE_URL` in its `--settings` value, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host.
-- Hooks in a repo's `.claude/settings.json` and its project MCP servers still run with the key in their env. Open only repos that you trust.
 
 OpenCode notes:
 

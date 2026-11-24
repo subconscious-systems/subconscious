@@ -628,35 +628,3 @@ test('headless sends every harness to the given endpoint, key, and model', async
     }
   }
 });
-
-test('subc claude pins the gateway it launches with in --settings', async () => {
-  const endpoint = 'http://127.0.0.1:9/custom-gateway';
-  const claudeOnly = 'http://127.0.0.1:9/claude-only';
-  // Headless ignores CLAUDE_GATEWAY_URL; an ordinary launch uses it.
-  const forms = [
-    [['claude', 'headless', 'go'], endpoint],
-    [['claude', '--', '-p', 'go'], claudeOnly],
-    [['claude', '--resume', 'abc'], claudeOnly],
-  ];
-  for (const [args, gateway] of forms) {
-    const result = await runSubc(args, {
-      SUBCONSCIOUS_BASE_URL: endpoint,
-      SUBCONSCIOUS_API_KEY: 'sk-own-key',
-      CLAUDE_GATEWAY_URL: claudeOnly,
-    });
-    assert.equal(result.status, 0, `${args}: ${result.stderr}`);
-    const argv = await recordedArgv();
-    assert.equal(argv.filter((word) => word === '--settings').length, 1);
-    const settings = JSON.parse(argv[argv.indexOf('--settings') + 1]);
-    assert.deepEqual(
-      settings.env,
-      { ANTHROPIC_BASE_URL: gateway },
-      args.join(' '),
-    );
-    assert.ok(settings.availableModels.length > 0, args.join(' '));
-    assert.ok(
-      !argv.some((word) => word.includes('sk-own-key')),
-      args.join(' '),
-    );
-  }
-});
