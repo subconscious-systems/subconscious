@@ -180,8 +180,8 @@ The packaged integrations live in `bin/runbook`.
 
 ### `subc opencode`
 
-- The OpenCode key setting in a profile is now `SUBC_OPENCODE_API_KEY`. A profile that still holds `OPENCODE_API_KEY` keeps working.
-- An `OPENCODE_API_KEY` exported in your shell no longer reaches OpenCode and does not select the key. OpenCode uses that name for its own opencode.ai key.
+- The OpenCode key setting in a profile is now `SUBC_OPENCODE_API_KEY`. An old `OPENCODE_API_KEY` line is ignored, and the launch uses `API_KEY`.
+- An `OPENCODE_API_KEY` exported in your shell no longer reaches OpenCode. OpenCode uses that name for its own opencode.ai key.
 - OpenCode lists only Subconscious models, because the launch config sets `enabled_providers` to the Subconscious provider.
 
 ### `subc claude`
@@ -190,13 +190,7 @@ Each launch pins the gateway in its `--settings` value, so a settings file canno
 
 ## T3 Code
 
-`subc t3 install` adds three providers to T3 Code. Each one runs a coding agent CLI on your hosted Subconscious models.
-
-| Provider | CLI | Status |
-| --- | --- | --- |
-| Subconscious (Codex) | `codex` | Stable |
-| Subconscious (Claude) | `claude` | Beta |
-| Subconscious (OpenCode) | `opencode` | Beta |
+`subc t3 install` adds three providers to T3 Code: Subconscious (Codex), Subconscious (Claude), and Subconscious (OpenCode). Each one runs that CLI on your hosted Subconscious models. The Claude and OpenCode providers are in beta. `subc t3` supports macOS and Linux, and the default profile only.
 
 ```bash
 subc t3 install --dry-run         # run every check and print the plan
@@ -206,94 +200,33 @@ subc t3 status                    # needs no network and no key
 subc t3 uninstall
 ```
 
-`--provider codex|claude|opencode` works on install, status, and uninstall. Without it, install sets up every provider whose CLI it finds. It skips a provider that a check refuses, such as an old CLI, prints why, and installs the others. It fails only when no provider is left. With `--provider`, every named provider must pass its checks. Status and uninstall cover all three.
+Install checks each CLI, the default profile's saved key, and the live key-scoped model catalog before it changes anything. Without `--provider`, it skips a provider whose CLI is missing or refused, such as an old CLI, and installs the others. With `--provider`, every named provider must pass.
 
-### What install writes
+For each provider, install writes a launcher, such as `~/.subconscious/bin/subc-t3-codex`, and one entry, such as `subconscious-codex`, in `~/.t3/userdata/settings.json` (or `$T3CODE_HOME/userdata/settings.json`). It backs up the settings file to `~/.subconscious/t3/backups/` first. It refuses malformed or symlinked settings, the old `providers` format, a managed policy, and an entry with subc's ID that subc did not write. For Codex, install and uninstall also remove the compaction hooks that older subc versions left in `~/.codex`, and keep your own hooks. T3 Code reloads its settings by itself.
 
-Install checks each CLI, the default profile's saved key, and the live key-scoped model catalog before it changes anything. Then it writes these files and settings:
+Each launcher pins this Node, this subc package, and the CLI that install found. Every launch reads the default profile again. If the key-scoped catalog cannot be read, the CLI does not start. Each provider uses the same folders as the matching subc command, such as `~/.codex`, `~/.claude`, and `~/.config/opencode`, and subc writes nothing there. Status shows each entry, launcher, and home, and exits 1 only when it cannot read the T3 Code settings. Uninstall removes the entries and the launchers, and keeps your threads.
 
-| What | Where |
-| --- | --- |
-| One entry per provider | `subconscious-codex`, `subconscious-claude`, and `subconscious-opencode` in `~/.t3/userdata/settings.json` (or `$T3CODE_HOME/userdata/settings.json`) |
-| One launcher per provider | `~/.subconscious/bin/subc-t3-codex`, `subc-t3-claude`, and `subc-t3-opencode`. T3 Code runs the launcher as the CLI. |
-| The Claude hide list | `providerModelPreferences["subconscious-claude"]` in the T3 Code settings. This is the one write outside subc's own entries. |
-
-Before each change, install copies the settings file to `~/.subconscious/t3/backups/`. It refuses malformed settings, the old `providers` format, and settings under a managed policy. It also refuses an entry with subc's ID that subc did not write. A second install repairs subc's entries and changes nothing else. For Codex, install and uninstall also remove the compaction hooks that older subc versions left in `~/.codex`, and keep your own hooks. T3 Code reloads its settings by itself, and subc never restarts it.
-
-Each launcher pins this Node, this subc package, and the CLI path that install found. Node computes the launch, and then the launcher `exec`s, so the process that T3 Code started becomes the CLI. Every launch reads the default profile again. If the key-scoped catalog cannot be read, the CLI does not start. There is no fallback to the public or packaged model list.
-
-### Shared homes
-
-Each provider uses the same folders as the matching subc command, so your settings, skills, MCP servers, and project trust carry over.
-
-| Provider | Home | What subc writes there |
+| Provider | Commands that get the Subconscious launch | Key carrier |
 | --- | --- | --- |
-| Codex | `~/.codex` | Nothing. subc never edits your `config.toml`. |
-| Claude Code | `~/.claude` and `~/.claude.json` | Nothing |
-| OpenCode | `~/.config/opencode` and `~/.local/share/opencode` | Nothing |
+| Codex | `app-server` and `exec`. `--version`, help, `mcp list`, and `mcp get` run the real Codex. Apps and plugins stay off unless the profile sets `CODEX_EXTERNAL_TOOLS=true`. | `SUBCONSCIOUS_API_KEY` |
+| Claude Code 2.1.280+ | A command with `--input-format`, `--output-format`, `-p`, or `--print`. `--version`, help, and `update` run the real Claude Code. | `ANTHROPIC_AUTH_TOKEN` |
+| OpenCode 2.0.18+ | `opencode serve`, which T3 Code runs as one helper for all threads. `--version` and `--help` run the real OpenCode. | `SUBCONSCIOUS_API_KEY` |
 
-### Status
+Claude Code notes:
 
-`subc t3 status` reads everything again on each run. subc keeps no state file. For each provider, it shows the entry, the launcher, the pinned CLI and its version, and the home. It also shows these items:
+- T3 Code also lists its built-in Claude models on this provider. A model outside your catalog runs as the default profile's model, and T3 Code shows no notice of that.
+- Each launch pins `ANTHROPIC_BASE_URL` in its `--settings` value, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host.
+- Hooks in a repo's `.claude/settings.json` and its project MCP servers still run with the key in their env. Open only repos that you trust.
 
-- Codex: any compaction hooks that an older subc left.
-- Claude: the hide list, and drift when T3 Code lists a built-in model that the hide list does not hide.
-- OpenCode: the freshness rule.
-- All providers: where T3 Code sends thread titles and commit messages. Status warns when that is not a Subconscious provider.
-- All providers: T3 Code's last check of the provider, from `~/.t3/caches/<instance id>.json`, with T3 Code's message. An error, or a sign-in warning such as the one for a rejected key, makes status exit 1, and status says to run `subc login` and restart T3 Code. T3 Code does not check a provider again on its own. A missing cache file only means that T3 Code has not checked the provider yet.
+OpenCode notes:
 
-| Exit code | Meaning |
-| --- | --- |
-| 0 | Every installed provider works, or nothing is installed. |
-| 1 | A provider is broken: a conflict, a missing or foreign launcher, unreadable settings, drift, a CLI version that install refuses, or a failed T3 Code check. For each problem that install can repair, status prints the `subc t3 install --provider <name>` command. |
+- A new key or model applies after the helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes.
+- Keep the provider's Server URL and Server password empty, because T3 Code skips the launcher when a Server URL is set.
+- A watchdog stops the helper's process group within about 10 s after T3 Code's server dies. It needs `ps`, so install refuses OpenCode on a system without it.
 
-### Uninstall
+T3 Code writes thread titles and commit messages with its own text generation setting, which defaults to its built-in Codex provider. To use Subconscious there, pick a Subconscious provider in T3 Code's settings.
 
-`subc t3 uninstall` removes subc's entries, the launchers, the Codex catalog file, and the Claude hide list. It also removes `~/.subconscious/t3/state.json`, which subc 8.2.0 wrote, and old Codex compaction hooks. It keeps the shared homes, the other providers, and your T3 Code threads.
-
-### Codex provider
-
-| Item | Behavior |
-| --- | --- |
-| Commands | `app-server` and `exec` get the `subc codex` config, from the default profile only. `--version`, help, `mcp list`, and `mcp get` run the real Codex unchanged. Every other command fails. |
-| Key | Codex reads the key from `SUBCONSCIOUS_API_KEY`. It gets no `CODEX_API_KEY`. |
-| Apps and plugins | Off, unless the default profile sets `CODEX_EXTERNAL_TOOLS=true`. |
-| History | Subconscious and OpenAI sessions share one Codex history. Plain `codex` does not resume a Subconscious session. |
-
-### Claude Code provider (beta)
-
-| Item | Behavior |
-| --- | --- |
-| Versions | Claude Code 2.1.280 or newer. Install warns below 2.1.301, the version that T3 Code 0.1.11 recommends. |
-| Commands | A command with `--input-format`, `--output-format`, `-p`, or `--print` gets the `subc claude` setup. `--version`, help, and `update` run the real Claude Code. Every other command fails. |
-| Key | Only `ANTHROPIC_AUTH_TOKEN` carries the key. |
-| Built-in models | T3 Code also lists its built-in Claude models on this provider. The hide list hides them in T3 Code's model picker. |
-| Hide list hint | T3 Code creates `providerModelPreferences` only after you hide or reorder a model in its settings. Do that once, then run `subc t3 install` again. |
-| Off-catalog fallback | A model outside your catalog runs as the default profile's model. This also covers `t3 thread start --model`, which ignores the hide list. The launcher writes one line about it to stderr, but T3 Code does not show launcher stderr, so the thread runs the default model with no notice. |
-| Thread switch | T3 Code's built-in Claude provider uses the same `~/.claude`. You can switch a running thread between the two, and the next turn sends the whole thread to the other backend. |
-| Pinned gateway | Each launch pins `ANTHROPIC_BASE_URL` in the `env` of its `--settings` value. Claude Code applies that value over every settings file, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host. The URL is not a secret, so the key stays out of the argv. |
-| Repo settings | Claude Code still loads a repo's project settings, as it does in `subc claude`. Hooks in a repo's `.claude/settings.json` and the repo's project MCP servers run with the key in their env. Open only repos that you trust with this provider. |
-
-Install reads T3 Code's model cache, `~/.t3/caches/subconscious-claude.json`, or `caches/claudeAgent.json` when that file is missing. The hide list holds every model in that cache that is not in your catalog. T3 Code downloads its built-in model list at run time, so status can report new drift at any time.
-
-### OpenCode provider (beta)
-
-| Item | Behavior |
-| --- | --- |
-| Versions | OpenCode 2.0.18 or newer. |
-| Commands | T3 Code starts one helper, `opencode serve --hostname=127.0.0.1 --port=<port>`, for all threads. `serve` with known flags gets the `subc opencode` config, with `enabled_providers: ["subconscious"]`. `--version` and `--help` run the real OpenCode. `serve --service`, `serve --stdio`, and `upgrade` are refused with exit code 64. |
-| Key | Only `SUBCONSCIOUS_API_KEY` carries the key. The launcher keeps T3 Code's `OPENCODE_PASSWORD`. |
-| Freshness | A new key or model applies after the OpenCode helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes. |
-| Server URL | Keep the provider's Server URL and Server password empty. With a Server URL, T3 Code skips the launcher, so status reports either field as drift. |
-| Watchdog | The launcher stops the helper within about 10 s after T3 Code's server dies. It sends SIGTERM to the helper's process group, which also holds the helper's tools and MCP servers, and SIGKILL 5 s later, as T3 Code's own orphan reaper does. The watchdog starts only for `serve`, and its env holds only `PATH`. It needs `ps`, so install refuses this provider on a system without it, such as a Linux image without procps. |
-
-### Limits for all providers
-
-- Text generation: T3 Code writes thread titles and commit messages with its own setting, which defaults to its built-in Codex provider. subc never changes it. To use Subconscious, open Settings in T3 Code, then Text generation, and pick a Subconscious provider. Commit messages can have their own model under Commits & pull requests.
-- Beta: the Claude Code and OpenCode providers are in beta.
-- Platforms: macOS and Linux only. On Windows, `subc t3` fails with an error. It supports the default profile only.
-- Launcher shell: the first line is `#!/usr/bin/env -S bash -p`. It needs bash and an `env` that supports `-S`: macOS, or GNU coreutils 8.30 or newer. Install checks this.
-- Pinned paths: if you move or upgrade Node or a CLI, status reports the launcher as broken or stale. Run `subc t3 install` again.
+The launcher's first line, `#!/usr/bin/env -S bash -p`, needs bash and an `env` that supports `-S`: macOS, or GNU coreutils 8.30 or newer.
 
 ## Headless runs
 
