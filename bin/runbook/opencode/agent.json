@@ -58,9 +58,8 @@
   "inputs": [
     {
       "name": "SUBC_OPENCODE_API_KEY",
-      "aliases": ["OPENCODE_API_KEY"],
       "label": "OpenCode API key",
-      "description": "Subconscious key for OpenCode only; blank uses API_KEY. A profile from an older subc may hold it as OPENCODE_API_KEY, which subc reads from the profile but never from the env, because OpenCode uses that name for its own opencode.ai key.",
+      "description": "Subconscious key for OpenCode only; blank uses API_KEY. It is not OPENCODE_API_KEY, which OpenCode uses for its own opencode.ai key.",
       "type": "secret"
     },
     {

@@ -229,15 +229,8 @@ export async function getAgentApiKey(profile, agent) {
     return { key: sharedEnvKey, source: 'SUBCONSCIOUS_API_KEY env var' };
   }
 
-  // An input's aliases are older names for it. They are read from the
-  // profile only: OpenCode's alias OPENCODE_API_KEY is also the name of
-  // OpenCode's own opencode.ai key, which a user may export in the shell.
-  const aliases =
-    agent.inputs.find((input) => input.name === specificKey)?.aliases ?? [];
-  for (const name of specificKey ? [specificKey, ...aliases] : []) {
-    const profileKey = profile?.values?.[name]?.trim();
-    if (profileKey) return { key: profileKey, source: profile.path };
-  }
+  const profileKey = specificKey && profile?.values?.[specificKey]?.trim();
+  if (profileKey) return { key: profileKey, source: profile.path };
 
   return getApiKey(profile);
 }

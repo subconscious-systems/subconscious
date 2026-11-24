@@ -342,50 +342,23 @@ test('OpenCode gets the key only as SUBCONSCIOUS_API_KEY', async () => {
   }
 });
 
-test('the OpenCode key setting is read from the profile under its old name, never from the env', async () => {
+test('the OpenCode key setting is not OPENCODE_API_KEY, from the env or the profile', async () => {
   const opencode = agentById('opencode');
-  const names = [
-    'SUBC_OPENCODE_API_KEY',
-    'OPENCODE_API_KEY',
-    'SUBCONSCIOUS_API_KEY',
-  ];
-  const previous = Object.fromEntries(
-    names.map((name) => [name, process.env[name]]),
-  );
-  for (const name of names) delete process.env[name];
+  const previous = process.env.OPENCODE_API_KEY;
+  // A user's own opencode.ai key in the shell is not a Subconscious key.
+  process.env.OPENCODE_API_KEY = 'opencode-ai-key';
   const keyFor = async (values) =>
     (
       await getAgentApiKey(
-        {
-          name: 'k',
-          path: '/profiles/k.env',
-          values: { API_KEY: 'shared', ...values },
-        },
+        { name: 'k', path: '/k.env', values: { API_KEY: 'shared', ...values } },
         opencode,
       )
     ).key;
   try {
-    // A profile saved before the rename keeps working.
-    assert.equal(
-      await keyFor({ OPENCODE_API_KEY: 'legacy-key' }),
-      'legacy-key',
-    );
-    assert.equal(
-      await keyFor({
-        SUBC_OPENCODE_API_KEY: 'new-key',
-        OPENCODE_API_KEY: 'old',
-      }),
-      'new-key',
-    );
-    // A user's own opencode.ai key in the shell is not a Subconscious key.
-    process.env.OPENCODE_API_KEY = 'opencode-ai-key';
-    assert.equal(await keyFor({}), 'shared');
-    process.env.SUBC_OPENCODE_API_KEY = 'env-specific-key';
-    assert.equal(await keyFor({}), 'env-specific-key');
+    assert.equal(await keyFor({ OPENCODE_API_KEY: 'old-key' }), 'shared');
+    assert.equal(await keyFor({ SUBC_OPENCODE_API_KEY: 'new-key' }), 'new-key');
   } finally {
-    for (const name of names) {
-      if (previous[name] === undefined) delete process.env[name];
-      else process.env[name] = previous[name];
-    }
+    if (previous === undefined) delete process.env.OPENCODE_API_KEY;
+    else process.env.OPENCODE_API_KEY = previous;
   }
 });
