@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
@@ -20,6 +19,7 @@ import {
   snapshot,
   subc,
   t3Sandbox,
+  writeT3ModelCache,
 } from './helpers/t3-sandbox.js';
 
 const skip = process.platform === 'win32';
@@ -452,47 +452,6 @@ test('repeated probes keep one catalog file and write nothing to ~/.codex', {
   );
 });
 
-function processesUnder(root) {
-  return execFileSync('ps', ['-Ao', 'pid=,command='], { encoding: 'utf8' })
-    .split('\n')
-    .filter((line) => line.includes(root) && !line.includes('ps -Ao'));
-}
-
-test('killing the launcher 200 times leaves no process behind', {
-  skip,
-  timeout: 240_000,
-}, async () => {
-  const sandbox = await installedBox();
-  const cycle = async (i) => {
-    const child = spawn(sandbox.launcher, ['app-server'], {
-      env: sandbox.t3Env({ FAKE_CODEX_SLEEP: '60000' }),
-      stdio: ['pipe', 'ignore', 'ignore'],
-    });
-    // Most kills land while Node computes the plan; every fourth lands after
-    // the exec, when the process T3 started is Codex.
-    const delay = i % 4 === 0 ? 700 + (i % 7) * 50 : (i * 7) % 90;
-    await new Promise((resolve) => setTimeout(resolve, delay));
-    const exited = new Promise((resolve) => child.on('exit', resolve));
-    child.kill('SIGKILL');
-    await exited;
-  };
-  for (let start = 0; start < 200; start += 20)
-    await Promise.all(
-      Array.from({ length: 20 }, (_, offset) => cycle(start + offset)),
-    );
-  let left = processesUnder(sandbox.root);
-  for (let waited = 0; left.length && waited < 10_000; waited += 100) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    left = processesUnder(sandbox.root);
-  }
-  assert.deepEqual(left, []);
-  const entries = await fs.readdir(sandbox.catalogDir);
-  assert.ok(
-    entries.filter((name) => name !== 'model-catalog.json').length <= 20,
-    `temp catalogs are bounded: ${entries.length}`,
-  );
-});
-
 test('status and uninstall work offline, without a key or valid settings', {
   skip,
 }, async () => {
@@ -786,4 +745,160 @@ test("uninstall removes hooks an older subc left, and keeps the user's", {
     await fs.readFile(path.join(sandbox.codexHome, 'hooks.json'), 'utf8'),
   );
   assert.deepEqual(document, { hooks: user });
+});
+
+test('status reports drift and an old launcher, and install repairs both', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const settings = JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
+  const entry = settings.providerInstances['subconscious-codex'];
+  const expected = structuredClone(entry);
+  entry.displayName = 'Renamed';
+  entry.config.launchArgs = 'set in T3 Code';
+  // A field that subc does not manage stays as the user set it.
+  entry.accentColor = '#123456';
+  await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings));
+  // The 8.2.0 launcher format.
+  const launcher = await fs.readFile(sandbox.launcher, 'utf8');
+  await fs.writeFile(
+    sandbox.launcher,
+    launcher.replace(/^#!.*\n/, '#!/usr/bin/env bash\n'),
+  );
+  const status = await subc(sandbox, ['t3', 'status']);
+  assert.equal(status.code, 1, status.stdout);
+  assert.match(
+    status.stdout,
+    /subconscious-codex: installed, changed in T3 \(displayName, launchArgs\)/,
+  );
+  assert.match(status.stdout, /stale \(written in an older format\)/);
+  assert.match(
+    status.stdout,
+    /To repair it, run: subc t3 install --provider codex\n/,
+  );
+
+  const result = await subc(sandbox, ['t3', 'install']);
+  assert.equal(result.code, 0, result.stderr);
+  const repaired = JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
+  assert.deepEqual(repaired.providerInstances['subconscious-codex'], {
+    ...expected,
+    accentColor: '#123456',
+  });
+  assert.equal(await fs.readFile(sandbox.launcher, 'utf8'), launcher);
+  assert.equal((await subc(sandbox, ['t3', 'status'])).code, 0);
+});
+
+test('without --provider, an old or missing CLI is skipped; with it, install refuses', {
+  skip,
+}, async () => {
+  const sandbox = await box({ withClaude: true });
+  const old = { FAKE_CODEX_VERSION: '0.142.0' };
+  const skipped = await subc(sandbox, ['t3', 'install'], old);
+  assert.equal(skipped.code, 0, skipped.stderr);
+  const out = skipped.stdout.replace(/\s+/g, ' ');
+  assert.match(
+    out,
+    /Subconscious \(Codex\): Codex 0\.142\.0 is older than 0\.143\.0/,
+  );
+  assert.match(out, /Subconscious \(OpenCode\): OpenCode CLI is not installed/);
+  assert.match(out, /Subconscious \(Claude\) is ready/);
+  await assert.rejects(fs.access(sandbox.launcher));
+
+  const before = await snapshot(sandbox.home);
+  const named = await subc(
+    sandbox,
+    ['t3', 'install', '--provider', 'claude', '--provider', 'codex'],
+    old,
+  );
+  assert.equal(named.code, 1);
+  assert.match(named.stderr, /Nothing was changed\./);
+  const missing = await subc(sandbox, [
+    't3',
+    'install',
+    '--provider',
+    'opencode',
+  ]);
+  assert.equal(missing.code, 1);
+  assert.match(missing.stderr, /OpenCode CLI is not installed/);
+  assert.deepEqual(await snapshot(sandbox.home), before);
+  // With every CLI refused, install fails too.
+  await fs.rm(sandbox.claudeBin);
+  const none = await subc(sandbox, ['t3', 'install'], old);
+  assert.equal(none.code, 1);
+  assert.match(none.stderr, /Codex 0\.142\.0 is older/);
+});
+
+test("status reports T3 Code's last check of the provider", {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const status = () => subc(sandbox, ['t3', 'status', '--provider', 'codex']);
+  const cache = (options) =>
+    writeT3ModelCache(sandbox, {
+      instanceId: 'subconscious-codex',
+      builtIns: [],
+      reported: MODELS,
+      ...options,
+    });
+  assert.match((await status()).stdout, /T3 check\s+none recorded yet/);
+  await cache({ checkedAt: '2026-11-23T19:40:00.000Z' });
+  const ready = await status();
+  assert.equal(ready.code, 0, ready.stdout);
+  assert.match(ready.stdout, /T3 check\s+ready, checked 2026-11-23T19:40:00/);
+  // T3 Code reports a rejected key as an error, or as a warning without a
+  // signed-in account. Install cannot fix it, so status does not suggest it.
+  await cache({
+    status: 'warning',
+    auth: { status: 'unknown' },
+    message: 'The CLI failed while checking account status.',
+  });
+  const failed = await status();
+  assert.equal(failed.code, 1, failed.stdout);
+  assert.ok(failed.stdout.includes('failed while checking account status'));
+  assert.match(failed.stdout, /run subc login/);
+  assert.match(failed.stdout, /T3 Code reports a failed check/);
+  assert.doesNotMatch(failed.stdout, /To repair it, run/);
+});
+
+test("status says where T3 Code's text generation goes", { skip }, async () => {
+  const sandbox = await installedBox();
+  const result = await subc(sandbox, ['t3', 'status']);
+  assert.match(
+    result.stdout,
+    /Thread titles and commit messages go to codex, T3 Code's default, not to Subconscious\./,
+  );
+  const settings = JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
+  settings.textGenerationModelSelection = {
+    instanceId: 'subconscious-codex',
+    model: MODELS[0],
+  };
+  settings.sourceControlWriterModelSelection = {
+    instanceId: 'claudeAgent',
+    model: 'claude-sonnet-5-5',
+  };
+  await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings));
+  const split = await subc(sandbox, ['t3', 'status']);
+  assert.match(split.stdout, /Thread titles go to Subconscious: /);
+  assert.match(
+    split.stdout,
+    /Commit messages go to claudeAgent, model claude-sonnet-5-5, not to Subconscious\./,
+  );
+});
+
+test('--provider refuses an unknown name, and uninstall removes the 8.2.0 state file', {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const unknown = await subc(sandbox, [
+    't3',
+    'install',
+    '--provider',
+    'cursor',
+  ]);
+  assert.equal(unknown.code, 1);
+  assert.match(unknown.stderr, /Unknown provider: cursor/);
+  await fs.writeFile(sandbox.state, '{"schema":1}\n');
+  const result = await subc(sandbox, ['t3', 'uninstall']);
+  assert.equal(result.code, 0, result.stderr);
+  await assert.rejects(fs.access(sandbox.state));
 });

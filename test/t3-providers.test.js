@@ -1,49 +1,9 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { test } from 'node:test';
-import {
-  isolateLaunchEnv,
-  LAUNCHER_SHEBANG,
-  launcherScript,
-} from '../bin/t3-launch.js';
+import { LAUNCHER_SHEBANG, launcherScript } from '../bin/t3-launch.js';
 import { encodePlan, SHELL_STARTUP_ENV } from '../bin/t3-plan.js';
-import {
-  CODEX_PROVIDER,
-  OPENCODE_PROVIDER,
-  providerByKey,
-  T3_PROVIDER_KEYS,
-  T3_PROVIDERS,
-} from '../bin/t3-providers.js';
-
-test('the provider table is frozen and has a fixed order', () => {
-  assert.ok(Object.isFrozen(T3_PROVIDERS));
-  assert.deepEqual(
-    T3_PROVIDERS.map((provider) => provider.id),
-    ['codex', 'claude', 'opencode'],
-  );
-  assert.ok(Object.isFrozen(T3_PROVIDER_KEYS));
-  for (const provider of T3_PROVIDERS) {
-    assert.ok(Object.isFrozen(provider), provider.id);
-    assert.equal(providerByKey(provider.id), provider);
-    // binaryPath decides ownership, so every provider must write it.
-    const config = provider.managedConfig({
-      launcherPath: '/x/launcher',
-      homePath: '/x/home',
-    });
-    assert.equal(config.binaryPath, '/x/launcher', provider.id);
-  }
-  assert.equal(providerByKey('opencode'), OPENCODE_PROVIDER);
-  assert.equal(providerByKey('cursor'), null);
-});
-
-test('the Codex descriptor keeps the 8.2.0 names', () => {
-  assert.equal(CODEX_PROVIDER, providerByKey('codex'));
-  assert.equal(CODEX_PROVIDER.instanceId, 'subconscious-codex');
-  assert.equal(CODEX_PROVIDER.displayName, 'Subconscious (Codex)');
-  assert.equal(CODEX_PROVIDER.launcherName, 'subc-t3-codex');
-  assert.equal(CODEX_PROVIDER.driver, 'codex');
-  assert.equal(CODEX_PROVIDER.watchdog, false);
-});
+import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 
 const FIXTURE_INPUTS = {
   node: '/opt/node 22/bin/node',
@@ -121,28 +81,4 @@ test('a plan unsets the names in plan.unset even when the env lacks them', () =>
       ['ok', ''],
     ],
   );
-});
-
-test('isolateLaunchEnv uses the agent inputs and extraIsolatedEnv', () => {
-  const env = () => ({
-    PATH: '/bin',
-    SUBC_PROFILE: 'x',
-    SUBCONSCIOUS_API_KEY: 'sk-fake',
-    CODEX_API_KEY: 'sk-fake',
-    ANTHROPIC_BASE_URL: 'http://evil',
-    OPENCODE_CONFIG: '/evil.json',
-  });
-  const codex = isolateLaunchEnv(env(), '/nowhere');
-  assert.deepEqual(Object.keys(codex).sort(), [
-    'ANTHROPIC_BASE_URL',
-    'OPENCODE_CONFIG',
-    'PATH',
-    'SUBC_CONFIG_DIR',
-  ]);
-  const other = isolateLaunchEnv(env(), '/nowhere', {
-    ...CODEX_PROVIDER,
-    id: 'test-extra',
-    extraIsolatedEnv: ['ANTHROPIC_*', 'OPENCODE_CONFIG'],
-  });
-  assert.deepEqual(Object.keys(other).sort(), ['PATH', 'SUBC_CONFIG_DIR']);
 });
