@@ -1,5 +1,14 @@
 # Changelog
 
+## [8.2.1](https://github.com/subconscious-systems/subconscious/compare/v8.2.0...v8.2.1) (2026-11-24)
+
+
+### Bug fixes
+
+* **codex:** look for old hooks in CODEX_HOME too ([00d76d9](https://github.com/subconscious-systems/subconscious/commit/00d76d90d894634a0a8a20e7bc8bb6c03cc6e8ab))
+* **opencode:** send x-subconscious-client again ([562fda9](https://github.com/subconscious-systems/subconscious/commit/562fda9bb9ada5acf543f87a2d77d2197cb513e0))
+* **t3:** stop installing Codex hooks and remove the ones older versions left ([2f068c0](https://github.com/subconscious-systems/subconscious/commit/2f068c05865bef0b570bc23e314d89d4a71b94cc))
+
 ## [8.2.0](https://github.com/subconscious-systems/subconscious/compare/v8.1.0...v8.2.0) (2026-11-23)
 
 
