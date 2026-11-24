@@ -213,6 +213,7 @@ Each launcher pins this Node, this subc package, and the CLI that install found.
 
 Claude Code notes:
 
+- Use T3 Code 0.1.11 or newer. Older versions list only the built-in Claude models on this provider, and install warns about that.
 - T3 Code also lists its built-in Claude models on this provider. A model outside your catalog runs as the default profile's model, and T3 Code shows no notice of that.
 - Each launch pins `ANTHROPIC_BASE_URL` in its `--settings` value, so a repo's `.claude/settings.json` or your `~/.claude/settings.json` cannot send the key to another host.
 - Hooks in a repo's `.claude/settings.json` and its project MCP servers still run with the key in their env. Open only repos that you trust.

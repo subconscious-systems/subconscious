@@ -252,6 +252,25 @@ test('an update that replaces the versioned file keeps the launcher working', {
   assert.equal((await readRecords(log)).length, 1);
 });
 
+test('install warns when T3 Code is too old to list the Subconscious models', {
+  skip,
+}, async () => {
+  const sandbox = await box();
+  const version = path.join(
+    sandbox.t3Home,
+    'userdata',
+    'desktop-last-started-version',
+  );
+  await fs.writeFile(version, '0.1.7\n');
+  const old = await install(sandbox);
+  assert.equal(old.code, 0, old.stderr);
+  assert.match(old.stdout, /T3 Code 0\.1\.7 shows only its built-in models/);
+  await fs.writeFile(version, '0.1.11\n');
+  const current = await install(sandbox);
+  assert.equal(current.code, 0, current.stderr);
+  assert.doesNotMatch(current.stdout, /shows only its built-in models/);
+});
+
 test('pinClaudeModel and mergeClaudeSettings leave words after -- alone', () => {
   assert.deepEqual(
     pinClaudeModel(

@@ -26,6 +26,8 @@
  *   agent file's `minimum_version`.
  * - `legacyHooks`: install and uninstall remove the compaction hooks that
  *   older subc versions left in `homeDir`.
+ * - `t3Version`: the oldest T3 Code that lists the provider's Subconscious
+ *   models. Install warns below it.
  */
 
 import path from 'node:path';
@@ -88,6 +90,9 @@ const CLAUDE = Object.freeze({
   // T3 Code 0.1.11 supports Claude Code 2.1.280 and newer.
   minimumVersion: '2.1.280',
   legacyHooks: false,
+  // T3 Code 0.1.7 lists only its built-in Claude models, not the models
+  // Claude Code reports, so the Subconscious models do not show.
+  t3Version: '0.1.11',
 });
 
 const OPENCODE = Object.freeze({

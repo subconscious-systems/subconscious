@@ -309,6 +309,15 @@ async function printPlan({ provider, target, report, binary, launch }) {
   );
   if (provider.legacyHooks && (await hasLegacyHooks(target.homePath)))
     line('Old hooks', 'left by an older subc; install removes them');
+  if (
+    provider.t3Version &&
+    report.version &&
+    versionNeedsUpgrade(report.version, provider.t3Version)
+  )
+    line(
+      'Warning',
+      `${c.yellow}T3 Code ${report.version} shows only its built-in models for this provider. Update T3 Code to ${provider.t3Version} or newer to see the Subconscious models.${c.reset}`,
+    );
 }
 
 /** Write the launcher and the settings entry for one provider. */
