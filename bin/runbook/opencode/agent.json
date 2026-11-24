@@ -57,9 +57,9 @@
   },
   "inputs": [
     {
-      "name": "OPENCODE_API_KEY",
+      "name": "SUBC_OPENCODE_API_KEY",
       "label": "OpenCode API key",
-      "description": "OpenCode-specific credential override; blank uses API_KEY.",
+      "description": "Subconscious key for OpenCode only; blank uses API_KEY. It is not OPENCODE_API_KEY, which OpenCode uses for its own opencode.ai key.",
       "type": "secret"
     },
     {
@@ -94,6 +94,18 @@
       "name": "OPENCODE_CONFIG_CONTENT",
       "value": "{opencodeConfig}",
       "description": "Whole OpenCode config for this launch; see the config entry. Nothing is written to disk."
+    },
+    {
+      "name": "SUBC_OPENCODE_API_KEY",
+      "value": "",
+      "optional": true,
+      "description": "Never exported: OpenCode reads the key from SUBCONSCIOUS_API_KEY. Keep this entry and the next one last, because the {apiKey} entries above read the key first."
+    },
+    {
+      "name": "OPENCODE_API_KEY",
+      "value": "",
+      "optional": true,
+      "description": "Never exported. OpenCode sends this variable to opencode.ai as the key for its own models."
     }
   ],
   "config": [

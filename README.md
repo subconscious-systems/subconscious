@@ -178,44 +178,49 @@ The packaged integrations live in `bin/runbook`.
 | `subc copilot install` | Install/update the VS Code custom endpoint and the Copilot prompt hook |
 | `subc dsh` | Launch the DeepSeek Harness Web UI with a temporary provider populated from the live catalog |
 
+### `subc opencode`
+
+- The OpenCode key setting in a profile is now `SUBC_OPENCODE_API_KEY`. subc does not use an old `OPENCODE_API_KEY` line as the key, and never exports it to OpenCode. Plain launches of the other agents still pass every profile line to their env, so remove the old line.
+- An `OPENCODE_API_KEY` exported in your shell no longer reaches OpenCode. OpenCode uses that name for its own opencode.ai key.
+- OpenCode lists only Subconscious models, because the launch config sets `enabled_providers` to the Subconscious provider.
+
 ## T3 Code
 
-`subc t3 install` adds a provider named "Subconscious (Codex)" to T3 Code. T3 Code then runs Codex on your hosted Subconscious models. The integration has these limits:
-
-- It supports macOS and Linux. On Windows, `subc t3` fails with an error.
-- It supports Codex only, and the default profile only.
-- It needs the T3 Code settings file, `~/.t3/userdata/settings.json` (or `$T3CODE_HOME/userdata/settings.json`). Open T3 Code once to create it.
+`subc t3 install` adds three providers to T3 Code: Subconscious (Codex), Subconscious (Claude), and Subconscious (OpenCode). Each one runs that CLI on your hosted Subconscious models. The Claude and OpenCode providers are in beta. `subc t3` supports macOS and Linux, and the default profile only.
 
 ```bash
-subc t3 install --dry-run   # run every check and print the plan
-subc t3 install
-subc t3 status              # needs no network and no key
+subc t3 install                   # every provider whose CLI is found
+subc t3 install --provider claude # one provider; repeat --provider for more
+subc t3 status                    # needs no network and no key
 subc t3 uninstall
 ```
 
-Install checks Codex, the default profile's saved key, and the live key-scoped model catalog before it changes anything. Then it does three things in order:
+Install checks each CLI, the default profile's saved key, and the live key-scoped model catalog before it changes anything. Without `--provider`, it skips a provider whose CLI is missing or refused, such as an old CLI, and installs the others. With `--provider`, every named provider must pass.
 
-1. It writes `~/.subconscious/bin/subc-t3-codex`, a launcher that pins this Node, this subc package, and the Codex binary that install found.
-2. It removes the compaction hooks that older subc versions left in `~/.codex`, the same way `subc codex install` does. Your own hooks stay. If this cleanup fails, install warns and continues, because the provider does not need it.
-3. It adds the `subconscious-codex` entry to the T3 Code settings, with that launcher as the binary and `~/.codex` as the Codex home.
+For each provider, install writes a launcher, such as `~/.subconscious/bin/subc-t3-codex`, and one entry, such as `subconscious-codex`, in `~/.t3/userdata/settings.json` (or `$T3CODE_HOME/userdata/settings.json`). It backs up the settings file to `~/.subconscious/t3/backups/` first. It refuses malformed or symlinked settings, the old `providers` format, a managed policy, and an entry with subc's ID that subc did not write. For Codex, install and uninstall also remove the compaction hooks that older subc versions left in `~/.codex`, and keep your own hooks. T3 Code reloads its settings by itself.
 
-If step 3 fails, install says that the launcher stays in place. `subc t3 uninstall` removes the launcher. Before each change, install copies the settings file to `~/.subconscious/t3/backups/`. It refuses settings that are malformed or in the old `providers` format, settings under a managed policy, and a `subconscious-codex` provider that subc did not write. A second install repairs the subc entry and changes nothing else. T3 Code reloads its settings by itself; subc never restarts it.
+Each launcher pins this Node, this subc package, and the CLI that install found. Every launch reads the default profile again. If the key-scoped catalog cannot be read, the CLI does not start. Each provider uses the same folders as the matching subc command, such as `~/.codex`, `~/.claude`, and `~/.config/opencode`, and subc writes nothing there. Status shows each entry, launcher, and home, and exits 1 only when it cannot read the T3 Code settings. Uninstall removes the entries and the launchers, and keeps your threads.
 
-Each Codex session reads the default profile again, so a new key, gateway, or model takes effect at the next launch. T3 Code also starts Codex to probe it. The launcher handles each Codex command in one of three ways:
+| Provider | Commands that get the Subconscious launch | Key carrier |
+| --- | --- | --- |
+| Codex | `app-server` and `exec`. `--version`, help, `mcp list`, and `mcp get` run the real Codex. Apps and plugins stay off unless the profile sets `CODEX_EXTERNAL_TOOLS=true`. | `SUBCONSCIOUS_API_KEY` |
+| Claude Code 2.1.280+ | A command with `--input-format`, `--output-format`, `-p`, or `--print`. `--version`, help, and `update` run the real Claude Code. | `ANTHROPIC_AUTH_TOKEN` |
+| OpenCode 2.0.18+ | `opencode serve`, which T3 Code runs as one helper for all threads. `--version` and `--help` run the real OpenCode. | `SUBCONSCIOUS_API_KEY` |
 
-- `app-server` and `exec` get the same Codex config as `subc codex`, from the default profile only. The launcher ignores `SUBC_*`, `SUBCONSCIOUS_*`, and the Codex inputs that `subc codex` reads (such as `CODEX_EXTERNAL_TOOLS` and `CODEX_REASONING_EFFORT`) in the T3 Code environment. Codex gets no `CODEX_API_KEY`, because the provider reads its key from `SUBCONSCIOUS_API_KEY`. If the key-scoped catalog cannot be read, Codex does not start. There is no fallback to the public or packaged model list.
-- `--version`, help, `mcp list`, and `mcp get` run the real Codex unchanged. They read no profile and make no request.
-- Every other Codex command fails with an error.
+Claude Code notes:
 
-Node computes the launch, and then the launcher `exec`s, so the process that T3 Code started becomes Codex. The model catalog is one file, `~/.subconscious/t3/codex/catalog/model-catalog.json`. The launcher replaces it only when its content changes.
+- Use T3 Code 0.1.11 or newer. Older versions list only the built-in Claude models on this provider, and install warns about that.
+- T3 Code also lists its built-in Claude models on this provider. A model outside your catalog runs as the default profile's model, and T3 Code shows no notice of that.
 
-Limits of this first version:
+OpenCode notes:
 
-- The provider shares `~/.codex` with plain Codex and `subc codex`, so your `AGENTS.md`, skills, and MCP servers carry over. Codex apps and plugins stay off unless the default profile sets `CODEX_EXTERNAL_TOOLS=true`.
-- subc never edits your `config.toml`. Its `-c` overrides route each T3 Code session to Subconscious. Subconscious and OpenAI sessions share one Codex history, but plain `codex` does not resume a Subconscious session.
-- The launcher pins the Node and Codex paths from install time. If you move or upgrade either one, `subc t3 status` reports the launcher as broken or stale. Run `subc t3 install` again.
+- A new key or model applies after the helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes.
+- Keep the provider's Server URL and Server password empty, because T3 Code skips the launcher when a Server URL is set.
+- If T3 Code is force-killed, its helper keeps running with the key until T3 Code starts again and stops it.
 
-`subc t3 uninstall` removes the `subconscious-codex` entry, the launcher, the catalog, and any compaction hooks that older subc versions left in `~/.codex`. It keeps the T3 Code threads and the other providers.
+T3 Code writes thread titles and commit messages with its own text generation setting, which defaults to its built-in Codex provider. To use Subconscious there, pick a Subconscious provider in T3 Code's settings.
+
+The launcher's first line, `#!/usr/bin/env -S bash -p`, needs bash and an `env` that supports `-S`: macOS, or GNU coreutils 8.30 or newer.
 
 ## Headless runs
 

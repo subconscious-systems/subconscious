@@ -3,6 +3,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { agentById } from '../bin/agent-data.js';
+import { getAgentApiKey, runbookEnv } from '../bin/agents.js';
 import {
   OPENCODE_PROVIDER_ID,
   OPENCODE_PROVIDER_NAME,
@@ -60,6 +62,7 @@ test('OpenCode launch replaces the Subconscious catalog on every startup', () =>
 
   assert.equal(result.status, 0, result.stderr);
   const config = JSON.parse(result.stdout);
+  assert.deepEqual(config.enabled_providers, [OPENCODE_PROVIDER_ID]);
   assert.deepEqual(config.disabled_providers, ['subconscious-cli']);
   assert.deepEqual(Object.keys(config.provider), [OPENCODE_PROVIDER_ID]);
   assert.equal(
@@ -286,4 +289,76 @@ test('OpenCode always launches on a private server', async () => {
   ]);
   // Subcommands that take no --standalone at the root position pass through.
   assert.deepEqual(await launched(['models']), ['models']);
+});
+
+// OpenCode 2.x sends OPENCODE_API_KEY to opencode.ai as the key for its own
+// models, so the Subconscious key must reach OpenCode under no other name
+// than SUBCONSCIOUS_API_KEY, which only the Subconscious provider reads.
+test('OpenCode gets the key only as SUBCONSCIOUS_API_KEY', async () => {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-opencode-env-'));
+  try {
+    await fs.writeFile(
+      path.join(dir, 'opencode'),
+      '#!/bin/sh\n' +
+        'show() {\n' +
+        '  if [ "$2" = unset ]; then echo "$1=unset";\n' +
+        '  elif [ "$2" = "$EXPECTED_KEY" ]; then echo "$1=key";\n' +
+        '  else echo "$1=other"; fi\n' +
+        '}\n' +
+        `show OPENCODE_API_KEY "\${OPENCODE_API_KEY-unset}"\n` +
+        `show SUBC_OPENCODE_API_KEY "\${SUBC_OPENCODE_API_KEY-unset}"\n` +
+        `show SUBCONSCIOUS_API_KEY "\${SUBCONSCIOUS_API_KEY-unset}"\n`,
+      { mode: 0o755 },
+    );
+    const key = 'sk-subc-test-key';
+    const env = {
+      ...runbookEnv(
+        key,
+        'subconscious/glm-5.3-marathon',
+        dir,
+        { values: {} },
+        agentById('opencode'),
+        ['subconscious/glm-5.3-marathon'],
+      ),
+      PATH: `${dir}:${process.env.PATH}`,
+      EXPECTED_KEY: key,
+    };
+    // A real launch env carries the agent's own key name, and the user's
+    // own opencode.ai key when the shell exports one.
+    assert.equal(env.SUBC_OPENCODE_API_KEY, key);
+    env.OPENCODE_API_KEY = 'opencode-ai-key';
+
+    for (const prompt of [undefined, 'summarize']) {
+      const result = runSync(launchCommand('opencode', { env, prompt }));
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(result.stdout.trim().split('\n'), [
+        'OPENCODE_API_KEY=unset',
+        'SUBC_OPENCODE_API_KEY=unset',
+        'SUBCONSCIOUS_API_KEY=key',
+      ]);
+    }
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('the OpenCode key setting is not OPENCODE_API_KEY, from the env or the profile', async () => {
+  const opencode = agentById('opencode');
+  const previous = process.env.OPENCODE_API_KEY;
+  // A user's own opencode.ai key in the shell is not a Subconscious key.
+  process.env.OPENCODE_API_KEY = 'opencode-ai-key';
+  const keyFor = async (values) =>
+    (
+      await getAgentApiKey(
+        { name: 'k', path: '/k.env', values: { API_KEY: 'shared', ...values } },
+        opencode,
+      )
+    ).key;
+  try {
+    assert.equal(await keyFor({ OPENCODE_API_KEY: 'old-key' }), 'shared');
+    assert.equal(await keyFor({ SUBC_OPENCODE_API_KEY: 'new-key' }), 'new-key');
+  } finally {
+    if (previous === undefined) delete process.env.OPENCODE_API_KEY;
+    else process.env.OPENCODE_API_KEY = previous;
+  }
 });

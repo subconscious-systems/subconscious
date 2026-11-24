@@ -117,7 +117,7 @@ ${agents}
     ${c.cyan}harness-manifest${c.reset}  Print how each agent is installed and launched (JSON)
 
   ${c.bold}Hosts${c.reset}
-    ${c.cyan}t3${c.reset}           Add a Subconscious (Codex) provider to T3 Code (macOS, Linux)
+    ${c.cyan}t3${c.reset}           Add Codex, Claude Code, and OpenCode providers to T3 Code (macOS, Linux)
 
   ${c.bold}Options${c.reset}
     ${c.dim}--model <id>${c.reset}   Model to use (profile MODEL, or first live catalog model if UNSET)
@@ -145,7 +145,6 @@ ${agents}
     ${c.dim}$${c.reset} subc pi install
     ${c.dim}$${c.reset} subc harness-manifest --json
     ${c.dim}$${c.reset} subc codex headless "fix the failing test"
-    ${c.dim}$${c.reset} subc t3 install --dry-run
     ${c.dim}$${c.reset} subc -p staging codex
 
   ${c.bold}Network${c.reset}

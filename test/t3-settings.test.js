@@ -3,13 +3,15 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
+import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   inspectT3,
   installT3Provider,
   removeT3Provider,
   settingsBlockers,
-  T3_INSTANCE_ID,
 } from '../bin/t3-settings.js';
+
+const T3_INSTANCE_ID = CODEX_PROVIDER.instanceId;
 
 const skip = process.platform === 'win32';
 const roots = [];
@@ -41,7 +43,12 @@ async function t3Home(settings, { mode = 0o644 } = {}) {
     root,
     file,
     backupDir: path.join(root, 'backups'),
-    target: { home, launcherPath: LAUNCHER, homePath: CODEX_HOME },
+    target: {
+      home,
+      launcherPath: LAUNCHER,
+      homePath: CODEX_HOME,
+      provider: CODEX_PROVIDER,
+    },
     read: async () => JSON.parse(await fs.readFile(file, 'utf8')),
   };
 }
@@ -277,33 +284,17 @@ test('the settings file keeps its mode', { skip }, async () => {
   assert.equal((await fs.stat(box.file)).mode & 0o777, 0o640);
 });
 
-test('a symlinked settings file is written through only when it is safe', {
-  skip,
-}, async () => {
+test('a symlinked settings file is refused', { skip }, async () => {
   const box = await t3Home();
-  const realDir = path.join(box.root, 'dotfiles');
-  await fs.mkdir(realDir, { mode: 0o700 });
-  const real = path.join(realDir, 'settings.json');
+  const real = path.join(box.root, 'settings.json');
   await fs.writeFile(real, `${JSON.stringify(BASE)}\n`);
   await fs.symlink(real, box.file);
-  await installT3Provider(box.target, {
-    backupDir: box.backupDir,
-    settleMs: 0,
-  });
-  assert.ok((await fs.lstat(box.file)).isSymbolicLink());
-  const written = JSON.parse(await fs.readFile(real, 'utf8'));
-  assert.ok(written.providerInstances[T3_INSTANCE_ID]);
-
-  await fs.chmod(real, 0o666);
   assert.equal((await inspectT3(box.target)).state, 'unsafe');
   await assert.rejects(
     installT3Provider(box.target, { backupDir: box.backupDir, settleMs: 0 }),
-    /not a private regular file/,
+    /not a regular file/,
   );
-
-  const dangling = await t3Home();
-  await fs.symlink(path.join(dangling.root, 'gone.json'), dangling.file);
-  assert.equal((await inspectT3(dangling.target)).state, 'unsafe');
+  assert.equal(await fs.readFile(real, 'utf8'), `${JSON.stringify(BASE)}\n`);
 });
 
 test('an entry T3 drops during its reload is written again', {
@@ -397,39 +388,4 @@ test('backups are pruned to the last ten', { skip }, async () => {
     await removeT3Provider(box.target, { backupDir: box.backupDir });
   }
   assert.equal((await fs.readdir(box.backupDir)).length, 10);
-});
-
-test('a ~ path or a symlink to the launcher counts as the launcher', {
-  skip,
-}, async () => {
-  const box = await t3Home(BASE);
-  const home = path.join(box.root, 'home');
-  const launcher = path.join(home, '.subconscious', 'bin', 'subc-t3-codex');
-  await fs.mkdir(path.dirname(launcher), { recursive: true });
-  await fs.writeFile(launcher, '#!/bin/sh\n', { mode: 0o755 });
-  const link = path.join(box.root, 'link-to-launcher');
-  await fs.symlink(launcher, link);
-  const target = { ...box.target, launcherPath: launcher };
-  const previousHome = process.env.HOME;
-  process.env.HOME = home;
-  try {
-    await fs.writeFile(
-      box.file,
-      JSON.stringify({
-        ...BASE,
-        providerInstances: {
-          [T3_INSTANCE_ID]: ours(
-            {},
-            { binaryPath: '~/.subconscious/bin/subc-t3-codex' },
-          ),
-          'my-subc': ours({}, { binaryPath: link }),
-        },
-      }),
-    );
-    const report = await inspectT3(target);
-    assert.equal(report.entry, 'owned');
-    assert.deepEqual(report.duplicates, ['my-subc']);
-  } finally {
-    process.env.HOME = previousHome;
-  }
 });

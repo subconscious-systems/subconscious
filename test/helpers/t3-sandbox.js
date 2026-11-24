@@ -9,37 +9,94 @@ export const CLI = fileURLToPath(new URL('../../bin/cli.js', import.meta.url));
 export const GOOD_KEY = 'sk-sandbox-good-0123456789';
 export const MODELS = ['subconscious/sandbox-a', 'subconscious/sandbox-b'];
 
-// A fake codex: --version creates CODEX_HOME/tmp, as the real Codex does on
-// every start, and prints a version; anything else records its argv,
-// env, stdin, and the catalog it was given, then prints one JSON line so a
-// test can check that stdout carries nothing else. FAKE_CODEX_SLEEP keeps it
-// alive in the same process, as a real app-server would be.
-const FAKE_CODEX = `#!/usr/bin/env node
+/**
+ * A fake agent CLI, as a Node script. Every fake reads its options from
+ * FAKE_<NAME>_* names, such as FAKE_CODEX_LOG. A lone `--version` or `-v`
+ * writes one file where the real CLI writes on every start, if it does, so
+ * a test can see which dir a version check used, and prints `versionLine` with
+ * FAKE_<NAME>_VERSION, or `version` without it. Any other call reads stdin
+ * when READ_STDIN is 1, and appends its argv, env, stdin, cwd, pid, ppid,
+ * and the fields of `record` to the LOG file. Then `body` runs.
+ */
+function fakeAgent(
+  name,
+  { version, versionLine, versionFile = 'null', record = '{}', body },
+) {
+  const prefix = `FAKE_${name.toUpperCase()}_`;
+  return `#!/usr/bin/env node
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const args = process.argv.slice(2);
-if (args[0] === '--version') {
-  const home = process.env.CODEX_HOME || require('path').join(require('os').homedir(), '.codex');
-  fs.mkdirSync(require('path').join(home, 'tmp'), { recursive: true });
-  process.stdout.write('codex-cli 0.167.2\\n');
+const option = (key) => process.env['${prefix}' + key];
+if (args.length === 1 && (args[0] === '--version' || args[0] === '-v')) {
+  const file = ${versionFile};
+  if (file) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, 'version check\\n');
+  }
+  const version = option('VERSION') || '${version}';
+  process.stdout.write(${versionLine} + '\\n');
   process.exit(0);
 }
-let stdin = '';
-if (process.env.FAKE_CODEX_READ_STDIN === '1') stdin = fs.readFileSync(0, 'utf8');
-const catalogArg = args.find((arg) => arg.startsWith('model_catalog_json='));
-const catalogPath = catalogArg && catalogArg.slice('model_catalog_json='.length);
-const record = {
-  args,
-  env: process.env,
-  stdin,
-  pid: process.pid,
-  catalogPath,
-  catalog: catalogPath ? JSON.parse(fs.readFileSync(catalogPath, 'utf8')) : null,
-};
-if (process.env.FAKE_CODEX_LOG)
-  fs.appendFileSync(process.env.FAKE_CODEX_LOG, JSON.stringify(record) + '\\n');
-process.stdout.write(JSON.stringify({ fake: 'codex', args }) + '\\n');
-if (process.env.FAKE_CODEX_SLEEP) setTimeout(() => {}, Number(process.env.FAKE_CODEX_SLEEP));
+const stdin = option('READ_STDIN') === '1' ? fs.readFileSync(0, 'utf8') : '';
+const record = { args, env: process.env, stdin, cwd: process.cwd(), pid: process.pid, ppid: process.ppid, ...${record} };
+if (option('LOG')) fs.appendFileSync(option('LOG'), JSON.stringify(record) + '\\n');
+${body}
 `;
+}
+
+// The fake prints exactly one line.
+const printLine = (line) =>
+  `process.stdout.write(JSON.stringify(${line}) + '\\n');`;
+
+// A fake codex. Its version check writes under CODEX_HOME/tmp, as the real
+// Codex does on every start. A launch records the catalog it was given and
+// prints one JSON line.
+const FAKE_CODEX = fakeAgent('codex', {
+  version: '0.167.2',
+  versionLine: "'codex-cli ' + version",
+  versionFile:
+    "path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'tmp', 'fake-version-check')",
+  record: `(() => {
+  const arg = args.find((value) => value.startsWith('model_catalog_json='));
+  const catalogPath = arg && arg.slice('model_catalog_json='.length);
+  return { catalogPath, catalog: catalogPath ? JSON.parse(fs.readFileSync(catalogPath, 'utf8')) : null };
+})()`,
+  body: printLine("{ fake: 'codex', args }"),
+});
+
+// A fake claude. Its version check writes nothing, as with the real Claude
+// Code. A launch prints a result line for -p and
+// an init message for stream-json.
+const FAKE_CLAUDE = fakeAgent('claude', {
+  version: '2.1.326',
+  versionLine: "version + ' (Claude Code)'",
+  body: printLine(
+    "args.includes('-p') || args.includes('--print') ? { type: 'result', subtype: 'success', result: 'fake', fake: 'claude' } : { type: 'system', subtype: 'init', fake: 'claude' }",
+  ),
+});
+
+// A fake opencode. A launch records the parsed launch config. Only `serve`
+// prints the one line T3 Code waits for.
+const FAKE_OPENCODE = fakeAgent('opencode', {
+  version: '2.3.0',
+  versionLine: "'opencode v' + version",
+  record: `(() => {
+  let config = null;
+  try {
+    config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
+  } catch {}
+  return { config };
+})()`,
+  body: `if (args[0] !== 'serve' || args.includes('--help') || args.includes('-h')) {
+  process.stdout.write('opencode ' + args.join(' ') + ': usage\\n');
+  process.exit(0);
+}
+process.stdout.write('server listening on http://127.0.0.1:4096\\n');`,
+});
+
+const shellWord = (text) => `'${text.replaceAll("'", "'\\''")}'`;
 
 /** A local gateway: the canonical catalog for GOOD_KEY, 401 for any other. */
 export async function fakeGateway() {
@@ -91,17 +148,42 @@ export async function fakeGateway() {
  * profile, a fake codex, and an existing ordinary ~/.codex. Nothing outside
  * `root` is read or written by the commands a test runs with `env`.
  */
-export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
+export async function t3Sandbox({
+  gateway,
+  apiKey = GOOD_KEY,
+  settings,
+  withClaude = false,
+  withOpenCode = false,
+} = {}) {
   const root = await fs.realpath(
     await fs.mkdtemp(path.join(os.tmpdir(), 'subc-t3-test-')),
   );
   const home = path.join(root, 'home with space');
   const bin = path.join(root, 'fake bin');
   const tmp = path.join(root, 'tmp');
+  // Only node, not the rest of its directory: an npm-installed opencode or
+  // npm itself there would let install find the real OpenCode.
+  const nodeBin = path.join(root, 'node bin');
   const t3Home = path.join(home, '.t3');
   const subc = path.join(home, '.subconscious');
-  for (const dir of [bin, tmp, path.join(t3Home, 'userdata')])
+  for (const dir of [bin, tmp, nodeBin, path.join(t3Home, 'userdata')])
     await fs.mkdir(dir, { recursive: true });
+  await fs.symlink(process.execPath, path.join(nodeBin, 'node'));
+  // subc looks for agents in the npm global bin. The real npm would name
+  // the prefix of the Node that runs it, where a real OpenCode can live.
+  await fs.writeFile(
+    path.join(bin, 'npm'),
+    `#!/bin/sh\nif [ "$1" = prefix ] && [ "$2" = -g ]; then echo ${shellWord(path.join(root, 'npm global'))}; exit 0; fi\nexit 1\n`,
+    { mode: 0o755 },
+  );
+  // A fake macOS `security`, first on PATH, so a launch with no key in the
+  // profile never reads the real Keychain. Exit 44 means "not found".
+  const keychainCalls = path.join(root, 'keychain calls');
+  await fs.writeFile(
+    path.join(bin, 'security'),
+    `#!/bin/sh\necho "$*" >> ${shellWord(keychainCalls)}\nexit 44\n`,
+    { mode: 0o755 },
+  );
   await fs.mkdir(path.join(subc, 'profiles'), { recursive: true });
   await fs.writeFile(path.join(bin, 'codex'), FAKE_CODEX, { mode: 0o755 });
   await fs.writeFile(
@@ -132,9 +214,30 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
     path.join(codexDir, 'config.toml'),
     'model = "gpt-user"\n[mcp_servers.user]\ncommand = "user-mcp"\n',
   );
+  // With withClaude, a fake Claude Code installed the way the native
+  // installer does it: ~/.local/bin/claude links to a versioned file.
+  const claudeBin = path.join(home, '.local', 'bin', 'claude');
+  const claudeVersions = path.join(
+    home,
+    '.local',
+    'share',
+    'claude',
+    'versions',
+  );
+  if (withClaude) {
+    await fs.mkdir(path.dirname(claudeBin), { recursive: true });
+    await fs.mkdir(claudeVersions, { recursive: true });
+    const versioned = path.join(claudeVersions, '2.1.326');
+    await fs.writeFile(versioned, FAKE_CLAUDE, { mode: 0o755 });
+    await fs.symlink(versioned, claudeBin);
+  }
+  // With withOpenCode, a fake OpenCode installed by npm into the fake bin.
+  const opencodeBin = path.join(bin, 'opencode');
+  if (withOpenCode)
+    await fs.writeFile(opencodeBin, FAKE_OPENCODE, { mode: 0o755 });
   const PATH = [
     bin,
-    path.dirname(process.execPath),
+    nodeBin,
     '/usr/local/bin',
     '/opt/homebrew/bin',
     '/usr/bin',
@@ -154,12 +257,16 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
     tmp,
     t3Home,
     settingsPath,
+    keychainCalls,
     codexDir,
     subc,
     launcher: path.join(subc, 'bin', 'subc-t3-codex'),
     codexHome: codexDir,
     catalogDir: path.join(subc, 't3', 'codex', 'catalog'),
-    state: path.join(subc, 't3', 'state.json'),
+    claudeBin,
+    claudeLauncher: path.join(subc, 'bin', 'subc-t3-claude'),
+    opencodeBin,
+    opencodeLauncher: path.join(subc, 'bin', 'subc-t3-opencode'),
   };
   return {
     ...paths,
@@ -181,14 +288,45 @@ export async function t3Sandbox({ gateway, apiKey = GOOD_KEY, settings } = {}) {
         ...extra,
       };
     },
+    // How T3 Code 0.1.11 starts its Claude binary with no homePath: its own
+    // env plus the protocol names it adds, and no CLAUDE_CONFIG_DIR.
+    claudeT3Env(extra = {}) {
+      return {
+        ...env,
+        CLAUDE_CODE_ENTRYPOINT: 't3-code',
+        CLAUDE_AGENT_SDK_VERSION: '0.3.321',
+        CLAUDE_CODE_SDK_READS_SESSION_STATE: '1',
+        ENABLE_CLAUDEAI_MCP_SERVERS: 'false',
+        CLAUDE_CODE_AUTO_CONNECT_IDE: 'false',
+        CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL: '1',
+        MISE_OFFLINE: '1',
+        T3CODE_THREAD_ID: 'thread-1',
+        ...extra,
+      };
+    },
+    // How T3 Code 0.1.11 starts its OpenCode helper: its own env, the
+    // password it made for the helper, and an empty config.
+    openCodeT3Env(extra = {}) {
+      return {
+        ...env,
+        T3CODE_HOME: t3Home,
+        OPENCODE_PASSWORD: 't3-helper-password-0123',
+        OPENCODE_CONFIG_CONTENT: '{}',
+        ...extra,
+      };
+    },
     cleanup: () => fs.rm(root, { recursive: true, force: true }),
   };
 }
 
-/** Run a command; resolves with code, signal, stdout, and stderr. */
-export function run(file, args, { env, input, timeoutMs = 60_000 } = {}) {
+/** Run a command; resolves with code, signal, stdout, stderr, and pid. */
+export function run(file, args, { env, input, cwd, timeoutMs = 60_000 } = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(file, args, { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const child = spawn(file, args, {
+      env,
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     let stdout = '';
     let stderr = '';
     const timer = setTimeout(() => child.kill('SIGKILL'), timeoutMs);
@@ -203,7 +341,7 @@ export function run(file, args, { env, input, timeoutMs = 60_000 } = {}) {
     child.on('error', reject);
     child.on('close', (code, signal) => {
       clearTimeout(timer);
-      resolve({ code, signal, stdout, stderr });
+      resolve({ code, signal, stdout, stderr, pid: child.pid });
     });
   });
 }
