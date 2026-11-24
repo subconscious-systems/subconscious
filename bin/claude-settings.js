@@ -68,3 +68,45 @@ export function pinnedClaudeSettings(settingsJson, env) {
     withSubcSettings(settings, { env: claudeGatewayPin(env, apiKey) }),
   );
 }
+
+const SETTINGS_UNREADABLE =
+  'Claude Code got a --settings value that is not a JSON object. subc merges its gateway pin into that value, so pass settings as JSON, not a file path. The value is not shown, because it can hold secrets.';
+
+/**
+ * Merge `extra` into the last `--settings` value before any `--` in `args`,
+ * which is the value Claude Code uses. With none, add one there, unless
+ * `add` is false. A value that is not a JSON object, such as a file path,
+ * stops the launch.
+ */
+export function mergeClaudeSettings(args, extra, { add = true } = {}) {
+  let end = args.indexOf('--');
+  if (end < 0) end = args.length;
+  let last = -1;
+  for (let i = 0; i < end; i++)
+    if (args[i] === '--settings' || args[i].startsWith('--settings=')) last = i;
+  if (last < 0) {
+    if (!add) return args;
+    return [
+      ...args.slice(0, end),
+      '--settings',
+      JSON.stringify(extra),
+      ...args.slice(end),
+    ];
+  }
+  const inline = args[last] !== '--settings';
+  const value = inline ? args[last].slice(11) : args[last + 1];
+  let settings;
+  try {
+    settings = JSON.parse(value ?? '');
+  } catch {
+    throw new ClaudeSettingsError(SETTINGS_UNREADABLE);
+  }
+  if (!isPlainObject(settings))
+    throw new ClaudeSettingsError(SETTINGS_UNREADABLE);
+  return [
+    ...args.slice(0, last),
+    '--settings',
+    JSON.stringify(withSubcSettings(settings, extra)),
+    ...args.slice(last + (inline ? 1 : 2)),
+  ];
+}

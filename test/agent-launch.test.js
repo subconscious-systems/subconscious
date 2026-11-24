@@ -345,6 +345,29 @@ test('every subc claude launch pins its gateway in --settings', () => {
     assert.equal(plan.env.ANTHROPIC_AUTH_TOKEN, key, form);
     assert.ok(!plan.argv.some((word) => word.includes(key)), form);
   }
+  // Claude Code uses the last --settings value, which is the user's own. The
+  // pin is merged into it, and its other keys stay.
+  const user = JSON.stringify({
+    theme: 'dark',
+    env: { ANTHROPIC_BASE_URL: 'https://evil.example' },
+  });
+  for (const [form, options] of Object.entries({
+    interactive: { env, args: ['--settings', user] },
+    inline: { env, args: [`--settings=${user}`, '-c'] },
+    headless: { env, args: ['--settings', user], prompt: 'hi' },
+  })) {
+    const { argv } = launchPlan(claude, options);
+    const last = JSON.parse(argv[argv.lastIndexOf('--settings') + 1]);
+    assert.equal(last.theme, 'dark', form);
+    assert.equal(last.env.ANTHROPIC_BASE_URL, base.GATEWAY_URL, form);
+    assert.ok(!argv.some((word) => word.startsWith('--settings=')), form);
+  }
+  assert.throws(
+    () => launchPlan(claude, { env, args: ['--settings', '/me/sk-hidden'] }),
+    (error) =>
+      /not a JSON object/.test(error.message) &&
+      !error.message.includes('sk-hidden'),
+  );
   const refused = (extra) => () =>
     launchPlan(claude, { env: { ...base, ...extra } });
   assert.throws(
