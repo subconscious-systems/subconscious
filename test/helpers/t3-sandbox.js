@@ -9,122 +9,121 @@ export const CLI = fileURLToPath(new URL('../../bin/cli.js', import.meta.url));
 export const GOOD_KEY = 'sk-sandbox-good-0123456789';
 export const MODELS = ['subconscious/sandbox-a', 'subconscious/sandbox-b'];
 
-// A fake codex: --version creates CODEX_HOME/tmp, as the real Codex does on
-// every start, and prints a version; anything else records its argv,
-// env, stdin, and the catalog it was given, then prints one JSON line so a
-// test can check that stdout carries nothing else. FAKE_CODEX_SLEEP keeps it
-// alive in the same process, as a real app-server would be.
-const FAKE_CODEX = `#!/usr/bin/env node
+/**
+ * A fake agent CLI, as a Node script. Every fake reads its options from
+ * FAKE_<NAME>_* names, such as FAKE_CODEX_LOG. A lone `--version` or `-v`
+ * writes one file where the real CLI writes on every start, so a test can
+ * see which dir a version check used, and prints `versionLine` with
+ * FAKE_<NAME>_VERSION, or `version` without it. Any other call reads stdin
+ * when READ_STDIN is 1, and appends its argv, env, stdin, cwd, pid, ppid,
+ * and the fields of `record` to the LOG file. Then `body` runs.
+ */
+function fakeAgent(
+  name,
+  { version, versionLine, versionFile, record = '{}', body },
+) {
+  const prefix = `FAKE_${name.toUpperCase()}_`;
+  return `#!/usr/bin/env node
 const fs = require('fs');
-const args = process.argv.slice(2);
-if (args[0] === '--version') {
-  const home = process.env.CODEX_HOME || require('path').join(require('os').homedir(), '.codex');
-  fs.mkdirSync(require('path').join(home, 'tmp'), { recursive: true });
-  process.stdout.write('codex-cli 0.167.2\\n');
-  process.exit(0);
-}
-let stdin = '';
-if (process.env.FAKE_CODEX_READ_STDIN === '1') stdin = fs.readFileSync(0, 'utf8');
-const catalogArg = args.find((arg) => arg.startsWith('model_catalog_json='));
-const catalogPath = catalogArg && catalogArg.slice('model_catalog_json='.length);
-const record = {
-  args,
-  env: process.env,
-  stdin,
-  pid: process.pid,
-  catalogPath,
-  catalog: catalogPath ? JSON.parse(fs.readFileSync(catalogPath, 'utf8')) : null,
-};
-if (process.env.FAKE_CODEX_LOG)
-  fs.appendFileSync(process.env.FAKE_CODEX_LOG, JSON.stringify(record) + '\\n');
-process.stdout.write(JSON.stringify({ fake: 'codex', args }) + '\\n');
-if (process.env.FAKE_CODEX_SLEEP) setTimeout(() => {}, Number(process.env.FAKE_CODEX_SLEEP));
-`;
-
-// A fake claude. --version prints FAKE_CLAUDE_VERSION (default 2.1.326) and,
-// like a real start, writes a file in its config dir (CLAUDE_CONFIG_DIR, or
-// ~/.claude), so a test can see which dir a version check used. Any other
-// call records its argv, env, stdin, cwd, and pid to FAKE_CLAUDE_LOG, then
-// prints exactly one JSON line: a result for -p and an init message for
-// stream-json. FAKE_CLAUDE_SLEEP keeps it alive in the same process.
-export const FAKE_CLAUDE = `#!/usr/bin/env node
-const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const args = process.argv.slice(2);
+const option = (key) => process.env['${prefix}' + key];
 if (args.length === 1 && (args[0] === '--version' || args[0] === '-v')) {
-  const dir = process.env.CLAUDE_CONFIG_DIR || path.join(require('os').homedir(), '.claude');
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'fake-version-check'), 'ran\\n');
-  process.stdout.write((process.env.FAKE_CLAUDE_VERSION || '2.1.326') + ' (Claude Code)\\n');
+  const file = ${versionFile};
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.appendFileSync(file, 'version check\\n');
+  const version = option('VERSION') || '${version}';
+  process.stdout.write(${versionLine} + '\\n');
   process.exit(0);
 }
-let stdin = '';
-if (process.env.FAKE_CLAUDE_READ_STDIN === '1') stdin = fs.readFileSync(0, 'utf8');
-const record = { args, env: process.env, stdin, cwd: process.cwd(), pid: process.pid };
-if (process.env.FAKE_CLAUDE_LOG)
-  fs.appendFileSync(process.env.FAKE_CLAUDE_LOG, JSON.stringify(record) + '\\n');
-const print = args.includes('-p') || args.includes('--print');
-const line = print
-  ? { type: 'result', subtype: 'success', result: 'fake', fake: 'claude' }
-  : { type: 'system', subtype: 'init', fake: 'claude' };
-process.stdout.write(JSON.stringify(line) + '\\n');
-if (process.env.FAKE_CLAUDE_SLEEP) setTimeout(() => {}, Number(process.env.FAKE_CLAUDE_SLEEP));
+const stdin = option('READ_STDIN') === '1' ? fs.readFileSync(0, 'utf8') : '';
+const record = { args, env: process.env, stdin, cwd: process.cwd(), pid: process.pid, ppid: process.ppid, ...${record} };
+if (option('LOG')) fs.appendFileSync(option('LOG'), JSON.stringify(record) + '\\n');
+${body}
 `;
+}
 
-// A fake opencode. --version prints `opencode v<FAKE_OPENCODE_VERSION>`
-// (default 2.3.0) and, like the real OpenCode, writes its log under
-// XDG_DATA_HOME (or ~/.local/share), so a test can see which dir a version
-// check used. --help prints a usage line. Any other call records its argv,
-// env, pid, ppid, cwd, and the parsed OPENCODE_CONFIG_CONTENT to
-// FAKE_OPENCODE_LOG. For `serve`, it then listens on --port (0 picks a
-// port), answers GET /api/info, and prints exactly one line on stdout:
+// The fake prints exactly one line, then stays alive for SLEEP ms, as a
+// long-lived agent would be.
+const printAndSleep = (
+  line,
+) => `process.stdout.write(JSON.stringify(${line}) + '\\n');
+if (option('SLEEP')) setTimeout(() => {}, Number(option('SLEEP')));`;
+
+// A fake codex. Its version check writes under CODEX_HOME/tmp, as the real
+// Codex does on every start. A launch records the catalog it was given and
+// prints one JSON line.
+const FAKE_CODEX = fakeAgent('codex', {
+  version: '0.167.2',
+  versionLine: "'codex-cli ' + version",
+  versionFile:
+    "path.join(process.env.CODEX_HOME || path.join(os.homedir(), '.codex'), 'tmp', 'fake-version-check')",
+  record: `(() => {
+  const arg = args.find((value) => value.startsWith('model_catalog_json='));
+  const catalogPath = arg && arg.slice('model_catalog_json='.length);
+  return { catalogPath, catalog: catalogPath ? JSON.parse(fs.readFileSync(catalogPath, 'utf8')) : null };
+})()`,
+  body: printAndSleep("{ fake: 'codex', args }"),
+});
+
+// A fake claude. Its version check writes in its config dir,
+// CLAUDE_CONFIG_DIR or ~/.claude. A launch prints a result line for -p and
+// an init message for stream-json.
+export const FAKE_CLAUDE = fakeAgent('claude', {
+  version: '2.1.326',
+  versionLine: "version + ' (Claude Code)'",
+  versionFile:
+    "path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'fake-version-check')",
+  body: printAndSleep(
+    "args.includes('-p') || args.includes('--print') ? { type: 'result', subtype: 'success', result: 'fake', fake: 'claude' } : { type: 'system', subtype: 'init', fake: 'claude' }",
+  ),
+});
+
+// A fake opencode. Its version check writes its log under XDG_DATA_HOME, or
+// ~/.local/share, as the real OpenCode does. A launch records the parsed
+// OPENCODE_CONFIG_CONTENT. A call that is not `serve`, and `serve --help`,
+// print a usage line. `serve` listens on --port (0 picks a port), answers
+// GET /api/info, and prints exactly one line on stdout:
 // `server listening on http://127.0.0.1:<port>`. It exits at once, or after
-// FAKE_OPENCODE_SLEEP ms, or on SIGTERM. FAKE_OPENCODE_IGNORE_TERM=1 makes
-// it ignore SIGTERM, and FAKE_OPENCODE_CHILD=1 makes it start a long
-// `sleep` child in its process group, like a tool or an MCP server. Its
-// PID goes in the record as childPid.
-export const FAKE_OPENCODE = `#!/usr/bin/env node
-const fs = require('fs');
-const path = require('path');
-const http = require('http');
-const args = process.argv.slice(2);
-if (args.length === 1 && (args[0] === '--version' || args[0] === '-v')) {
-  const data = process.env.XDG_DATA_HOME || path.join(require('os').homedir(), '.local', 'share');
-  fs.mkdirSync(path.join(data, 'opencode', 'log'), { recursive: true });
-  fs.appendFileSync(path.join(data, 'opencode', 'log', 'opencode.log'), 'version check\\n');
-  process.stdout.write('opencode v' + (process.env.FAKE_OPENCODE_VERSION || '2.3.0') + '\\n');
-  process.exit(0);
-}
-let config = null;
-try {
-  config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
-} catch {}
-let childPid = null;
-if (process.env.FAKE_OPENCODE_CHILD === '1' && args[0] === 'serve')
-  childPid = require('child_process').spawn('sleep', ['600'], { stdio: 'ignore' }).pid;
-const record = { args, env: process.env, pid: process.pid, ppid: process.ppid, cwd: process.cwd(), config, childPid };
-if (process.env.FAKE_OPENCODE_LOG)
-  fs.appendFileSync(process.env.FAKE_OPENCODE_LOG, JSON.stringify(record) + '\\n');
-if (args[0] !== 'serve' || args.includes('--help') || args.includes('-h')) {
+// SLEEP ms, or on SIGTERM. IGNORE_TERM=1 makes it ignore SIGTERM, and
+// CHILD=1 makes it start a long `sleep` child in its process group, like a
+// tool or an MCP server. Its PID goes in the record as childPid.
+export const FAKE_OPENCODE = fakeAgent('opencode', {
+  version: '2.3.0',
+  versionLine: "'opencode v' + version",
+  versionFile:
+    "path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'opencode', 'log', 'opencode.log')",
+  record: `(() => {
+  let config = null;
+  try {
+    config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
+  } catch {}
+  const childPid = option('CHILD') === '1' && args[0] === 'serve'
+    ? require('child_process').spawn('sleep', ['600'], { stdio: 'ignore' }).pid
+    : null;
+  return { config, childPid };
+})()`,
+  body: `if (args[0] !== 'serve' || args.includes('--help') || args.includes('-h')) {
   process.stdout.write('opencode ' + args.join(' ') + ': usage\\n');
   process.exit(0);
 }
 const portArg = args.find((arg) => arg.startsWith('--port='));
 const port = portArg ? Number(portArg.slice('--port='.length)) : 0;
-const server = http.createServer((req, res) => {
+const server = require('http').createServer((req, res) => {
   res.setHeader('content-type', 'application/json');
   res.end(JSON.stringify({ version: '2.3.0', pid: process.pid }));
 });
 process.on('SIGTERM', () => {
-  if (process.env.FAKE_OPENCODE_IGNORE_TERM !== '1') process.exit(0);
+  if (option('IGNORE_TERM') !== '1') process.exit(0);
 });
 server.listen(port, '127.0.0.1', () => {
   process.stdout.write('server listening on http://127.0.0.1:' + server.address().port + '\\n');
-  const sleep = Number(process.env.FAKE_OPENCODE_SLEEP || 0);
+  const sleep = Number(option('SLEEP') || 0);
   if (sleep > 0) setTimeout(() => process.exit(0), sleep);
   else server.close();
+});`,
 });
-`;
 
 // The user's own Claude Code files. Install and launches must leave them as
 // they are.

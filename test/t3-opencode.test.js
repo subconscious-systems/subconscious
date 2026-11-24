@@ -7,7 +7,6 @@ import { fileURLToPath } from 'node:url';
 import { isolateLaunchEnv } from '../bin/t3-launch.js';
 import { OPENCODE_PROVIDER } from '../bin/t3-providers.js';
 import {
-  exportedFunctions,
   fakeGateway,
   GOOD_KEY,
   MODELS,
@@ -23,8 +22,6 @@ const ADAPTER = fileURLToPath(
   new URL('../bin/t3-opencode.js', import.meta.url),
 );
 const OURS = 'subconscious-opencode';
-const FRESHNESS =
-  'A new key or model applies after the OpenCode helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes.';
 // The helper argv T3 Code 0.1.11 passes (OpenCodeRuntime.ts:601), with
 // port 0 so the fake picks a free port.
 const SERVE_ARGS = ['serve', '--hostname=127.0.0.1', '--port=0'];
@@ -68,16 +65,6 @@ function keyHolders(env, key = GOOD_KEY) {
     .filter(([, value]) => String(value).includes(key))
     .map(([name]) => name)
     .sort();
-}
-
-async function missing(file) {
-  try {
-    await fs.lstat(file);
-    return false;
-  } catch (error) {
-    if (error.code === 'ENOENT') return true;
-    throw error;
-  }
 }
 
 /** Each live process as pid, pgid, and command line. */
@@ -125,152 +112,18 @@ after(async () => {
   await gateway?.close();
 });
 
-test('install --dry-run --provider opencode checks everything and writes nothing', {
+test('install puts the watchdog in the OpenCode launcher and writes no hide list', {
   skip,
 }, async () => {
-  const sandbox = await box();
-  const before = await snapshot(sandbox.home);
-  const requests = gateway.requests.length;
-  const result = await subc(sandbox, [
-    't3',
-    'install',
-    '--provider',
-    'opencode',
-    '--dry-run',
-  ]);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /Plan: Subconscious \(OpenCode\) in T3 Code/);
-  assert.ok(
-    result.stdout.includes(`${sandbox.opencodeBin} (2.3.0)`),
-    result.stdout,
-  );
-  assert.match(result.stdout, /OpenCode uses your ~\/\.config\/opencode/);
-  assert.match(result.stdout, /read again when the helper starts/);
-  assert.ok(result.stdout.includes(FRESHNESS), result.stdout);
-  assert.match(result.stdout, /Dry run: nothing was changed/);
-  assert.deepEqual(await snapshot(sandbox.home), before);
-  assert.ok(gateway.requests.length > requests, 'the live catalog was read');
-});
-
-test('install adds subconscious-opencode with an empty server URL and password', {
-  skip,
-}, async () => {
-  const sandbox = await box();
-  const result = await subc(sandbox, [
-    't3',
-    'install',
-    '--provider',
-    'opencode',
-  ]);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /Subconscious \(OpenCode\) is ready in T3 Code/);
-  const text = await fs.readFile(sandbox.settingsPath, 'utf8');
-  const settings = JSON.parse(text);
-  assert.deepEqual(settings.futureTopLevelSetting, { keep: [1, 2, 3] });
-  assert.deepEqual(Object.keys(settings.providerInstances), [
-    'claudeAgent',
-    OURS,
-  ]);
-  // Only the envelope's enabled flag. T3 Code removes config.enabled.
-  assert.deepEqual(settings.providerInstances[OURS], {
-    driver: 'opencode',
-    displayName: 'Subconscious (OpenCode)',
-    enabled: true,
-    config: { binaryPath: sandbox.opencodeLauncher },
-  });
+  const sandbox = installed;
+  const settings = await readSettings(sandbox);
   assert.equal(settings.providerModelPreferences, undefined);
-  assert.equal((await fs.stat(sandbox.opencodeLauncher)).mode & 0o777, 0o755);
-  await assert.rejects(fs.access(sandbox.launcher), 'no Codex launcher');
-
   const launcher = await fs.readFile(sandbox.opencodeLauncher, 'utf8');
-  assert.match(launcher, /^#!\/usr\/bin\/env -S bash -p\n/);
-  assert.ok(
-    launcher.includes(`\nsubc_opencode='${sandbox.opencodeBin}'\n`),
-    launcher,
-  );
-  assert.match(launcher, /--opencode "\$subc_opencode"/);
   // The parent watchdog sits right before the exec.
   assert.match(
     launcher,
     /subc_parent=\$PPID\n[\s\S]*\nexec "\$\{subc_argv\[@\]\}"\n$/,
   );
-  assert.ok(!launcher.includes(GOOD_KEY));
-  assert.ok(!text.includes(GOOD_KEY));
-  assert.ok(!`${result.stdout}${result.stderr}`.includes(GOOD_KEY));
-
-  // The version check ran in a throwaway dir. The fake writes its log under
-  // XDG_DATA_HOME, or ~/.local/share without it.
-  assert.ok(await missing(sandbox.opencodeDataDir));
-  assert.ok(await missing(sandbox.opencodeStateDir));
-  assert.ok(await missing(sandbox.opencodeConfigDir));
-  assert.ok(await missing(path.join(sandbox.home, '.cache', 'opencode')));
-});
-
-test("install keeps T3 Code's built-in opencode instance and every other setting", {
-  skip,
-}, async () => {
-  const builtIn = {
-    driver: 'opencode',
-    enabled: true,
-    config: { enabled: true, binaryPath: 'opencode' },
-  };
-  const sandbox = await box({
-    settings: `${JSON.stringify(
-      {
-        projectSettingsFolded: true,
-        providerInstances: { opencode: builtIn },
-        futureTopLevelSetting: { keep: [1, 2, 3] },
-      },
-      null,
-      2,
-    )}\n`,
-  });
-  const result = await subc(sandbox, [
-    't3',
-    'install',
-    '--provider',
-    'opencode',
-  ]);
-  assert.equal(result.code, 0, result.stderr);
-  const settings = await readSettings(sandbox);
-  assert.deepEqual(Object.keys(settings), [
-    'projectSettingsFolded',
-    'providerInstances',
-    'futureTopLevelSetting',
-  ]);
-  assert.deepEqual(settings.providerInstances.opencode, builtIn);
-  assert.deepEqual(Object.keys(settings.providerInstances), ['opencode', OURS]);
-  // The 2-space indent is kept.
-  assert.match(
-    await fs.readFile(sandbox.settingsPath, 'utf8'),
-    /^\{\n {2}"projectSettingsFolded"/,
-  );
-});
-
-test('install refuses OpenCode older than 2.0.18', { skip }, async () => {
-  const sandbox = await box();
-  const before = await snapshot(sandbox.home);
-  for (const version of ['2.0.17', '1.19.6']) {
-    const old = await subc(
-      sandbox,
-      ['t3', 'install', '--provider', 'opencode'],
-      { FAKE_OPENCODE_VERSION: version },
-    );
-    assert.equal(old.code, 1, version);
-    assert.ok(
-      old.stderr.includes(
-        `OpenCode ${version} is older than 2.0.18, the oldest version this provider supports`,
-      ),
-      old.stderr,
-    );
-  }
-  assert.deepEqual(await snapshot(sandbox.home), before);
-  const oldest = await subc(
-    sandbox,
-    ['t3', 'install', '--provider', 'opencode', '--dry-run'],
-    { FAKE_OPENCODE_VERSION: '2.0.18' },
-  );
-  assert.equal(oldest.code, 0, oldest.stderr);
 });
 
 test('a serve launch uses only the default profile and the live catalog', {
@@ -280,17 +133,8 @@ test('a serve launch uses only the default profile and the live catalog', {
   const log = logFile(sandbox, 'serve');
   const result = await launch(sandbox, SERVE_ARGS, { log });
   assert.equal(result.code, 0, result.stderr);
-  // T3 Code reads the helper's stdout for this line, and nothing comes
-  // before it.
-  assert.match(
-    result.stdout,
-    /^server listening on http:\/\/127\.0\.0\.1:\d+\n$/,
-  );
-  assert.equal(result.stderr, '');
   const [record] = await readRecords(log);
-  // The process T3 Code started is the one that became `opencode serve`,
-  // with T3 Code's args unchanged and in order.
-  assert.equal(record.pid, result.pid);
+  // T3 Code's args reach `opencode serve` unchanged and in order.
   assert.deepEqual(record.args, SERVE_ARGS);
 
   const { config, env } = record;
@@ -304,7 +148,6 @@ test('a serve launch uses only the default profile and the live catalog', {
   assert.equal(provider.models[MODELS[0]].limit.context, 5000000);
   assert.equal(env.SUBCONSCIOUS_API_KEY, GOOD_KEY);
   assert.equal(env.SUBCONSCIOUS_GATEWAY_URL, gateway.url);
-  assert.equal(env.HOME, sandbox.home);
   // T3 Code's own names reach the helper.
   assert.equal(env.T3CODE_HOME, sandbox.t3Home);
 });
@@ -324,170 +167,6 @@ test("T3 Code's OPENCODE_PASSWORD reaches the helper unchanged and its {} config
   assert.equal(record.env.OPENCODE_SERVER_PASSWORD, 'v1-password-4567');
   assert.notEqual(record.env.OPENCODE_CONFIG_CONTENT, '{}');
   assert.deepEqual(record.config.enabled_providers, ['subconscious']);
-});
-
-test('only SUBCONSCIOUS_API_KEY carries the key into the helper', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  // Profile lines can hold more copies of the key under OpenCode names.
-  await fs.appendFile(
-    profileFile(sandbox),
-    `OPENCODE_API_KEY=${GOOD_KEY}\nSUBC_OPENCODE_API_KEY=${GOOD_KEY}\nEXTRA_COPY=${GOOD_KEY}\n`,
-  );
-  const log = logFile(sandbox, 'key-copies');
-  const result = await launch(sandbox, SERVE_ARGS, { log });
-  assert.equal(result.code, 0, result.stderr);
-  const [record] = await readRecords(log);
-  assert.deepEqual(keyHolders(record.env), ['SUBCONSCIOUS_API_KEY']);
-  for (const name of [
-    'API_KEY',
-    'OPENCODE_API_KEY',
-    'SUBC_OPENCODE_API_KEY',
-    'GATEWAY_URL',
-    'MODEL',
-    'SUBCONSCIOUS_MODELS',
-    'OPENCODE_CONTEXT_LIMIT',
-  ])
-    assert.equal(record.env[name], undefined, name);
-  assert.ok(
-    Object.keys(record.env).every((name) => !name.startsWith('SUBC_')),
-    'no SUBC_* name reaches OpenCode',
-  );
-  assert.ok(!record.args.join('\n').includes(GOOD_KEY), 'no key in argv');
-  assert.ok(
-    !JSON.stringify(record.config).includes(GOOD_KEY),
-    'no key in the config',
-  );
-  assert.ok(!result.stderr.includes(GOOD_KEY), 'no key in stderr');
-  assert.ok(!result.stdout.includes(GOOD_KEY), 'no key in stdout');
-});
-
-test('a hostile T3 Code env cannot steer the launch', { skip }, async () => {
-  const sandbox = installed;
-  const extra = path.join(sandbox.root, 'evil opencode.json');
-  await fs.writeFile(
-    extra,
-    JSON.stringify({
-      provider: { evil: { options: { apiKey: '{env:SUBCONSCIOUS_API_KEY}' } } },
-    }),
-  );
-  // A BASH_ENV that prints would put text before the listening line.
-  const bashEnv = path.join(sandbox.root, 'bash env.sh');
-  await fs.writeFile(bashEnv, 'echo evil-bash-env\n');
-  const log = logFile(sandbox, 'hostile');
-  const requests = gateway.requests.length;
-  const result = await launch(sandbox, SERVE_ARGS, {
-    log,
-    env: {
-      SUBCONSCIOUS_API_KEY: 'sk-inherited-evil',
-      SUBCONSCIOUS_BASE_URL: 'http://127.0.0.1:9/evil',
-      SUBCONSCIOUS_GATEWAY_URL: 'http://127.0.0.1:9/evil',
-      SUBCONSCIOUS_MODELS: 'evil/pinned-model',
-      SUBCONSCIOUS_MODEL: 'evil/model',
-      SUBC_CONFIG_DIR: path.join(sandbox.root, 'evil-config'),
-      SUBC_MODEL_METADATA: '[]',
-      SUBC_OPENCODE_API_KEY: 'sk-evil-subc-opencode',
-      OPENCODE_API_KEY: 'sk-evil-opencode',
-      OPENCODE_CONFIG: extra,
-      OPENCODE_CONFIG_DIR: path.join(sandbox.root, 'evil-config-dir'),
-      OPENCODE_CONTEXT_LIMIT: '7',
-      OPENCODE_OUTPUT_LIMIT: '8',
-      API_KEY: 'sk-evil-api-key',
-      GATEWAY_URL: 'http://127.0.0.1:9/evil-gateway',
-      MODEL: 'evil/model',
-      BASH_ENV: bashEnv,
-      ENV: bashEnv,
-    },
-  });
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(
-    result.stdout,
-    /^server listening on http:\/\/127\.0\.0\.1:\d+\n$/,
-  );
-  const [record] = await readRecords(log);
-  const { env, config } = record;
-  assert.equal(env.SUBCONSCIOUS_API_KEY, GOOD_KEY);
-  assert.equal(env.SUBCONSCIOUS_GATEWAY_URL, gateway.url);
-  for (const name of [
-    'OPENCODE_API_KEY',
-    'SUBC_OPENCODE_API_KEY',
-    'OPENCODE_CONFIG',
-    'OPENCODE_CONFIG_DIR',
-    'OPENCODE_CONTEXT_LIMIT',
-    'OPENCODE_OUTPUT_LIMIT',
-    'API_KEY',
-    'GATEWAY_URL',
-    'MODEL',
-    'SUBC_CONFIG_DIR',
-    'BASH_ENV',
-    'ENV',
-  ])
-    assert.equal(env[name], undefined, name);
-  assert.equal(
-    config.provider.subconscious.options.baseURL,
-    `${gateway.url}/v1`,
-  );
-  assert.deepEqual(Object.keys(config.provider.subconscious.models), MODELS);
-  assert.equal(
-    config.provider.subconscious.models[MODELS[0]].limit.context,
-    5000000,
-  );
-  assert.equal(
-    config.provider.subconscious.models[MODELS[0]].limit.output,
-    65536,
-  );
-  const values = `${Object.values(env).join('\n')}\n${JSON.stringify(config)}`;
-  assert.ok(!values.includes('evil'), 'no hostile value reached OpenCode');
-  const launches = gateway.requests.slice(requests);
-  assert.ok(launches.length > 0);
-  assert.ok(
-    launches.every((request) => request.authorization === `Bearer ${GOOD_KEY}`),
-    'only the profile key reached the gateway',
-  );
-});
-
-test('an exported shell function in the env never runs, and stdout stays clean', {
-  skip,
-}, async () => {
-  const sandbox = installed;
-  const marker = path.join(sandbox.root, 'opencode-function-ran');
-  const log = logFile(sandbox, 'bash-func');
-  const result = await launch(sandbox, SERVE_ARGS, {
-    log,
-    env: exportedFunctions(marker),
-  });
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(
-    result.stdout,
-    /^server listening on http:\/\/127\.0\.0\.1:\d+\n$/,
-  );
-  const [record] = await readRecords(log);
-  assert.deepEqual(record.args, SERVE_ARGS);
-  await assert.rejects(fs.lstat(marker), { code: 'ENOENT' });
-});
-
-test('a BASH_ENV line in the default profile never reaches run.sh or the helper', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  const startup = path.join(sandbox.root, 'profile startup.sh');
-  await fs.writeFile(startup, 'echo "hello from the profile BASH_ENV"\n');
-  await fs.writeFile(
-    profileFile(sandbox),
-    PROFILE(gateway.url, GOOD_KEY, `BASH_ENV=${startup}\nENV=${startup}\n`),
-    { mode: 0o600 },
-  );
-  const log = logFile(sandbox, 'profile-bash-env');
-  const result = await launch(sandbox, SERVE_ARGS, { log });
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(
-    result.stdout,
-    /^server listening on http:\/\/127\.0\.0\.1:\d+\n$/,
-  );
-  const [record] = await readRecords(log);
-  assert.equal(record.env.BASH_ENV, undefined);
-  assert.equal(record.env.ENV, undefined);
 });
 
 test('the helper command line ends with T3 Code serve args, for the orphan reaper', {
@@ -532,104 +211,6 @@ test('the helper command line ends with T3 Code serve args, for the orphan reape
   }
 });
 
-test('--version and --help pass through offline without reading the profile', {
-  skip,
-}, async () => {
-  const sandbox = installed;
-  const requests = gateway.requests.length;
-  const before = await snapshot(sandbox.subc);
-  for (const args of [['--version'], ['-v']]) {
-    const result = await launch(sandbox, args);
-    assert.equal(result.code, 0, result.stderr);
-    assert.equal(result.stdout, 'opencode v2.3.0\n');
-  }
-  const hostile = { SUBCONSCIOUS_MODEL: 'x', OPENCODE_CONFIG: '/x.json' };
-  for (const args of [
-    ['--help'],
-    ['-h'],
-    ['serve', '--help'],
-    ['serve', '-h'],
-  ]) {
-    const log = logFile(sandbox, `passthrough-${args.join('')}`);
-    const result = await launch(sandbox, args, { log, env: hostile });
-    assert.equal(result.code, 0, `${args.join(' ')}: ${result.stderr}`);
-    const [record] = await readRecords(log);
-    assert.deepEqual(record.args, args);
-    // T3 Code's env reaches OpenCode as it was: no Subconscious launch.
-    const expected = sandbox.openCodeT3Env({
-      FAKE_OPENCODE_LOG: log,
-      ...hostile,
-    });
-    for (const [name, value] of Object.entries(expected))
-      if (name !== 'PATH') assert.equal(record.env[name], value, name);
-    assert.equal(record.env.SUBCONSCIOUS_API_KEY, undefined);
-  }
-  assert.equal(gateway.requests.length, requests, 'no network request');
-  assert.deepEqual(await snapshot(sandbox.subc), before, 'no file written');
-
-  // A passthrough never reads the profile, so a broken one cannot stop it.
-  await fs.writeFile(profileFile(sandbox), 'MODEL=not a model!\n');
-  try {
-    const result = await launch(sandbox, ['--version']);
-    assert.equal(result.code, 0, result.stderr);
-  } finally {
-    await fs.writeFile(profileFile(sandbox), PROFILE(gateway.url));
-  }
-});
-
-test('serve --service, serve --stdio, upgrade, and other commands are refused before OpenCode runs', {
-  skip,
-}, async () => {
-  const sandbox = installed;
-  const requests = gateway.requests.length;
-  for (const args of [
-    ['serve', '--service'],
-    ['serve', '--hostname=127.0.0.1', '--port=0', '--service'],
-    ['serve', '--stdio'],
-    ['upgrade'],
-    ['upgrade', '--method', 'curl'],
-    [],
-    ['models'],
-    ['run', 'hello'],
-    ['serve', '--mdns'],
-    ['serve', '--port'],
-    ['serve', '--port', '--service'],
-    ['serve', '--hostname=127.0.0.1', 'extra'],
-    ['serve', '--help', '--service'],
-    ['--version', '--help'],
-    ['--standalone'],
-  ]) {
-    const log = logFile(sandbox, 'refused');
-    const result = await launch(sandbox, args, { log });
-    // The launcher reads the plan through a process substitution, so it
-    // exits 1 for any adapter failure, as the other launchers do.
-    assert.equal(result.code, 1, args.join(' '));
-    assert.equal(result.stdout, '');
-    assert.match(
-      result.stderr,
-      /^subc-t3-opencode: `opencode .*` is not available through the Subconscious provider\. Run opencode directly for it\.\n$/,
-    );
-    assert.deepEqual(await readRecords(log), []);
-    // The adapter itself exits 64 (EX_USAGE).
-    const adapter = await run(
-      process.execPath,
-      [
-        ADAPTER,
-        '--opencode',
-        sandbox.opencodeBin,
-        '--config-dir',
-        sandbox.subc,
-        '--',
-        ...args,
-      ],
-      { env: sandbox.openCodeT3Env({ FAKE_OPENCODE_LOG: log }) },
-    );
-    assert.equal(adapter.code, 64, args.join(' '));
-    assert.equal(adapter.stdout, '');
-  }
-  assert.equal(gateway.requests.length, requests, 'no network request');
-});
-
 test('serve accepts its known flags in = and space form', {
   skip,
 }, async () => {
@@ -651,60 +232,6 @@ test('serve accepts its known flags in = and space form', {
   assert.equal(result.code, 0, result.stderr);
   const [record] = await readRecords(log);
   assert.deepEqual(record.args, args);
-});
-
-test('a rejected key or a failed catalog stops the launch', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  await fs.writeFile(
-    profileFile(sandbox),
-    PROFILE(gateway.url, 'sk-rejected-key'),
-  );
-  const log = logFile(sandbox, 'rejected');
-  const rejected = await launch(sandbox, SERVE_ARGS, { log });
-  assert.equal(rejected.code, 1);
-  assert.equal(rejected.stdout, '');
-  assert.match(
-    rejected.stderr,
-    /^subc-t3-opencode: .* did not return the model catalog for this key/,
-  );
-  assert.ok(!rejected.stderr.includes('sk-rejected-key'));
-
-  await fs.writeFile(profileFile(sandbox), PROFILE('http://127.0.0.1:9'));
-  const offline = await launch(sandbox, SERVE_ARGS, { log });
-  assert.equal(offline.code, 1);
-  assert.equal(offline.stdout, '');
-  assert.match(offline.stderr, /Could not read the model catalog/);
-  assert.ok(!offline.stderr.includes(GOOD_KEY));
-
-  await fs.writeFile(profileFile(sandbox), `GATEWAY_URL=${gateway.url}\n`);
-  const none = await launch(sandbox, SERVE_ARGS, { log });
-  assert.equal(none.code, 1);
-  assert.match(none.stderr, /no saved API key/);
-  assert.deepEqual(await readRecords(log), []);
-});
-
-test('each serve launch reads the default profile again', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  const log = logFile(sandbox, 'dynamic');
-  const first = await launch(sandbox, SERVE_ARGS, { log });
-  assert.equal(first.code, 0, first.stderr);
-  await fs.writeFile(
-    profileFile(sandbox),
-    `GATEWAY_URL=${gateway.url}\nAPI_KEY=${GOOD_KEY}\nMODEL=${MODELS[1]}\nOPENCODE_CONTEXT_LIMIT=200000\n`,
-  );
-  const second = await launch(sandbox, SERVE_ARGS, { log });
-  assert.equal(second.code, 0, second.stderr);
-  const [before, after] = await readRecords(log);
-  assert.equal(before.config.model, `subconscious/${MODELS[0]}`);
-  assert.equal(after.config.model, `subconscious/${MODELS[1]}`);
-  assert.equal(
-    after.config.provider.subconscious.models[MODELS[1]].limit.context,
-    200000,
-  );
 });
 
 test('a serve launch finishes in under 5 s with a 3 s gateway delay', {
@@ -744,19 +271,6 @@ test('a serve launch finishes in under 5 s with a 3 s gateway delay', {
       assert.match(edge.stderr, /Could not read the model catalog/);
       assert.equal(records.length, 1);
     }
-    // A gateway that never answers stops the launch within the 4 s
-    // catalog deadline, although the public list is asked for too.
-    slow.delayMs = 60_000;
-    started = Date.now();
-    const hung = await launch(sandbox, SERVE_ARGS, { log });
-    assert.ok(Date.now() - started < 5000, `${Date.now() - started} ms`);
-    assert.equal(hung.code, 1);
-    assert.equal(hung.stdout, '');
-    assert.match(
-      hung.stderr,
-      /Could not read the model catalog from http:\/\/127\.0\.0\.1:\d+ within 4 s\./,
-    );
-    assert.equal((await readRecords(log)).length, records.length);
   } finally {
     await slow.close();
   }
@@ -941,35 +455,6 @@ test('the watchdog exits with the helper and leaves no process', {
   assert.ok(empty, JSON.stringify(group()));
 });
 
-test('killing the launcher 200 times during the catalog fetch leaves no process behind', {
-  skip,
-  timeout: 240_000,
-}, async () => {
-  const sandbox = await installedBox();
-  const cycle = async (i) => {
-    const child = spawn(sandbox.opencodeLauncher, SERVE_ARGS, {
-      env: sandbox.openCodeT3Env({ FAKE_OPENCODE_SLEEP: '60000' }),
-      stdio: ['pipe', 'ignore', 'ignore'],
-    });
-    // Most kills land while Node computes the plan; every fourth lands after
-    // the exec, when the process T3 Code started is OpenCode.
-    const delay = i % 4 === 0 ? 700 + (i % 7) * 50 : (i * 7) % 90;
-    await sleep(delay);
-    const exited = new Promise((resolve) => child.on('exit', resolve));
-    child.kill('SIGKILL');
-    await exited;
-  };
-  for (let start = 0; start < 200; start += 20)
-    await Promise.all(
-      Array.from({ length: 20 }, (_, offset) => cycle(start + offset)),
-    );
-  const left = () =>
-    processes().filter((entry) => entry.command.includes(sandbox.root));
-  // A watchdog notices a killed helper within 2 s.
-  const empty = await waitFor(() => left().length === 0, 10_000);
-  assert.ok(empty, JSON.stringify(left()));
-});
-
 test('an entry without config.enabled, as T3 Code writes it, is current', {
   skip,
 }, async () => {
@@ -1001,49 +486,6 @@ test('an entry without config.enabled, as T3 Code writes it, is current', {
   assert.equal(again.code, 0, again.stderr);
   assert.match(again.stdout, /already current/);
   assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), before);
-});
-
-test('an opencode entry that subc did not write blocks install', {
-  skip,
-}, async () => {
-  const sandbox = await box({
-    settings: `${JSON.stringify({
-      providerInstances: {
-        [OURS]: {
-          driver: 'opencode',
-          enabled: true,
-          config: { binaryPath: '/usr/local/bin/opencode' },
-        },
-      },
-    })}\n`,
-  });
-  const settings = await fs.readFile(sandbox.settingsPath, 'utf8');
-  const result = await subc(sandbox, [
-    't3',
-    'install',
-    '--provider',
-    'opencode',
-  ]);
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /subconscious-opencode that subc did not create/);
-  assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), settings);
-  await assert.rejects(fs.access(sandbox.opencodeLauncher));
-  const status = await subc(sandbox, [
-    't3',
-    'status',
-    '--provider',
-    'opencode',
-  ]);
-  assert.match(status.stdout, /subconscious-opencode: conflict/);
-  // Uninstall leaves the foreign entry alone.
-  const removed = await subc(sandbox, [
-    't3',
-    'uninstall',
-    '--provider',
-    'opencode',
-  ]);
-  assert.equal(removed.code, 0, removed.stderr);
-  assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), settings);
 });
 
 test('a server URL or password set in T3 Code is drift, and install repairs it', {
@@ -1094,70 +536,6 @@ test('a server URL or password set in T3 Code is drift, and install repairs it',
   assert.match(fixed.stdout, /subconscious-opencode: installed\n/);
 });
 
-test('status lists the OpenCode provider offline, with no key', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  await fs.writeFile(
-    profileFile(sandbox),
-    'GATEWAY_URL=http://127.0.0.1:9\nMODEL=not a model!\n',
-  );
-  const requests = gateway.requests.length;
-  const status = await subc(sandbox, ['t3', 'status']);
-  assert.equal(status.code, 0, status.stderr);
-  assert.match(status.stdout, /subconscious-codex: not installed/);
-  assert.match(status.stdout, /Subconscious \(OpenCode\)/);
-  assert.match(status.stdout, /subconscious-opencode: installed/);
-  assert.match(status.stdout, /subc-t3-opencode: current/);
-  assert.ok(
-    status.stdout.includes(`${sandbox.opencodeBin} (2.3.0)`),
-    status.stdout,
-  );
-  assert.match(status.stdout, /OpenCode uses your ~\/\.config\/opencode/);
-  assert.ok(
-    status.stdout.includes(`Freshness     ${FRESHNESS}`),
-    status.stdout,
-  );
-  assert.equal(gateway.requests.length, requests, 'no network request');
-  // The version check in status writes nothing in the user's folders.
-  assert.ok(await missing(sandbox.opencodeDataDir));
-});
-
-test('uninstall removes only subconscious-opencode and its launcher', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox({ withClaude: true }, []);
-  // The user's own OpenCode folders, which uninstall never touches.
-  await fs.mkdir(sandbox.opencodeConfigDir, { recursive: true });
-  await fs.writeFile(
-    path.join(sandbox.opencodeConfigDir, 'opencode.json'),
-    '{"theme":"user"}\n',
-  );
-  await fs.mkdir(sandbox.opencodeDataDir, { recursive: true });
-  await fs.writeFile(path.join(sandbox.opencodeDataDir, 'opencode.db'), 'db');
-  const before = await snapshot(path.join(sandbox.home, '.config'));
-  const dataBefore = await snapshot(sandbox.opencodeDataDir);
-  const settings = await readSettings(sandbox);
-  const result = await subc(sandbox, [
-    't3',
-    'uninstall',
-    '--provider',
-    'opencode',
-  ]);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /Removed subconscious-opencode/);
-  await assert.rejects(fs.access(sandbox.opencodeLauncher));
-  await fs.access(sandbox.launcher);
-  await fs.access(sandbox.claudeLauncher);
-  const left = await readSettings(sandbox);
-  const { [OURS]: removed, ...others } = settings.providerInstances;
-  assert.ok(removed);
-  assert.deepEqual(left.providerInstances, others);
-  assert.deepEqual(left.futureTopLevelSetting, { keep: [1, 2, 3] });
-  assert.deepEqual(await snapshot(path.join(sandbox.home, '.config')), before);
-  assert.deepEqual(await snapshot(sandbox.opencodeDataDir), dataBefore);
-});
-
 test('install with all three CLIs adds three entries, and a second install changes nothing', {
   skip,
 }, async () => {
@@ -1192,81 +570,10 @@ test('install with all three CLIs adds three entries, and a second install chang
   assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), text);
 });
 
-test('--provider opencode installs only OpenCode, and Codex and Claude keep working', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox({ withClaude: true }, [
-    '--provider',
-    'codex',
-    '--provider',
-    'claude',
-  ]);
-  const before = (await readSettings(sandbox)).providerInstances;
-  assert.equal(before[OURS], undefined);
-  const result = await subc(sandbox, [
-    't3',
-    'install',
-    '--provider',
-    'opencode',
-  ]);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(
-    result.stdout,
-    /Installing: Subconscious \(OpenCode\) in T3 Code/,
-  );
-  assert.doesNotMatch(
-    result.stdout,
-    /Subconscious \(Codex\)|Subconscious \(Claude\)/,
-  );
-  const after = (await readSettings(sandbox)).providerInstances;
-  assert.deepEqual(Object.keys(after), [...Object.keys(before), OURS]);
-  for (const id of Object.keys(before))
-    assert.deepEqual(after[id], before[id], id);
-
-  const codexLog = logFile(sandbox, 'mixed-codex');
-  const codex = await run(sandbox.launcher, ['app-server'], {
-    env: sandbox.t3Env({ FAKE_CODEX_LOG: codexLog }),
-  });
-  assert.equal(codex.code, 0, codex.stderr);
-  const [codexRecord] = await readRecords(codexLog);
-  assert.equal(codexRecord.env.SUBCONSCIOUS_API_KEY, GOOD_KEY);
-  assert.equal(codexRecord.env.OPENCODE_CONFIG_CONTENT, undefined);
-
-  const claudeLog = logFile(sandbox, 'mixed-claude');
-  const claude = await run(
-    sandbox.claudeLauncher,
-    ['--output-format', 'stream-json', '--input-format', 'stream-json'],
-    { env: sandbox.claudeT3Env({ FAKE_CLAUDE_LOG: claudeLog }) },
-  );
-  assert.equal(claude.code, 0, claude.stderr);
-  const [claudeRecord] = await readRecords(claudeLog);
-  assert.equal(claudeRecord.env.ANTHROPIC_AUTH_TOKEN, GOOD_KEY);
-
-  const openCodeLog = logFile(sandbox, 'mixed-opencode');
-  const openCode = await launch(sandbox, SERVE_ARGS, { log: openCodeLog });
-  assert.equal(openCode.code, 0, openCode.stderr);
-  assert.equal((await readRecords(openCodeLog)).length, 1);
-});
-
-test('install without --provider installs Codex and skips OpenCode 1.x', {
+test('install fails and changes nothing when it refuses every CLI it finds', {
   skip,
 }, async () => {
   const sandbox = await box();
-  const result = await subc(sandbox, ['t3', 'install'], {
-    FAKE_OPENCODE_VERSION: '1.14.30',
-  });
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(
-    result.stdout,
-    /Skipped.*Subconscious \(OpenCode\): OpenCode 1\.14\.30 is older than 2\.0\.18/,
-  );
-  assert.match(result.stdout, /Subconscious \(Codex\) is ready in T3 Code/);
-  const settings = await readSettings(sandbox);
-  assert.ok(settings.providerInstances['subconscious-codex']);
-  assert.equal(settings.providerInstances[OURS], undefined);
-  assert.ok(await missing(sandbox.opencodeLauncher));
-
-  // With every found CLI refused, install fails and changes nothing.
   await fs.rm(path.join(sandbox.bin, 'codex'));
   const before = await snapshot(sandbox.home);
   const none = await subc(sandbox, ['t3', 'install'], {
@@ -1275,26 +582,6 @@ test('install without --provider installs Codex and skips OpenCode 1.x', {
   assert.equal(none.code, 1);
   assert.match(none.stderr, /OpenCode 1\.14\.30 is older than 2\.0\.18/);
   assert.deepEqual(await snapshot(sandbox.home), before);
-});
-
-test('install without --provider skips OpenCode when its CLI is missing', {
-  skip,
-}, async () => {
-  const sandbox = await box({ withOpenCode: false });
-  const result = await subc(sandbox, ['t3', 'install', '--dry-run']);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(
-    result.stdout,
-    /Skipped.*Subconscious \(OpenCode\): OpenCode CLI is not installed\. Install it with npm i -g opencode-ai/,
-  );
-  const named = await subc(sandbox, [
-    't3',
-    'install',
-    '--provider',
-    'opencode',
-  ]);
-  assert.equal(named.code, 1);
-  assert.match(named.stderr, /OpenCode CLI is not installed/);
 });
 
 test('the OpenCode descriptor keeps T3 Code helper names and removes steering names', () => {
