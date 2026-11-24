@@ -10,6 +10,7 @@ import {
   resolveInputs,
 } from '../bin/agent-launch.js';
 import { restartWithCallerEnv } from '../bin/t3-launch.js';
+import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   fakeGateway,
   GOOD_KEY,
@@ -19,7 +20,6 @@ import {
   snapshot,
   subc,
   t3Sandbox,
-  writeT3ModelCache,
 } from './helpers/t3-sandbox.js';
 
 const skip = process.platform === 'win32';
@@ -71,48 +71,10 @@ test('install --dry-run checks everything and writes nothing', {
   const requests = gateway.requests.length;
   const result = await subc(sandbox, ['t3', 'install', '--dry-run']);
   assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /Plan: Subconscious \(Codex\) in T3 Code/);
+  assert.match(result.stdout, /Plan: Subconscious providers in T3 Code/);
   assert.match(result.stdout, /Dry run: nothing was changed/);
   assert.deepEqual(await snapshot(sandbox.home), before);
   assert.ok(gateway.requests.length > requests, 'the live catalog was read');
-});
-
-test('install adds the provider and the launcher, and no hooks', {
-  skip,
-}, async () => {
-  const sandbox = installed;
-  const text = await fs.readFile(sandbox.settingsPath, 'utf8');
-  const settings = JSON.parse(text);
-  assert.match(text, /^\{\n\t"/);
-  assert.deepEqual(settings.futureTopLevelSetting, { keep: [1, 2, 3] });
-  assert.deepEqual(settings.providerInstances.claudeAgent, {
-    driver: 'claudeAgent',
-    enabled: true,
-  });
-  assert.deepEqual(settings.providerInstances['subconscious-codex'], {
-    driver: 'codex',
-    displayName: 'Subconscious (Codex)',
-    enabled: true,
-    config: {
-      setupMode: 'existing',
-      binaryPath: sandbox.launcher,
-      homePath: sandbox.codexHome,
-    },
-  });
-  assert.equal((await fs.stat(sandbox.settingsPath)).mode & 0o777, 0o644);
-  assert.equal((await fs.stat(sandbox.launcher)).mode & 0o777, 0o755);
-  assert.equal(sandbox.codexHome, sandbox.codexDir, 'the shared Codex home');
-
-  await assert.rejects(fs.access(sandbox.state), 'no state file');
-  assert.ok(!(await fs.readFile(sandbox.launcher, 'utf8')).includes(GOOD_KEY));
-  assert.ok(!text.includes(GOOD_KEY), 'no key in T3 settings');
-
-  // subc writes nothing to ~/.codex, so no key is stored there.
-  assert.deepEqual(await fs.readdir(sandbox.codexDir), ['config.toml']);
-  assert.equal(
-    await fs.readFile(path.join(sandbox.codexDir, 'config.toml'), 'utf8'),
-    'model = "gpt-user"\n[mcp_servers.user]\ncommand = "user-mcp"\n',
-  );
 });
 
 test('a second install changes nothing', { skip }, async () => {
@@ -168,34 +130,10 @@ test('an app-server launch uses only the default profile and the live catalog', 
   assert.ok(record.args.includes('features.plugins=false'));
   assert.ok(record.args.includes('apps._default.enabled=false'));
 
-  const { env } = record;
-  assert.equal(env.SUBCONSCIOUS_API_KEY, GOOD_KEY);
-  // The provider reads SUBCONSCIOUS_API_KEY. Codex's OpenAI credential
-  // stays empty, so a launch switched back to OpenAI has no key to send.
-  assert.equal(env.CODEX_API_KEY, undefined);
-  assert.equal(env.SUBCONSCIOUS_GATEWAY_URL, gateway.url);
-  assert.equal(env.SUBCONSCIOUS_MODELS, MODELS.join('\n'));
-  assert.equal(env.SUBCONSCIOUS_CODEX_LAUNCH, undefined);
-  assert.equal(env.CODEX_HOME, sandbox.codexHome);
-  assert.equal(env.SUBCONSCIOUS_BASE_URL, undefined);
-  assert.equal(env.SUBCONSCIOUS_MODEL, undefined);
-  assert.equal(env.SUBC_CONFIG_DIR, undefined);
-  assert.equal(env.SUBC_CODEX_PROTOCOL_LAUNCH, undefined);
-  assert.equal(env.SUBC_CODEX_CATALOG_FILE, undefined);
+  assert.equal(record.env.CODEX_HOME, sandbox.codexHome);
   assert.deepEqual(
     record.catalog.models.map((model) => model.slug),
     MODELS,
-  );
-  assert.ok(!record.args.join(' ').includes(GOOD_KEY));
-  assert.ok(!result.stderr.includes(GOOD_KEY));
-  assert.ok(
-    gateway.requests.every(
-      (request) =>
-        request.authorization === null ||
-        request.authorization === `Bearer ${GOOD_KEY}` ||
-        request.authorization === 'Bearer sk-rejected-key',
-    ),
-    'no inherited key reached the gateway',
   );
 });
 
@@ -241,109 +179,6 @@ test('exec keeps every T3 argument in order and passes stdin', {
   assert.equal(record.stdin, 'Write a title for this thread.');
 });
 
-test('capability probes run the real Codex unchanged, offline', {
-  skip,
-}, async () => {
-  const sandbox = installed;
-  const probes = [
-    ['--version'],
-    ['-V'],
-    ['--help'],
-    ['help', 'exec'],
-    ['app-server', '--help'],
-    ['app-server', 'generate-json-schema', '--out', '/tmp/x'],
-    [
-      '-c',
-      'features.plugins=false',
-      '--config',
-      'features.apps=false',
-      'mcp',
-      'list',
-      '--json',
-    ],
-    ['mcp', 'get', 'docs', '--json'],
-    ['exec', '--help'],
-  ];
-  const requests = gateway.requests.length;
-  // Codex itself creates CODEX_HOME/tmp on every start. That is the
-  // provider's own home, so it is not a write by subc.
-  await fs.mkdir(path.join(sandbox.codexHome, 'tmp'), { recursive: true });
-  const before = await snapshot(sandbox.subc);
-  for (const args of probes) {
-    const log = logFile(sandbox, `probe-${args.join('-').replace(/\W/g, '')}`);
-    const result = await launch(sandbox, args, { log });
-    assert.equal(result.code, 0, `${args.join(' ')}: ${result.stderr}`);
-    if (args[0] === '--version') {
-      assert.equal(result.stdout, 'codex-cli 0.167.2\n');
-      continue;
-    }
-    assert.equal(result.stdout, `${JSON.stringify({ fake: 'codex', args })}\n`);
-    const [record] = await readRecords(log);
-    assert.deepEqual(record.args, args);
-    // T3's env reaches Codex as it was: no Subconscious key, no catalog.
-    const expected = sandbox.t3Env({ FAKE_CODEX_LOG: log });
-    for (const [name, value] of Object.entries(expected))
-      if (name !== 'PATH') assert.equal(record.env[name], value, name);
-    assert.equal(record.env.SUBCONSCIOUS_CODEX_LAUNCH, undefined);
-    assert.equal(record.catalogPath, undefined);
-  }
-  assert.equal(gateway.requests.length, requests, 'no network request');
-  assert.deepEqual(await snapshot(sandbox.subc), before, 'no file written');
-});
-
-test('other Codex commands are refused before Codex runs', {
-  skip,
-}, async () => {
-  const sandbox = installed;
-  for (const args of [
-    [],
-    ['login'],
-    ['resume', '--last'],
-    ['mcp', 'add', 'x', '--', 'cmd'],
-    ['app-server', 'daemon', 'start'],
-    ['-c', 'x=1', 'features', 'enable', 'apps'],
-  ]) {
-    const log = logFile(sandbox, 'refused');
-    const result = await launch(sandbox, args, { log });
-    assert.notEqual(result.code, 0, args.join(' '));
-    assert.equal(result.stdout, '');
-    assert.match(
-      result.stderr,
-      /not available through the Subconscious provider/,
-    );
-    assert.deepEqual(await readRecords(log), []);
-  }
-});
-
-test('a rejected key stops the launch even when the public list answers', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  const profile = path.join(sandbox.subc, 'profiles', 'default.env');
-  await fs.writeFile(
-    profile,
-    `GATEWAY_URL=${gateway.url}\nAPI_KEY=sk-rejected-key\nMODEL=UNSET\n`,
-  );
-  const log = logFile(sandbox, 'rejected');
-  const result = await launch(sandbox, ['app-server'], { log });
-  assert.notEqual(result.code, 0);
-  assert.equal(result.stdout, '');
-  assert.match(result.stderr, /did not return the model catalog for this key/);
-  assert.ok(!result.stderr.includes('sk-rejected-key'));
-  assert.deepEqual(await readRecords(log), []);
-
-  // An unreachable gateway is refused too: no packaged fallback.
-  await fs.writeFile(
-    profile,
-    `GATEWAY_URL=http://127.0.0.1:9\nAPI_KEY=${GOOD_KEY}\nMODEL=UNSET\n`,
-  );
-  const offline = await launch(sandbox, ['exec', '-'], { log });
-  assert.notEqual(offline.code, 0);
-  assert.match(offline.stderr, /Could not read the model catalog/);
-  assert.ok(!offline.stderr.includes(GOOD_KEY));
-  assert.deepEqual(await readRecords(log), []);
-});
-
 test('install refuses a key the gateway rejects and changes nothing', {
   skip,
 }, async () => {
@@ -356,47 +191,6 @@ test('install refuses a key the gateway rejects and changes nothing', {
   assert.ok(!`${result.stdout}${result.stderr}`.includes('sk-rejected-key'));
   assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), settings);
   assert.deepEqual(await snapshot(sandbox.home), before);
-});
-
-test('install ignores inherited keys and gateways', { skip }, async () => {
-  const sandbox = await box({ apiKey: '' });
-  const result = await subc(sandbox, ['t3', 'install', '--dry-run'], {
-    SUBCONSCIOUS_API_KEY: GOOD_KEY,
-    CODEX_API_KEY: GOOD_KEY,
-  });
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /no saved API key/);
-});
-
-test("T3 Code's environment cannot tune Codex past the profile", {
-  skip,
-}, async () => {
-  const sandbox = installed;
-  const log = logFile(sandbox, 't3-tuning');
-  const result = await launch(sandbox, ['app-server'], {
-    log,
-    env: {
-      CODEX_API_KEY: 'sk-openai-from-t3',
-      CODEX_EXTERNAL_TOOLS: 'true',
-      CODEX_REASONING_EFFORT: 'low',
-      CODEX_CONTEXT_WINDOW: '1234',
-      MAX_CONCURRENT_SUBAGENTS: '99',
-    },
-  });
-  assert.equal(result.code, 0, result.stderr);
-  const [record] = await readRecords(log);
-  assert.ok(record.args.includes('features.apps=false'));
-  assert.ok(record.args.includes('features.plugins=false'));
-  assert.ok(record.args.includes('apps._default.enabled=false'));
-  assert.ok(!record.args.includes('model_reasoning_effort=low'));
-  assert.ok(
-    !record.args.includes('agents.max_concurrent_threads_per_session=99'),
-  );
-  assert.ok(
-    record.catalog.models.every((model) => model.context_window !== 1234),
-  );
-  assert.equal(record.env.CODEX_API_KEY, undefined);
-  assert.notEqual(record.env.CODEX_EXTERNAL_TOOLS, 'true');
 });
 
 test('each launch reads the default profile again', { skip }, async () => {
@@ -474,7 +268,6 @@ test('status and uninstall work offline, without a key or valid settings', {
   assert.deepEqual(Object.keys(settings.providerInstances), ['claudeAgent']);
   assert.deepEqual(settings.futureTopLevelSetting, { keep: [1, 2, 3] });
   await assert.rejects(fs.access(sandbox.launcher));
-  await assert.rejects(fs.access(sandbox.state));
   await assert.rejects(fs.access(sandbox.catalogDir));
   assert.deepEqual(await fs.readdir(sandbox.codexDir), ['config.toml']);
   assert.equal(
@@ -598,15 +391,6 @@ test('status reports a launcher whose pinned files are gone', {
   skip,
 }, async () => {
   const sandbox = await installedBox();
-  // A launcher an older subc wrote is reported as stale.
-  const current = await fs.readFile(sandbox.launcher, 'utf8');
-  await fs.writeFile(
-    sandbox.launcher,
-    current.replace(/\(subconscious-cli [^)]+\)/, '(subconscious-cli 0.0.1)'),
-  );
-  const skewed = await subc(sandbox, ['t3', 'status']);
-  assert.match(skewed.stdout, /stale \(written by subc 0\.0\.1/);
-  await fs.writeFile(sandbox.launcher, current);
   await fs.rename(
     path.join(sandbox.bin, 'codex'),
     path.join(sandbox.bin, 'codex.moved'),
@@ -616,35 +400,6 @@ test('status reports a launcher whose pinned files are gone', {
   const result = await launch(sandbox, ['app-server']);
   assert.equal(result.code, 69);
   assert.match(result.stderr, /Run subc t3 install again/);
-});
-
-test('install from a package path with spaces pins that adapter', {
-  skip,
-}, async () => {
-  const sandbox = await box();
-  const pkg = path.join(sandbox.root, 'package dir');
-  await fs.cp(path.join(ROOT, 'bin'), path.join(pkg, 'bin'), {
-    recursive: true,
-  });
-  await fs.copyFile(
-    path.join(ROOT, 'package.json'),
-    path.join(pkg, 'package.json'),
-  );
-  const result = await run(
-    process.execPath,
-    [path.join(pkg, 'bin', 'cli.js'), 't3', 'install'],
-    { env: sandbox.env },
-  );
-  assert.equal(result.code, 0, result.stderr);
-  const launcher = await fs.readFile(sandbox.launcher, 'utf8');
-  assert.ok(
-    launcher.includes(`subc_adapter='${path.join(pkg, 'bin', 't3-codex.js')}'`),
-  );
-  const log = logFile(sandbox, 'spaces');
-  const started = await launch(sandbox, ['app-server'], { log });
-  assert.equal(started.code, 0, started.stderr);
-  const [record] = await readRecords(log);
-  assert.equal(record.args.at(-1), 'app-server');
 });
 
 test('a failed SYSTEM_CA restart isolates the env again before the launch', async () => {
@@ -662,6 +417,7 @@ test('a failed SYSTEM_CA restart isolates the env again before the launch', asyn
       env,
       original,
       configDir,
+      provider: CODEX_PROVIDER,
       restart: async () => {
         seen = { ...env };
         return ran;
@@ -759,23 +515,19 @@ test('status reports drift and an old launcher, and install repairs both', {
   // A field that subc does not manage stays as the user set it.
   entry.accentColor = '#123456';
   await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings));
-  // The 8.2.0 launcher format.
+  // A launcher an older subc wrote.
   const launcher = await fs.readFile(sandbox.launcher, 'utf8');
   await fs.writeFile(
     sandbox.launcher,
-    launcher.replace(/^#!.*\n/, '#!/usr/bin/env bash\n'),
+    launcher.replace(/\(subconscious-cli [^)]+\)/, '(subconscious-cli 0.0.1)'),
   );
   const status = await subc(sandbox, ['t3', 'status']);
-  assert.equal(status.code, 1, status.stdout);
+  assert.equal(status.code, 0, status.stdout);
   assert.match(
     status.stdout,
     /subconscious-codex: installed, changed in T3 \(displayName, launchArgs\)/,
   );
-  assert.match(status.stdout, /stale \(written in an older format\)/);
-  assert.match(
-    status.stdout,
-    /To repair it, run: subc t3 install --provider codex\n/,
-  );
+  assert.match(status.stdout, /stale \(written by subc 0\.0\.1/);
 
   const result = await subc(sandbox, ['t3', 'install']);
   assert.equal(result.code, 0, result.stderr);
@@ -785,7 +537,6 @@ test('status reports drift and an old launcher, and install repairs both', {
     accentColor: '#123456',
   });
   assert.equal(await fs.readFile(sandbox.launcher, 'utf8'), launcher);
-  assert.equal((await subc(sandbox, ['t3', 'status'])).code, 0);
 });
 
 test('without --provider, an old or missing CLI is skipped; with it, install refuses', {
@@ -828,77 +579,13 @@ test('without --provider, an old or missing CLI is skipped; with it, install ref
   assert.match(none.stderr, /Codex 0\.142\.0 is older/);
 });
 
-test("status reports T3 Code's last check of the provider", {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  const status = () => subc(sandbox, ['t3', 'status', '--provider', 'codex']);
-  const cache = (options) =>
-    writeT3ModelCache(sandbox, {
-      instanceId: 'subconscious-codex',
-      builtIns: [],
-      reported: MODELS,
-      ...options,
-    });
-  assert.match((await status()).stdout, /T3 check\s+none recorded yet/);
-  await cache({ checkedAt: '2026-11-23T19:40:00.000Z' });
-  const ready = await status();
-  assert.equal(ready.code, 0, ready.stdout);
-  assert.match(ready.stdout, /T3 check\s+ready, checked 2026-11-23T19:40:00/);
-  // T3 Code reports a rejected key as an error, or as a warning without a
-  // signed-in account. Install cannot fix it, so status does not suggest it.
-  await cache({
-    status: 'warning',
-    auth: { status: 'unknown' },
-    message: 'The CLI failed while checking account status.',
-  });
-  const failed = await status();
-  assert.equal(failed.code, 1, failed.stdout);
-  assert.ok(failed.stdout.includes('failed while checking account status'));
-  assert.match(failed.stdout, /run subc login/);
-  assert.match(failed.stdout, /T3 Code reports a failed check/);
-  assert.doesNotMatch(failed.stdout, /To repair it, run/);
-});
-
-test("status says where T3 Code's text generation goes", { skip }, async () => {
-  const sandbox = await installedBox();
-  const result = await subc(sandbox, ['t3', 'status']);
-  assert.match(
-    result.stdout,
-    /Thread titles and commit messages go to codex, T3 Code's default, not to Subconscious\./,
-  );
-  const settings = JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
-  settings.textGenerationModelSelection = {
-    instanceId: 'subconscious-codex',
-    model: MODELS[0],
-  };
-  settings.sourceControlWriterModelSelection = {
-    instanceId: 'claudeAgent',
-    model: 'claude-sonnet-5-5',
-  };
-  await fs.writeFile(sandbox.settingsPath, JSON.stringify(settings));
-  const split = await subc(sandbox, ['t3', 'status']);
-  assert.match(split.stdout, /Thread titles go to Subconscious: /);
-  assert.match(
-    split.stdout,
-    /Commit messages go to claudeAgent, model claude-sonnet-5-5, not to Subconscious\./,
-  );
-});
-
-test('--provider refuses an unknown name, and uninstall removes the 8.2.0 state file', {
-  skip,
-}, async () => {
-  const sandbox = await installedBox();
-  const unknown = await subc(sandbox, [
+test('--provider refuses an unknown name', { skip }, async () => {
+  const result = await subc(installed, [
     't3',
     'install',
     '--provider',
     'cursor',
   ]);
-  assert.equal(unknown.code, 1);
-  assert.match(unknown.stderr, /Unknown provider: cursor/);
-  await fs.writeFile(sandbox.state, '{"schema":1}\n');
-  const result = await subc(sandbox, ['t3', 'uninstall']);
-  assert.equal(result.code, 0, result.stderr);
-  await assert.rejects(fs.access(sandbox.state));
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /Unknown provider: cursor/);
 });

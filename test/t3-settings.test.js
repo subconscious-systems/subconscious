@@ -3,14 +3,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { CLAUDE_PROVIDER, CODEX_PROVIDER } from '../bin/t3-providers.js';
+import { CODEX_PROVIDER } from '../bin/t3-providers.js';
 import {
   inspectT3,
   installT3Provider,
-  readT3ModelPreferences,
   removeT3Provider,
   settingsBlockers,
-  writeT3HideList,
 } from '../bin/t3-settings.js';
 
 const T3_INSTANCE_ID = CODEX_PROVIDER.instanceId;
@@ -45,7 +43,12 @@ async function t3Home(settings, { mode = 0o644 } = {}) {
     root,
     file,
     backupDir: path.join(root, 'backups'),
-    target: { home, launcherPath: LAUNCHER, homePath: CODEX_HOME },
+    target: {
+      home,
+      launcherPath: LAUNCHER,
+      homePath: CODEX_HOME,
+      provider: CODEX_PROVIDER,
+    },
     read: async () => JSON.parse(await fs.readFile(file, 'utf8')),
   };
 }
@@ -281,33 +284,17 @@ test('the settings file keeps its mode', { skip }, async () => {
   assert.equal((await fs.stat(box.file)).mode & 0o777, 0o640);
 });
 
-test('a symlinked settings file is written through only when it is safe', {
-  skip,
-}, async () => {
+test('a symlinked settings file is refused', { skip }, async () => {
   const box = await t3Home();
-  const realDir = path.join(box.root, 'dotfiles');
-  await fs.mkdir(realDir, { mode: 0o700 });
-  const real = path.join(realDir, 'settings.json');
+  const real = path.join(box.root, 'settings.json');
   await fs.writeFile(real, `${JSON.stringify(BASE)}\n`);
   await fs.symlink(real, box.file);
-  await installT3Provider(box.target, {
-    backupDir: box.backupDir,
-    settleMs: 0,
-  });
-  assert.ok((await fs.lstat(box.file)).isSymbolicLink());
-  const written = JSON.parse(await fs.readFile(real, 'utf8'));
-  assert.ok(written.providerInstances[T3_INSTANCE_ID]);
-
-  await fs.chmod(real, 0o666);
   assert.equal((await inspectT3(box.target)).state, 'unsafe');
   await assert.rejects(
     installT3Provider(box.target, { backupDir: box.backupDir, settleMs: 0 }),
-    /not a private regular file/,
+    /not a regular file/,
   );
-
-  const dangling = await t3Home();
-  await fs.symlink(path.join(dangling.root, 'gone.json'), dangling.file);
-  assert.equal((await inspectT3(dangling.target)).state, 'unsafe');
+  assert.equal(await fs.readFile(real, 'utf8'), `${JSON.stringify(BASE)}\n`);
 });
 
 test('an entry T3 drops during its reload is written again', {
@@ -365,48 +352,6 @@ test('a write that lands before the compare is kept and retried', {
   assert.ok(settings.providerInstances[T3_INSTANCE_ID]);
 });
 
-/**
- * Play a T3 Code save that lands after subc read the file and before it
- * renamed its new copy into place. subc chmods its temp file right before
- * it compares and renames, so the save happens inside that chmod, once.
- */
-function saveDuringReplace(t, file, change) {
-  const chmod = fs.chmod;
-  const state = { saved: false };
-  t.mock.method(fs, 'chmod', async (target, mode) => {
-    await chmod(target, mode);
-    if (
-      state.saved ||
-      !path.basename(String(target)).startsWith('.settings.json.subc-')
-    )
-      return;
-    state.saved = true;
-    const settings = JSON.parse(await fs.readFile(file, 'utf8'));
-    change(settings);
-    await fs.writeFile(`${file}.t3`, JSON.stringify(settings, null, 2));
-    await fs.rename(`${file}.t3`, file);
-  });
-  return state;
-}
-
-test('a T3 Code save between the read and the rename survives', {
-  skip,
-}, async (t) => {
-  const box = await t3Home(BASE);
-  const entrySave = saveDuringReplace(t, box.file, (settings) => {
-    settings.t3Saved = 'entry';
-  });
-  await installT3Provider(box.target, {
-    backupDir: box.backupDir,
-    settleMs: 10,
-  });
-  t.mock.restoreAll();
-  assert.ok(entrySave.saved, 'the save landed inside the write');
-  const afterEntry = await box.read();
-  assert.equal(afterEntry.t3Saved, 'entry');
-  assert.ok(afterEntry.providerInstances[T3_INSTANCE_ID]);
-});
-
 test('uninstall removes only subc entry and keeps a backup', {
   skip,
 }, async () => {
@@ -443,85 +388,4 @@ test('backups are pruned to the last ten', { skip }, async () => {
     await removeT3Provider(box.target, { backupDir: box.backupDir });
   }
   assert.equal((await fs.readdir(box.backupDir)).length, 10);
-});
-
-test('a ~ path or a symlink to the launcher counts as the launcher', {
-  skip,
-}, async () => {
-  const box = await t3Home(BASE);
-  const home = path.join(box.root, 'home');
-  const launcher = path.join(home, '.subconscious', 'bin', 'subc-t3-codex');
-  await fs.mkdir(path.dirname(launcher), { recursive: true });
-  await fs.writeFile(launcher, '#!/bin/sh\n', { mode: 0o755 });
-  const link = path.join(box.root, 'link-to-launcher');
-  await fs.symlink(launcher, link);
-  const target = { ...box.target, launcherPath: launcher };
-  const previousHome = process.env.HOME;
-  process.env.HOME = home;
-  try {
-    await fs.writeFile(
-      box.file,
-      JSON.stringify({
-        ...BASE,
-        providerInstances: {
-          [T3_INSTANCE_ID]: ours(
-            {},
-            { binaryPath: '~/.subconscious/bin/subc-t3-codex' },
-          ),
-          'my-subc': ours({}, { binaryPath: link }),
-        },
-      }),
-    );
-    const report = await inspectT3(target);
-    assert.equal(report.entry, 'owned');
-    assert.deepEqual(report.duplicates, ['my-subc']);
-  } finally {
-    process.env.HOME = previousHome;
-  }
-});
-
-test('the hide list write skips unmigrated preferences and a missing entry', {
-  skip,
-}, async () => {
-  const launcherPath = '/opt/subc home/bin/subc-t3-claude';
-  const entry = {
-    driver: 'claudeAgent',
-    displayName: 'Subconscious (Claude)',
-    enabled: true,
-    config: { binaryPath: launcherPath },
-  };
-  const withEntry = (prefs) => ({
-    ...BASE,
-    providerModelPreferences: prefs,
-    providerInstances: {
-      ...BASE.providerInstances,
-      'subconscious-claude': entry,
-    },
-  });
-  for (const prefs of [null, ['not', 'an', 'object']]) {
-    const box = await t3Home(withEntry(prefs));
-    const target = {
-      home: box.target.home,
-      launcherPath,
-      provider: CLAUDE_PROVIDER,
-    };
-    const before = await fs.readFile(box.file, 'utf8');
-    const result = await writeT3HideList(target, ['claude-opus-5-5'], {
-      backupDir: box.backupDir,
-    });
-    assert.equal(result.state, 'unmigrated');
-    assert.equal(await fs.readFile(box.file, 'utf8'), before);
-  }
-  const noEntry = await t3Home({ ...BASE, providerModelPreferences: {} });
-  const target = {
-    home: noEntry.target.home,
-    launcherPath,
-    provider: CLAUDE_PROVIDER,
-  };
-  const result = await writeT3HideList(target, ['claude-opus-5-5'], {
-    backupDir: noEntry.backupDir,
-  });
-  assert.equal(result.state, 'no-entry');
-  assert.deepEqual((await noEntry.read()).providerModelPreferences, {});
-  assert.equal((await readT3ModelPreferences(target)).state, 'absent');
 });

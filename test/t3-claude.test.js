@@ -4,7 +4,6 @@ import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { mergeClaudeSettings, pinClaudeModel } from '../bin/t3-launch.js';
 import {
-  BUILT_IN_CLAUDE_MODELS,
   fakeGateway,
   GOOD_KEY,
   MODELS,
@@ -12,7 +11,6 @@ import {
   run,
   subc,
   t3Sandbox,
-  writeT3ModelCache,
 } from './helpers/t3-sandbox.js';
 
 const skip = process.platform === 'win32';
@@ -30,11 +28,10 @@ async function box(options = {}) {
 const install = (sandbox) =>
   subc(sandbox, ['t3', 'install', '--provider', 'claude']);
 
-function launch(sandbox, args, { log, env = {}, input, cwd } = {}) {
+function launch(sandbox, args, { log, env = {}, input } = {}) {
   return run(sandbox.claudeLauncher, args, {
     env: sandbox.claudeT3Env({ FAKE_CLAUDE_LOG: log, ...env }),
     input,
-    cwd,
   });
 }
 
@@ -169,64 +166,43 @@ test('text generation keeps its argv order and its stdin', {
   assertSubcSettings(settingsOf(record.args)[0]);
 });
 
-test('a settings file or value cannot move the gateway, and its other keys stay', {
+test('a --settings value cannot move the gateway, and its other keys stay', {
   skip,
 }, async () => {
   const sandbox = installed;
-  const cwd = path.join(sandbox.root, 'project dir');
-  await fs.mkdir(cwd, { recursive: true });
   const evil = 'http://127.0.0.1:9/evil';
-  await fs.writeFile(
-    path.join(cwd, 'settings.json'),
-    JSON.stringify({ fromFile: true, env: { ANTHROPIC_BASE_URL: evil } }),
-  );
   const inline = JSON.stringify({
     inline: true,
     availableModels: ['claude-opus-5-5'],
     env: { KEEP: 'x', ANTHROPIC_BASE_URL: evil },
   });
-  const forms = {
-    file: ['-p', '--settings', 'settings.json'],
-    // Earlier flags are dropped, and the last one is merged.
-    last: ['-p', '--settings', '{"first":true}', `--settings=${inline}`],
-    none: ['--input-format', 'stream-json'],
-  };
-  for (const [form, args] of Object.entries(forms)) {
+  for (const args of [
+    ['-p', '--settings', '{"first":true}', `--settings=${inline}`],
+    ['--input-format', 'stream-json'],
+  ]) {
     const log = logFile(sandbox);
-    const result = await launch(sandbox, args, { log, cwd });
-    assert.equal(result.code, 0, `${form}: ${result.stderr}`);
+    const result = await launch(sandbox, args, { log });
+    assert.equal(result.code, 0, result.stderr);
     const [record] = await readRecords(log);
-    const [settings, ...more] = settingsOf(record.args);
-    assert.equal(more.length, 0, form);
-    // The picker wins over a list that T3 Code or the user set.
+    // Claude Code uses the last --settings value, and the picker wins over a
+    // list that T3 Code or the user set.
+    const settings = settingsOf(record.args).at(-1);
     assertSubcSettings(settings);
-    if (form === 'file') assert.equal(settings.fromFile, true);
-    if (form === 'last') {
-      assert.equal(settings.inline, true);
-      assert.equal(settings.first, undefined);
-      assert.equal(settings.env.KEEP, 'x');
-    }
+    if (args.length > 2) assert.equal(settings.env.KEEP, 'x');
   }
 });
 
-test('a malformed --settings value stops the launch and is never shown', {
+test('a --settings value that is not a JSON object stops the launch and is never shown', {
   skip,
 }, async () => {
   const sandbox = installed;
-  const cwd = path.join(sandbox.root, 'malformed dir');
-  await fs.mkdir(cwd, { recursive: true });
-  await fs.writeFile(path.join(cwd, 'bad.json'), 'SECRET-IN-FILE not json');
   const log = logFile(sandbox);
   for (const value of [
     '{"token":"SECRET-INLINE"',
     '["SECRET-ARRAY"]',
-    'bad.json',
-    'missing-SECRET.json',
+    'SECRET-settings.json',
   ]) {
-    const result = await launch(sandbox, ['-p', '--settings', value], {
-      log,
-      cwd,
-    });
+    const result = await launch(sandbox, ['-p', '--settings', value], { log });
     assert.equal(result.code, 1, value);
     assert.equal(result.stdout, '');
     assert.match(result.stderr, /--settings value that is not a JSON object/);
@@ -292,94 +268,4 @@ test('pinClaudeModel and mergeClaudeSettings leave words after -- alone', () => 
     mergeClaudeSettings(['-p', '--', '--settings', 'x'], { a: 1 }),
     ['-p', '--settings', '{"a":1}', '--', '--settings', 'x'],
   );
-});
-
-// The hide list: providerModelPreferences["subconscious-claude"].
-
-const BUILT_INS = BUILT_IN_CLAUDE_MODELS.map(([slug]) => slug);
-const OURS = 'subconscious-claude';
-const HINT =
-  'In T3 Code, hide or reorder any model once, then run subc t3 install again.';
-const tabbed = (value) => `${JSON.stringify(value, null, '\t')}\n`;
-const readSettings = async (sandbox) =>
-  JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
-
-const settingsWith = (preferences) => ({
-  favorites: [{ provider: 'claudeAgent', model: 'claude-opus-5-5' }],
-  ...(preferences === undefined
-    ? {}
-    : { providerModelPreferences: preferences }),
-  providerInstances: { claudeAgent: { driver: 'claudeAgent', enabled: true } },
-});
-
-test('install writes only the hide list key, and uninstall removes it', {
-  skip,
-}, async () => {
-  const text = tabbed(
-    settingsWith({
-      claudeAgent: { hiddenModels: ['claude-haiku-4-5'], modelOrder: [] },
-    }),
-  );
-  const sandbox = await box({ settings: text });
-  await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
-  const result = await install(sandbox);
-  assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /Hide list\s+hid 14 models that are not in/);
-  const settings = await readSettings(sandbox);
-  assert.deepEqual(settings.providerModelPreferences[OURS], {
-    hiddenModels: BUILT_INS,
-    modelOrder: [],
-  });
-  // Without subc's entry and its hide list, the file is the original, byte
-  // for byte.
-  const rest = structuredClone(settings);
-  delete rest.providerInstances[OURS];
-  delete rest.providerModelPreferences[OURS];
-  assert.equal(tabbed(rest), text);
-
-  // A second install uses subc's own cache and keeps the user's order.
-  settings.providerModelPreferences[OURS].modelOrder = [MODELS[1]];
-  await fs.writeFile(sandbox.settingsPath, tabbed(settings));
-  await writeT3ModelCache(sandbox, {
-    instanceId: OURS,
-    builtIns: [...BUILT_INS, 'claude-opus-6'],
-    reported: MODELS,
-  });
-  assert.equal((await install(sandbox)).code, 0);
-  assert.deepEqual(
-    (await readSettings(sandbox)).providerModelPreferences[OURS],
-    {
-      hiddenModels: [...BUILT_INS, 'claude-opus-6'],
-      modelOrder: [MODELS[1]],
-    },
-  );
-
-  // Uninstall removes the hide list even when the entry is already gone.
-  const left = await readSettings(sandbox);
-  delete left.providerInstances[OURS];
-  await fs.writeFile(sandbox.settingsPath, tabbed(left));
-  const removed = await subc(sandbox, ['t3', 'uninstall']);
-  assert.equal(removed.code, 0, removed.stderr);
-  assert.match(removed.stdout, /Removed the subconscious-claude hide list/);
-  assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), text);
-});
-
-test('install skips the hide list without preferences or a cache, and still installs', {
-  skip,
-}, async () => {
-  for (const [preferences, cache, message] of [
-    [null, true, HINT],
-    [undefined, true, HINT],
-    [{}, false, 'T3 Code wrote no model cache for subconscious-claude'],
-  ]) {
-    const sandbox = await box({ settings: tabbed(settingsWith(preferences)) });
-    if (cache) await writeT3ModelCache(sandbox, { instanceId: 'claudeAgent' });
-    const result = await install(sandbox);
-    assert.equal(result.code, 0, result.stderr);
-    assert.ok(result.stdout.includes(message), result.stdout);
-    assert.match(result.stdout, /Subconscious \(Claude\) is ready/);
-    const settings = await readSettings(sandbox);
-    assert.deepEqual(settings.providerModelPreferences, preferences);
-    assert.ok(settings.providerInstances[OURS], 'the entry is installed');
-  }
 });

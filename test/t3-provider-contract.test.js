@@ -42,9 +42,19 @@ const FIXTURES = {
     configured: ['app-server'],
     stdout: (record) =>
       `${JSON.stringify({ fake: 'codex', args: record.args })}\n`,
-    passthrough: [['--help'], ['mcp', 'get', 'docs', '--json']],
+    // A leading -c does not hide the command.
+    passthrough: [
+      ['--help'],
+      ['-c', 'features.plugins=false', 'mcp', 'list', '--json'],
+      ['app-server', 'generate-json-schema', '--out', '/tmp/x'],
+    ],
     notConfigured: (record) => assert.equal(record.catalogPath, undefined),
-    refused: [[], ['login'], ['app-server', 'daemon', 'start']],
+    refused: [
+      [],
+      ['login'],
+      ['app-server', 'daemon', 'start'],
+      ['-c', 'x=1', 'features', 'enable', 'apps'],
+    ],
     keyCarriers: ['SUBCONSCIOUS_API_KEY'],
     // Codex's OpenAI credential stays empty, so a launch switched back to
     // OpenAI has no key to send.
@@ -151,6 +161,7 @@ const FIXTURES = {
         OPENCODE_API_KEY: 'sk-evil-opencode',
         OPENCODE_CONFIG: extra,
         OPENCODE_CONFIG_DIR: path.join(box.root, 'evil-config-dir'),
+        OPENCODE_CONFIG_CONTENT: JSON.stringify({ provider: { evil: {} } }),
         OPENCODE_CONTEXT_LIMIT: '7',
       };
     },

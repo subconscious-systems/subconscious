@@ -7,11 +7,7 @@
  * key-scoped catalog, then writes a launcher and adds one entry to T3's
  * settings. For Codex, install and uninstall also remove the compaction
  * hooks that older subc versions left in ~/.codex. Every launch reads the
- * default profile again, so a new key or model needs no reinstall. For
- * OpenCode, a launch is the start of T3 Code's shared OpenCode helper.
- *
- * subc keeps no state file. Status reads the launcher and the settings entry
- * on every run.
+ * default profile again, so a new key or model needs no reinstall.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -38,17 +34,14 @@ import {
   T3LaunchError,
   t3Paths,
 } from './t3-launch.js';
-import { T3_PROVIDER_KEYS, T3_PROVIDERS } from './t3-providers.js';
+import { T3_PROVIDERS } from './t3-providers.js';
 import {
   inspectT3,
   installT3Provider,
-  readT3ModelCache,
-  readT3ModelPreferences,
-  readT3TextGeneration,
+  readText,
   removeT3Provider,
   settingsBlockers,
   t3HomeDir,
-  writeT3HideList,
 } from './t3-settings.js';
 
 // What older subc versions left in a Codex home: hooks.json entries that run
@@ -60,9 +53,9 @@ const LEGACY_HOOK_FILES = [
   'subconscious.env',
   'subconscious-hook-logs',
 ];
+const PROVIDER_KEYS = T3_PROVIDERS.map((provider) => provider.id);
 
 export function printT3Help() {
-  const available = T3_PROVIDERS.map((provider) => provider.id).join(', ');
   console.log(`
 Usage:
   subc t3 install [--provider NAME]... [--dry-run]
@@ -70,128 +63,41 @@ Usage:
   subc t3 uninstall [--provider NAME]...
   subc t3 help
 
-Adds three providers to T3 Code. Each runs Codex, Claude Code, or OpenCode
-on your hosted Subconscious models:
-  Subconscious (Codex)      runs codex
-  Subconscious (Claude)     runs claude, beta
-  Subconscious (OpenCode)   runs opencode, beta
-It works on macOS and Linux only, and with the default profile only.
+Adds providers to T3 Code that run an agent on your hosted Subconscious
+models: Subconscious (Codex), Subconscious (Claude), and Subconscious
+(OpenCode). It works on macOS and Linux, with the default profile only.
 
   install            Check each CLI, the default profile's key, and the live
-                     model catalog. Then write what the next section lists.
+                     model catalog. Then write a launcher per provider in
+                     ~/.subconscious/bin and add its entry to T3 Code.
   install --dry-run  Run every check and print the plan. Change nothing.
-  status             Show the state of each provider. Needs no network or key.
-  uninstall          Remove the entries, the launchers, and the hide list.
-  --provider NAME    Act on this provider only. Repeat it to name more.
-                     Available: ${available}.
-                     Without it, install sets up every provider whose CLI is
-                     found, and skips one that a check refuses, such as an
-                     old CLI. It fails only when no provider is left. Status
-                     and uninstall cover all of them.
+  status             Show what is installed. Needs no network or key.
+  uninstall          Remove the entries and the launchers. Threads stay.
+  --provider NAME    Act on one provider: codex, claude, or opencode.
+                     Repeat it to name more. Without it, install skips a
+                     provider whose CLI is missing or refused.
 
-What install writes:
-  - One entry per provider in T3 Code's settings.json: subconscious-codex,
-    subconscious-claude, and subconscious-opencode.
-  - One launcher per provider in ~/.subconscious/bin: subc-t3-codex,
-    subc-t3-claude, and subc-t3-opencode. T3 Code runs it as the CLI.
-  - The Claude hide list, providerModelPreferences["subconscious-claude"].
-    It is the one write outside subc's own entries.
-  Install backs up settings.json to ~/.subconscious/t3/backups first. T3
-  Code reloads its settings on its own; subc never restarts it.
+Each launch reads the default profile again. If the key-scoped catalog
+cannot be read, the agent does not start. Each provider uses the same
+folders as the matching subc command, such as ~/.codex and ~/.claude.
+Install and uninstall remove the Codex hooks older subc versions left.
+T3 Code reloads its settings on its own; subc never restarts it.
 
-Shared homes:
-  Each provider uses the same folders as the matching subc command, so your
-  settings, skills, and MCP servers carry over:
-  - Codex uses ~/.codex, the same Codex home as subc codex. subc
-    never edits your config.toml.
-  - Claude Code uses your ~/.claude and ~/.claude.json. subc writes nothing
-    there.
-  - OpenCode uses ~/.config/opencode and ~/.local/share/opencode. subc
-    writes nothing there.
+Claude Code: each launch pins ANTHROPIC_BASE_URL in --settings, so a
+settings file cannot send the key to another host. Hooks and MCP servers
+from a repo's .claude settings still run with the key in their env.
 
-Status:
-  Status reads the entries, the launchers, and the CLI versions on every
-  run. It also shows the Claude hide list and where T3 Code
-  sends thread titles and commit messages. From T3 Code's cache files, it
-  shows the result of T3 Code's last check of each provider, with T3 Code's
-  message.
-  Exit codes:
-    0  Every installed provider works, or nothing is installed.
-    1  A provider is broken: a conflict, a missing or foreign launcher,
-       unreadable settings, drift, or a CLI version
-       that install refuses. Status prints the subc t3 install --provider
-       command that repairs it. Status also exits 1 when T3 Code's last
-       check failed, such as for a rejected key. Then run subc login, and
-       restart T3 Code.
+OpenCode: T3 Code shares one helper across threads, so a new key or model
+applies after the helper restarts. A watchdog stops the helper when T3
+Code's server dies, and it needs ps.
 
-Uninstall:
-  Uninstall removes the entries, the launchers, the Codex catalog file, and
-  the Claude hide list. It keeps the shared homes and your T3 Code threads.
-
-Codex:
-  Each session reads the default profile again, so a new key or model
-  applies at the next launch. Codex apps and plugins stay off unless
-  CODEX_EXTERNAL_TOOLS=true is in the default profile. subc installs no
-  Codex hooks. Install and uninstall remove the ones older subc versions
-  left in ~/.codex, and keep your own hooks.
-
-Claude Code (beta):
-  It needs Claude Code 2.1.280 or newer, and warns below 2.1.301. Each
-  session reads the default profile again.
-  - T3 Code also lists its built-in Claude models on this provider. Install
-    hides them in the model picker with the hide list.
-  - T3 Code creates that setting only after you hide or reorder a
-    model in its settings. Do that once, then run subc t3 install again.
-  - Status reports a new built-in model as drift.
-  - A model outside your catalog, such as one from t3 thread start
-    --model, runs as the default profile's model. T3 Code does not show the
-    launcher's stderr, so the thread gives no notice of the change.
-  - T3 Code lets you switch a running thread between its own Claude
-    provider and this one. The next turn sends the whole thread to the
-    other backend.
-  - Each launch pins ANTHROPIC_BASE_URL in its --settings value, so a
-    repo's .claude/settings.json or your ~/.claude/settings.json cannot
-    send the key to another host.
-  - Claude Code still loads a repo's project settings, as in subc claude.
-    Hooks in a repo's .claude/settings.json and its project MCP servers
-    run with the key in their env. Open only repos that you trust.
-
-OpenCode (beta):
-  It needs OpenCode 2.0.18 or newer. T3 Code starts one helper, opencode
-  serve, for all threads of the provider.
-  - A new key or model applies after the OpenCode helper restarts: restart
-    T3 Code, or wait until its OpenCode threads have been idle for 30
-    minutes.
-  - Keep the provider's Server URL and Server password empty in T3 Code.
-    Status reports either one as drift.
-  - When T3 Code's server dies, the launcher's watchdog sends SIGTERM to
-    the helper's process group, then SIGKILL 5 s later, so the helper is
-    gone within about 10 s. The watchdog needs ps, so install refuses
-    this provider on a system without it, such as a Linux image without
-    procps.
-
-Limits for all providers:
-  - T3 Code writes thread titles and commit messages with its own text
-    generation setting. subc never changes it. Status says where it points.
-  - If the key-scoped catalog cannot be read, the agent does not start.
-    There is no fallback to the public or packaged model list.
-  - The launcher's first line, #!/usr/bin/env -S bash -p, needs bash and an
-    env that supports -S: macOS, or GNU coreutils 8.30 or newer.
+See the README for details.
 `);
 }
 
 async function packageVersion() {
   const file = new URL('../package.json', import.meta.url);
   return JSON.parse(await fs.readFile(file, 'utf8')).version;
-}
-
-async function readText(file) {
-  try {
-    return await fs.readFile(file, 'utf8');
-  } catch (error) {
-    if (error.code === 'ENOENT') return null;
-    throw error;
-  }
 }
 
 async function exists(file) {
@@ -307,12 +213,6 @@ function line(label, value) {
   console.log(`  ${c.dim}${label.padEnd(14)}${c.reset}${value}`);
 }
 
-function lines(label, values) {
-  values.forEach((value, index) => {
-    line(index ? '' : label, value);
-  });
-}
-
 function failWith(messages) {
   console.error('');
   for (const message of [messages].flat())
@@ -321,61 +221,42 @@ function failWith(messages) {
   return 1;
 }
 
-function notInstalledMessage(provider, agent) {
-  return `${provider.label} CLI is not installed. Install it with npm i -g ${agent.install.package}, then retry.`;
-}
-
-function higherVersion(left, right) {
-  if (!left || !right) return left || right || null;
-  return versionNeedsUpgrade(left, right) ? right : left;
-}
-
 /**
- * The version of the agent binary in `binDir`, or null. The probe gets a
- * throwaway home, so the check, a dry run, and status write nothing in the
- * user's agent home.
+ * The pinned binary path and its version. Throws T3LaunchError. The path is
+ * the one found, not its real path: Claude Code's native installer links
+ * ~/.local/bin/claude to a versioned file that a later update removes.
  */
-async function readBinaryVersion(provider, binDir) {
-  const probeHome = await fs.mkdtemp(
-    path.join(os.tmpdir(), `subc-t3-${provider.id}-`),
-  );
+async function checkBinary(provider, agent, binDir) {
+  const binary = path.join(binDir, provider.binaryName);
+  const probeHome = provider.versionProbeEnv
+    ? await fs.mkdtemp(path.join(os.tmpdir(), `subc-t3-${provider.id}-`))
+    : null;
+  let version;
   try {
-    return readClaudeVersion(provider.binaryName, binDir, {
-      env: provider.versionProbeEnv(probeHome),
+    version = readClaudeVersion(provider.binaryName, binDir, {
+      env: probeHome ? provider.versionProbeEnv(probeHome) : {},
     });
   } finally {
-    await fs.rm(probeHome, { recursive: true, force: true });
+    if (probeHome) await fs.rm(probeHome, { recursive: true, force: true });
   }
-}
-
-/** The pinned binary path and its version. Throws T3LaunchError. */
-async function checkBinary(provider, agent, binDir) {
-  // The path as found, not its real path: Claude Code's native installer
-  // links ~/.local/bin/claude to a versioned file that a later update
-  // removes.
-  const binary = path.join(binDir, provider.binaryName);
-  const version = await readBinaryVersion(provider, binDir);
   if (!version)
     throw new T3LaunchError(`Could not read the version of ${binary}.`);
-  const minimum = higherVersion(
-    provider.minimumVersion,
-    agent.install.minimum_version,
-  );
+  const required = agent.install.minimum_version;
+  const minimum =
+    provider.minimumVersion &&
+    (!required || versionNeedsUpgrade(required, provider.minimumVersion))
+      ? provider.minimumVersion
+      : required;
   if (versionNeedsUpgrade(version, minimum))
     throw new T3LaunchError(
       `${provider.label} ${version} is older than ${minimum}, the oldest version this provider supports. Upgrade ${provider.label}, then retry.`,
     );
-  const recommended = provider.recommendedVersion;
-  const warning = versionNeedsUpgrade(version, recommended)
-    ? `${provider.label} ${version} is older than ${recommended}, the version T3 Code recommends. Upgrade ${provider.label} if T3 Code reports a problem.`
-    : null;
-  return { path: binary, version, warning };
+  return { path: binary, version };
 }
 
 /**
  * Check that this system can start the launcher: its first line needs an
- * env that supports -S, and bash. The check runs the same command the
- * kernel runs for that line, so it writes no file.
+ * env that supports -S, and bash.
  */
 function checkLauncherShell() {
   const [file, words] = LAUNCHER_SHEBANG.slice(2).split(/ (.*)/s);
@@ -390,10 +271,9 @@ function checkLauncherShell() {
 }
 
 /**
- * Check that the watchdog can read a parent PID here. The watchdog runs
- * `ps -o ppid= -p PID`, and some Linux images, such as debian:bookworm-slim,
- * ship no ps. Without it, the watchdog cannot tell when T3 Code's server
- * dies, so a helper with the key could outlive it.
+ * Check that the watchdog can read a parent PID here. Without `ps`, it
+ * cannot tell when T3 Code's server dies, so a helper with the key could
+ * outlive it.
  */
 function checkWatchdogTools() {
   const result = spawnSync('bash', ['-c', 'ps -o ppid= -p $$ | tr -d " "'], {
@@ -407,7 +287,6 @@ function checkWatchdogTools() {
     );
 }
 
-/** The install command that repairs one provider. */
 const repairCommand = (provider) => `subc t3 install --provider ${provider.id}`;
 
 function describeEntry(report) {
@@ -423,164 +302,41 @@ async function prepare(paths, item) {
   item.binary = await checkBinary(provider, agent, binDir);
   isolateLaunchEnv(process.env, paths.configDir, provider);
   item.launch = await resolveT3Launch({ agentId: provider.agentId });
-  item.adapter = await adapterPath(provider);
   item.script = launcherScript({
     provider,
     node: process.execPath,
-    adapter: item.adapter,
+    adapter: await adapterPath(provider),
     binary: item.binary.path,
     configDir: paths.configDir,
     version: await packageVersion(),
   });
 }
 
-async function printPlan(item, single) {
-  const { provider, target, report, binary, launch } = item;
-  if (!single) {
-    console.log(`\n  ${c.bold}${provider.displayName}${c.reset}`);
-    line('Provider', `${provider.instanceId}: ${describeEntry(report)}`);
-  }
+async function printPlan({ provider, target, report, binary, launch }) {
+  console.log(`\n  ${c.bold}${provider.displayName}${c.reset}`);
+  line('Provider', `${provider.instanceId}: ${describeEntry(report)}`);
   line('Launcher', target.launcherPath);
   line(provider.label, `${binary.path} (${binary.version})`);
-  if (binary.warning) line('', `${c.yellow}${binary.warning}${c.reset}`);
   if (target.homePath)
     line(
       `${provider.label} home`,
       `${target.homePath} (shared with subc ${provider.id})`,
     );
-  else if (provider.homeNote) line('Config', provider.homeNote);
-  line(
-    'Model',
-    `${launch.model} from the default profile, read again ${provider.freshnessNote ? 'when the helper starts' : 'at each launch'}`,
-  );
+  line('Model', `${launch.model} from the default profile`);
   line(
     'Catalog',
     `${launch.catalog.models.length} models, key-scoped, from ${new URL(launch.baseUrl).origin}`,
   );
-  if (provider.freshnessNote) line('Freshness', provider.freshnessNote);
   if (provider.legacyHooks && (await hasLegacyHooks(target.homePath)))
     line('Old hooks', 'left by an older subc; install removes them');
 }
 
-/** What stayed in place when the settings write failed. */
-function settingsFailure({ target }, error) {
-  return failWith([
-    `T3 Code settings were not updated: ${error.message}`,
-    `The launcher ${target.launcherPath} is in place.`,
-    'Retry subc t3 install, or run subc t3 uninstall to remove the launcher.',
-  ]);
-}
-
-const HIDE_LIST_HINT =
-  'In T3 Code, hide or reorder any model once, then run subc t3 install again.';
-const HIDE_LIST_FALLBACK =
-  "Until then, a model outside the catalog runs as the default profile's model.";
-/**
- * The model cache to build the hide list from: the cache of subc's
- * instance, else the built-in instance's, or null when both are missing.
- */
-async function hideListCache(provider, home) {
-  return (
-    (await readT3ModelCache(home, provider.instanceId)) ??
-    readT3ModelCache(home, provider.builtInInstanceId)
-  );
-}
-
-/**
- * What the hide list would be: every model in the cache that is not in the
- * key-scoped catalog, so it never hides a catalog model. `state` is
- * `ready`, `unmigrated`, `invalid`, `unreadable`, or `no-cache`.
- */
-async function planHideList(item) {
-  const { provider, target, launch } = item;
-  const prefs = await readT3ModelPreferences(target);
-  if (prefs.state === 'unmigrated' || prefs.state === 'invalid')
-    return { state: prefs.state };
-  if (prefs.state === 'unreadable') return { state: 'unreadable' };
-  const cache = await hideListCache(provider, target.home);
-  if (!cache) return { state: 'no-cache' };
-  const catalog = new Set(launch.catalog.models);
-  return {
-    state: 'ready',
-    cache: cache.file,
-    hiddenModels: cache.slugs.filter((slug) => !catalog.has(slug)),
-  };
-}
-
-function hideListSkipLines(plan, provider) {
-  if (plan.state === 'unmigrated')
-    return [
-      `Skipped: T3 Code has no model preferences yet. ${HIDE_LIST_HINT}`,
-      HIDE_LIST_FALLBACK,
-    ];
-  if (plan.state === 'invalid')
-    return [
-      'Skipped: providerModelPreferences in the T3 Code settings is not an object.',
-      HIDE_LIST_FALLBACK,
-    ];
-  if (plan.state === 'no-cache')
-    return [
-      `Skipped: T3 Code wrote no model cache for ${provider.instanceId} or ${provider.builtInInstanceId}. Open T3 Code, then run subc t3 install again.`,
-      HIDE_LIST_FALLBACK,
-    ];
-  return ['Skipped: the T3 Code settings could not be read.'];
-}
-
-function modelList(models) {
-  return models.length ? models.join(', ') : 'none';
-}
-
-/** Print the hide list that install would write. Writes nothing. */
-async function printHideListPlan(item) {
-  const plan = await planHideList(item);
-  if (plan.state !== 'ready') {
-    lines('Hide list', hideListSkipLines(plan, item.provider));
-    return;
-  }
-  lines('Hide list', [
-    `would hide ${plan.hiddenModels.length} models that are not in the catalog: ${modelList(plan.hiddenModels)}`,
-    `from ${plan.cache}`,
-  ]);
-}
-
-/**
- * Write the hide list after the entry is in place. A skip or a failure
- * leaves the provider installed, because the launcher's fallback covers
- * the models the list would hide.
- */
-async function installHideList(paths, item) {
-  const { provider, target } = item;
-  const plan = await planHideList(item);
-  if (plan.state !== 'ready') {
-    lines('Hide list', hideListSkipLines(plan, provider));
-    return;
-  }
-  try {
-    const result = await writeT3HideList(target, plan.hiddenModels, {
-      backupDir: paths.backups,
-    });
-    if (result.state === 'written' || result.state === 'current')
-      line(
-        'Hide list',
-        `${result.state === 'written' ? 'hid' : 'already hides'} ${plan.hiddenModels.length} models that are not in the catalog: ${modelList(plan.hiddenModels)}`,
-      );
-    else
-      lines('Hide list', hideListSkipLines({ state: 'unmigrated' }, provider));
-  } catch (error) {
-    lines('Hide list', [
-      `${c.yellow}Not written: ${error.message}${c.reset}`,
-      HIDE_LIST_FALLBACK,
-    ]);
-  }
-}
-
 /** Write the launcher and the settings entry for one provider. */
-async function installOne(paths, item, single) {
-  const { provider, target } = item;
+async function installOne(paths, { provider, target, script }) {
   // The agent home belongs to the user and the agent, so subc creates it if
   // needed but never changes its mode.
   if (target.homePath) await fs.mkdir(target.homePath, { recursive: true });
-  await writeLauncher(target.launcherPath, item.script);
+  await writeLauncher(target.launcherPath, script);
   // The provider works without this cleanup, so a failure (no jq, or a
   // hooks.json that does not parse) is a warning.
   if (
@@ -595,15 +351,15 @@ async function installOne(paths, item, single) {
   try {
     result = await installT3Provider(target, { backupDir: paths.backups });
   } catch (error) {
-    return settingsFailure(item, error);
+    return failWith([
+      `T3 Code settings were not updated: ${error.message}`,
+      `The launcher ${target.launcherPath} is in place.`,
+      'Retry subc t3 install, or run subc t3 uninstall to remove the launcher.',
+    ]);
   }
   if (result.backup) line('Backup', result.backup);
-  if (provider.builtInInstanceId) await installHideList(paths, item);
   console.log(
-    `${single ? '\n' : ''}  ${c.green}${c.bold}✓ ${provider.displayName} is ${result.changed ? 'ready' : 'already set up'} in T3 Code.${c.reset}`,
-  );
-  console.log(
-    `  ${c.dim}T3 Code reloads its settings on its own. Pick ${provider.displayName} as the provider for a new thread.${c.reset}${single ? '\n' : ''}`,
+    `  ${c.green}${c.bold}✓ ${provider.displayName} is ${result.changed ? 'ready' : 'already set up'} in T3 Code.${c.reset}`,
   );
   return 0;
 }
@@ -611,17 +367,20 @@ async function installOne(paths, item, single) {
 async function install({ dryRun, providers, explicit }) {
   const paths = t3Paths(configDir());
   const found = [];
-  const missing = [];
+  const skipped = [];
   for (const provider of providers) {
     const agent = agentById(provider.agentId);
     const binDir = await locateAgent(agent);
     if (binDir) found.push({ provider, agent, binDir });
     else
-      missing.push({ provider, message: notInstalledMessage(provider, agent) });
+      skipped.push({
+        provider,
+        message: `${provider.label} CLI is not installed. Install it with npm i -g ${agent.install.package}, then retry.`,
+      });
   }
   // Without --provider, a provider whose CLI is missing is skipped.
-  if (!found.length || (explicit && missing.length))
-    return failWith(missing.map((item) => item.message));
+  if (!found.length || (explicit && skipped.length))
+    return failWith(skipped.map((item) => item.message));
 
   for (const item of found) {
     item.target = context(item.provider).target;
@@ -632,68 +391,47 @@ async function install({ dryRun, providers, explicit }) {
   ];
   if (blockers.length) return failWith(blockers);
 
+  // Without --provider, a provider that a check refuses, such as an old
+  // CLI, is skipped with its message, and the others install. With
+  // --provider, every named provider must pass.
+  const ready = [];
   try {
     checkLauncherShell();
+    for (const item of found) {
+      try {
+        await prepare(paths, item);
+        ready.push(item);
+      } catch (error) {
+        if (!(error instanceof T3LaunchError)) throw error;
+        skipped.push({ provider: item.provider, message: error.message });
+      }
+    }
   } catch (error) {
     if (error instanceof T3LaunchError) return failWith(error.message);
     throw error;
   }
-  // Without --provider, a provider that a check refuses, such as an old
-  // CLI, is skipped with its message, and the others install (D5). With
-  // --provider, every named provider must pass.
-  const ready = [];
-  const refused = [];
-  for (const item of found) {
-    try {
-      await prepare(paths, item);
-      ready.push(item);
-    } catch (error) {
-      if (!(error instanceof T3LaunchError)) throw error;
-      refused.push({ provider: item.provider, message: error.message });
-    }
-  }
-  if (!ready.length || (explicit && refused.length)) {
-    if (found.length === 1) return failWith(refused[0].message);
-    // One cause for every provider, such as a missing key, prints once.
-    const texts = new Set(refused.map((item) => item.message));
+  if (!ready.length || (explicit && ready.length < found.length))
     return failWith([
-      ...(texts.size === 1 && refused.length > 1
-        ? texts
-        : refused.map(
-            (item) => `${item.provider.displayName}: ${item.message}`,
-          )),
+      ...skipped.map((item) => `${item.provider.displayName}: ${item.message}`),
       'Nothing was changed.',
     ]);
-  }
-  const single = ready.length === 1;
 
-  const [first] = ready;
+  const { report } = ready[0];
   console.log(
-    `\n  ${c.bold}${dryRun ? 'Plan' : 'Installing'}: ${single ? first.provider.displayName : 'Subconscious providers'} in T3 Code${c.reset}\n`,
+    `\n  ${c.bold}${dryRun ? 'Plan' : 'Installing'}: Subconscious providers in T3 Code${c.reset}\n`,
   );
   line(
     'T3 Code',
-    `${first.report.home}${first.report.version ? ` (${first.report.version})` : ''}`,
+    `${report.home}${report.version ? ` (${report.version})` : ''}`,
   );
-  if (single)
-    line(
-      'Provider',
-      `${first.provider.instanceId}: ${describeEntry(first.report)}`,
-    );
-  line('Settings', first.report.settingsPath);
-  for (const item of ready) {
-    await printPlan(item, single);
-    if (dryRun && item.provider.builtInInstanceId)
-      await printHideListPlan(item);
-  }
-  if (refused.length || missing.length) console.log('');
-  for (const item of refused)
+  line('Settings', report.settingsPath);
+  for (const item of ready) await printPlan(item);
+  if (skipped.length) console.log('');
+  for (const item of skipped)
     line(
       'Skipped',
       `${c.yellow}${item.provider.displayName}: ${item.message}${c.reset}`,
     );
-  for (const item of missing)
-    line('Skipped', `${item.provider.displayName}: ${item.message}`);
   console.log('');
   if (dryRun) {
     console.log(`  ${c.dim}Dry run: nothing was changed.${c.reset}\n`);
@@ -703,135 +441,34 @@ async function install({ dryRun, providers, explicit }) {
   await privateDir(paths.root);
   let code = 0;
   // A failure in one provider does not stop the others.
-  for (const item of ready) {
-    if ((await installOne(paths, item, single)) !== 0) code = 1;
-  }
-  if (!single && code === 0) console.log('');
+  for (const item of ready) if ((await installOne(paths, item)) !== 0) code = 1;
+  if (code === 0)
+    console.log(
+      `\n  ${c.dim}T3 Code reloads its settings on its own. Pick a Subconscious provider for a new thread.${c.reset}\n`,
+    );
   return code;
 }
 
-/**
- * The launcher's state and the text status prints for it. `state` is
- * `missing`, `foreign`, `broken`, `stale`, or `current`. A stale launcher
- * still starts the agent, so only the first three are broken.
- */
 async function launcherReport(paths, provider, file) {
   const launcher = await readLauncher(file, provider);
-  if (launcher.state !== 'present')
-    return { state: launcher.state, text: launcher.state };
+  if (launcher.state !== 'present') return launcher.state;
   const { pinned } = launcher;
   const missing = [];
   for (const name of ['node', 'adapter', provider.binaryName])
     if (!pinned[name] || !(await exists(pinned[name]))) missing.push(name);
   if (missing.length)
-    return {
-      state: 'broken',
-      text: `broken: pinned ${missing.join(', ')} missing; run ${repairCommand(provider)}`,
-    };
+    return `broken: pinned ${missing.join(', ')} missing; run ${repairCommand(provider)}`;
   const notes = [];
   const version = await packageVersion();
   if (launcher.version !== version)
     notes.push(`written by subc ${launcher.version}, this is ${version}`);
-  else if (
-    launcher.text !==
-    launcherScript({
-      provider,
-      node: pinned.node,
-      adapter: pinned.adapter,
-      binary: pinned[provider.binaryName],
-      configDir: pinned.config_dir ?? '',
-      version,
-    })
-  )
-    notes.push('written in an older format');
   if (pinned.adapter !== (await adapterPath(provider)))
     notes.push('pins another subc install');
   if (pinned.config_dir !== paths.configDir)
     notes.push(`pins config dir ${pinned.config_dir}`);
   return notes.length
-    ? {
-        state: 'stale',
-        text: `stale (${notes.join('; ')}); run ${repairCommand(provider)}`,
-      }
-    : { state: 'current', text: 'current' };
-}
-
-/**
- * The binary the launcher pins and its version, or null with no launcher.
- * `refused` is true when install would refuse that binary: its version
- * cannot be read, or it is older than the provider supports.
- */
-async function binaryReport(file, provider) {
-  const launcher = await readLauncher(file, provider);
-  const binary = launcher.pinned?.[provider.binaryName];
-  if (!binary) return null;
-  if (!(await exists(binary)))
-    return { text: `${binary} (missing)`, refused: false };
-  const version = await readBinaryVersion(provider, path.dirname(binary));
-  if (!version) return { text: `${binary} (version unknown)`, refused: true };
-  const minimum = higherVersion(
-    provider.minimumVersion,
-    agentById(provider.agentId).install.minimum_version,
-  );
-  if (versionNeedsUpgrade(version, minimum))
-    return {
-      text: `${binary} (${version}) ${c.yellow}is older than ${minimum}, the oldest version this provider supports. Upgrade ${provider.label}.${c.reset}`,
-      refused: true,
-    };
-  return { text: `${binary} (${version})`, refused: false };
-}
-
-/**
- * The hide list state, read from the settings and T3 Code's caches with no
- * network. Status has no catalog, so it reports drift for a model that the
- * built-in instance lists and the hide list does not hide. A new T3 Code
- * release, or a new remote model list, adds such models.
- */
-async function hideListReport(target, provider, report) {
-  if (report.state !== 'ok')
-    return { lines: ['unknown, because the settings cannot be read'] };
-  const prefs = await readT3ModelPreferences(target);
-  if (prefs.state === 'unmigrated')
-    return {
-      lines: [
-        `skipped, because T3 Code has no model preferences yet. ${HIDE_LIST_HINT}`,
-        HIDE_LIST_FALLBACK,
-      ],
-    };
-  if (prefs.state === 'invalid')
-    return {
-      lines: ['skipped, because providerModelPreferences is not an object'],
-    };
-  if (prefs.state !== 'present')
-    return {
-      lines: [
-        report.entry === 'owned'
-          ? `not written. Run ${repairCommand(provider)} to write it.`
-          : 'not written',
-      ],
-    };
-  const lines = [`written, ${prefs.hiddenModels.length} models hidden`];
-  const builtIn = await readT3ModelCache(
-    target.home,
-    provider.builtInInstanceId,
-  );
-  const own = await readT3ModelCache(target.home, provider.instanceId);
-  if (!builtIn) {
-    lines.push(
-      `cannot check for new built-in models, because T3 Code has no caches/${provider.builtInInstanceId}.json`,
-    );
-    return { lines };
-  }
-  const hidden = new Set(prefs.hiddenModels);
-  const listed = own
-    ? own.slugs.filter((slug) => builtIn.slugs.includes(slug))
-    : builtIn.slugs;
-  const drift = listed.filter((slug) => !hidden.has(slug));
-  if (drift.length)
-    lines.push(
-      `${c.yellow}drift: T3 Code lists ${drift.length} built-in models that the hide list does not hide: ${drift.join(', ')}. Run ${repairCommand(provider)} again.${c.reset}`,
-    );
-  return { lines, drift: drift.length > 0 };
+    ? `stale (${notes.join('; ')}); run ${repairCommand(provider)}`
+    : 'current';
 }
 
 function entryReport(report, provider) {
@@ -843,156 +480,14 @@ function entryReport(report, provider) {
   return 'installed';
 }
 
-const TEXT_GENERATION_HINT =
-  'To change it, open Settings in T3 Code, then Text generation, and pick a Subconscious provider. subc never changes this setting.';
-const COMMIT_WRITER_HINT =
-  'Commit messages have their own model in Settings, Commits & pull requests.';
-
-// How long a T3 Code message in status can be.
-const MAX_T3_MESSAGE = 300;
-
-function shortMessage(message) {
-  const text = message.replace(/\s+/g, ' ');
-  return text.length > MAX_T3_MESSAGE
-    ? `${text.slice(0, MAX_T3_MESSAGE - 3)}...`
-    : text;
-}
-
-/**
- * What T3 Code found when it last checked subc's instance, from the cache
- * file it writes, with no network. `broken` is true for an error, and for a
- * warning whose sign-in is not authenticated, which is how T3 Code 0.1.11
- * reports a key that the gateway rejects. A missing cache only means that
- * T3 Code has not checked the provider yet.
- */
-async function t3CheckReport(home, provider, report) {
-  if (report.entry !== 'owned') return null;
-  const cache = await readT3ModelCache(home, provider.instanceId);
-  if (!cache?.status)
-    return {
-      lines: ['none recorded yet. T3 Code checks the provider when it starts.'],
-      broken: false,
-    };
-  const when = cache.checkedAt
-    ? `, checked ${new Date(cache.checkedAt).toISOString()}`
-    : '';
-  const signIn =
-    cache.status === 'warning' && cache.authStatus !== 'authenticated';
-  if (cache.status !== 'error' && !signIn)
-    return {
-      lines: [
-        `${cache.status}${when}${cache.message ? `: ${shortMessage(cache.message)}` : ''}`,
-      ],
-      broken: false,
-    };
-  return {
-    lines: [
-      `${c.red}${cache.status}${when}: ${cache.message ? shortMessage(cache.message) : 'T3 Code gave no message'}${c.reset}`,
-      'If the key changed or the gateway rejects it, run subc login, or check the key with subc whoami.',
-      'Then restart T3 Code. It does not check the provider again on its own.',
-    ],
-    broken: true,
-  };
-}
-
-function selectionText(selection) {
-  if (selection.kind === 'invalid') return 'a value that subc cannot read';
-  const name =
-    selection.name === selection.instanceId
-      ? selection.instanceId
-      : `${selection.name} (${selection.instanceId})`;
-  const where =
-    selection.kind === 'textGenerator' && selection.origin
-      ? ` at ${selection.origin}`
-      : '';
-  const model = selection.model ? `, model ${selection.model}` : '';
-  const fallback = selection.isDefault ? ", T3 Code's default" : '';
-  return `${name}${where}${model}${fallback}`;
-}
-
-/**
- * Where T3 Code sends thread titles and commit messages, with a warning
- * when that is not a Subconscious provider (D6). subc never writes these
- * settings, so status only reports them.
- */
-async function textGenerationLines(home) {
-  const targets = T3_PROVIDERS.map((provider) => context(provider).target);
-  const result = await readT3TextGeneration(home, targets);
-  if (result.state !== 'ok')
-    return ['unknown, because the settings cannot be read'];
-  const { titles, commits } = result;
-  const groups = commits
-    ? [
-        ['Thread titles', titles],
-        ['Commit messages', commits],
-      ]
-    : [['Thread titles and commit messages', titles]];
-  const lines = [];
-  for (const [what, selection] of groups) {
-    if (selection.kind === 'subconscious')
-      lines.push(`${what} go to Subconscious: ${selectionText(selection)}.`);
-    else
-      lines.push(
-        `${c.yellow}${what} go to ${selectionText(selection)}, not to Subconscious. That provider gets the prompts and the diffs.${c.reset}`,
-      );
-  }
-  const foreign = groups.filter(
-    ([, selection]) => selection.kind !== 'subconscious',
-  );
-  if (foreign.length) {
-    lines.push(TEXT_GENERATION_HINT);
-    if (commits && commits.kind !== 'subconscious')
-      lines.push(COMMIT_WRITER_HINT);
-  }
-  return lines;
-}
-
-/**
- * Why a provider is broken, as short phrases, or none. A provider that has
- * no entry, no launcher, and no conflict is not installed, so it is not
- * broken, even when --provider names it. A T3 Code check that failed is
- * listed last, because install does not repair it.
- */
-function brokenReasons(
-  { report, launcher, binary, hideList, check },
-  explicit,
-) {
-  const installed = report.entry === 'owned' || launcher.state !== 'missing';
-  const reasons = [];
-  if (report.state !== 'ok') {
-    if (installed || (explicit && report.state !== 'missing'))
-      reasons.push(`T3 Code settings ${report.state}`);
-    return { reasons, repair: reasons.length > 0 };
-  }
-  if (report.entry === 'conflict')
-    reasons.push('an entry that subc did not write');
-  if (report.entry === 'absent' && installed)
-    reasons.push('a launcher with no entry in T3 Code');
-  if (report.entry === 'owned' && report.drift.length)
-    reasons.push(`drift in ${report.drift.join(', ')}`);
-  if (
-    report.entry === 'owned' &&
-    ['missing', 'foreign', 'broken'].includes(launcher.state)
-  )
-    reasons.push(`launcher ${launcher.state}`);
-  if (binary?.refused) reasons.push('a CLI version that install refuses');
-  if (hideList?.drift) reasons.push('hide list drift');
-  const repair = reasons.length > 0;
-  if (check?.broken) reasons.push('T3 Code reports a failed check');
-  return { reasons, repair };
-}
-
-async function status({ providers, explicit }) {
-  const single = providers.length === 1;
+async function status({ providers }) {
   const items = [];
   for (const provider of providers) {
     const { paths, target } = context(provider);
     items.push({ provider, paths, target, report: await inspectT3(target) });
   }
   const { report: first } = items[0];
-  console.log(
-    `\n  ${c.bold}${single ? providers[0].displayName : 'Subconscious providers'} in T3 Code${c.reset}\n`,
-  );
+  console.log(`\n  ${c.bold}Subconscious providers in T3 Code${c.reset}\n`);
   line('T3 Code', `${first.home}${first.version ? ` (${first.version})` : ''}`);
   line('Settings', first.settingsPath);
   line(
@@ -1001,28 +496,23 @@ async function status({ providers, explicit }) {
       ? 'none'
       : `${first.policy}; subc does not edit settings`,
   );
-  lines('Text gen', await textGenerationLines(first.home));
-  const broken = [];
-  for (const item of items) {
-    const { provider, paths, target, report } = item;
-    if (!single) console.log(`\n  ${c.bold}${provider.displayName}${c.reset}`);
+  for (const { provider, paths, target, report } of items) {
+    console.log(`\n  ${c.bold}${provider.displayName}${c.reset}`);
     line(
       'Provider',
       `${provider.instanceId}: ${entryReport(report, provider)}`,
     );
     if (report.duplicates.length)
       line('Also runs it', report.duplicates.join(', '));
-    item.launcher = await launcherReport(paths, provider, target.launcherPath);
-    line('Launcher', `${target.launcherPath}: ${item.launcher.text}`);
-    item.binary = await binaryReport(target.launcherPath, provider);
-    if (item.binary) line(provider.label, item.binary.text);
+    line(
+      'Launcher',
+      `${target.launcherPath}: ${await launcherReport(paths, provider, target.launcherPath)}`,
+    );
     if (target.homePath)
       line(
         `${provider.label} home`,
         `${target.homePath}${(await exists(target.homePath)) ? '' : ' (missing)'}`,
       );
-    else if (provider.homeNote) line('Config', provider.homeNote);
-    if (provider.freshnessNote) line('Freshness', provider.freshnessNote);
     if (provider.legacyHooks)
       line(
         'Old hooks',
@@ -1030,28 +520,10 @@ async function status({ providers, explicit }) {
           ? `left by an older subc; run ${repairCommand(provider)}`
           : 'none',
       );
-    if (provider.builtInInstanceId) {
-      item.hideList = await hideListReport(target, provider, report);
-      lines('Hide list', item.hideList.lines);
-    }
-    item.check = await t3CheckReport(target.home, provider, report);
-    if (item.check) lines('T3 check', item.check.lines);
-    const { reasons, repair } = brokenReasons(item, explicit);
-    if (reasons.length) broken.push({ provider, reasons, repair });
   }
   console.log('');
-  if (!broken.length) return 0;
-  for (const { provider, reasons } of broken)
-    console.log(
-      `  ${c.red}Broken: ${provider.displayName}: ${reasons.join('; ')}.${c.reset}`,
-    );
-  const repairs = broken.filter((item) => item.repair);
-  if (repairs.length)
-    console.log(
-      `  ${c.dim}To repair it, run: subc t3 install ${repairs.map(({ provider }) => `--provider ${provider.id}`).join(' ')}${c.reset}`,
-    );
-  console.log(`  ${c.dim}Status exits 1.${c.reset}\n`);
-  return 1;
+  // Status exits 1 only when it cannot read T3 Code's settings.
+  return ['ok', 'missing'].includes(first.state) ? 0 : 1;
 }
 
 async function uninstall({ providers }) {
@@ -1062,22 +534,14 @@ async function uninstall({ providers }) {
   for (const provider of providers) {
     const { target } = context(provider);
     try {
-      const { removed, removedPreferences, backup } = await removeT3Provider(
-        target,
-        {
-          backupDir: paths.backups,
-          preferences: Boolean(provider.builtInInstanceId),
-        },
-      );
+      const { removed, backup } = await removeT3Provider(target, {
+        backupDir: paths.backups,
+      });
       done.push(
         removed
           ? `Removed ${provider.instanceId} from ${path.join(target.home, 'userdata', 'settings.json')}${backup ? ` (backup: ${backup})` : ''}.`
           : `T3 Code has no ${provider.instanceId} provider from subc.`,
       );
-      if (removedPreferences)
-        done.push(
-          `Removed the ${provider.instanceId} hide list from providerModelPreferences.`,
-        );
     } catch (error) {
       problems.push(
         `T3 Code settings were not changed: ${error.message}`,
@@ -1110,11 +574,9 @@ async function uninstall({ providers }) {
         `${target.launcherPath} was not written by subc; it was kept.`,
       );
     }
-    for (const dir of provider.ownedDirs)
-      await fs.rm(paths.underRoot(dir), { recursive: true, force: true });
+    if (provider.id === 'codex')
+      await fs.rm(paths.catalogDir, { recursive: true, force: true });
   }
-  // subc 8.2.0 wrote this file. Nothing reads it now.
-  await fs.rm(paths.state, { force: true });
 
   console.log('');
   for (const message of done) console.log(`  ${message}`);
@@ -1125,24 +587,6 @@ async function uninstall({ providers }) {
   return 0;
 }
 
-/**
- * The providers that `--provider` names, in table order, or every
- * registered provider when it names none. Throws on an unknown key.
- */
-function selectProviders(keys) {
-  if (!keys.length) return { providers: T3_PROVIDERS, explicit: false };
-  for (const key of keys) {
-    if (!T3_PROVIDER_KEYS.includes(key))
-      throw new Error(
-        `Unknown provider: ${key}. Use one of: ${T3_PROVIDER_KEYS.join(', ')}.`,
-      );
-  }
-  return {
-    providers: T3_PROVIDERS.filter((provider) => keys.includes(provider.id)),
-    explicit: true,
-  };
-}
-
 function parseOptions(action, args) {
   const keys = [];
   let dryRun = false;
@@ -1150,18 +594,24 @@ function parseOptions(action, args) {
     const arg = args[i];
     if (action === 'install' && arg === '--dry-run') {
       dryRun = true;
-    } else if (arg === '--provider' || arg.startsWith('--provider=')) {
-      const value = arg === '--provider' ? args[++i] : arg.slice(11);
-      if (!value)
+    } else if (arg === '--provider') {
+      const key = args[++i];
+      if (!PROVIDER_KEYS.includes(key))
         throw new Error(
-          `--provider needs a name: ${T3_PROVIDER_KEYS.join(', ')}.`,
+          `Unknown provider: ${key ?? '(none)'}. Use one of: ${PROVIDER_KEYS.join(', ')}.`,
         );
-      keys.push(value);
+      keys.push(key);
     } else {
       throw new Error(`Unknown argument for subc t3 ${action}: ${arg}`);
     }
   }
-  return { dryRun, ...selectProviders(keys) };
+  return {
+    dryRun,
+    explicit: keys.length > 0,
+    providers: keys.length
+      ? T3_PROVIDERS.filter((provider) => keys.includes(provider.id))
+      : T3_PROVIDERS,
+  };
 }
 
 /** Entry point for `subc t3 ...`. Returns the exit code. */

@@ -1,7 +1,12 @@
 /**
- * Helpers that every `subc t3` adapter shares. An adapter never starts the
- * agent. It prints a plan on stdout as NUL-separated pairs of kind and value,
- * and the launcher applies the plan and execs:
+ * The runner that every `subc t3` adapter shares. The launcher runs an
+ * adapter as
+ *
+ *   node t3-<agent>.js <binaryFlag> PATH --config-dir DIR -- AGENT_ARGS...
+ *
+ * An adapter never starts the agent. It prints a plan on stdout as
+ * NUL-separated pairs of kind and value, and the launcher applies the plan
+ * and execs:
  *
  *   env   NAME=VALUE   export the variable
  *   unset NAME         unset the variable
@@ -9,8 +14,10 @@
  *   watch (empty)      start the watchdog before the exec
  *   ok    (empty)      the plan is complete
  *
- * Only a launcher whose provider has `watchdog` accepts `watch`. An adapter
- * sends it only for a launch that starts a long-lived helper.
+ * Each adapter sorts its agent's command lines into three kinds. A
+ * `configured` launch gets the Subconscious launch. A `passthrough` query,
+ * such as `--version`, runs the real agent unchanged, without reading the
+ * profile or the network. An `unsupported` command is refused.
  */
 
 import path from 'node:path';
@@ -19,9 +26,8 @@ const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 /**
  * Bash sources the file in BASH_ENV when it starts a script, and stdout is
- * T3 Code's protocol stream, so a BASH_ENV that prints breaks the session. A
- * plan that runs a runbook script with bash unsets these. ENV is the POSIX
- * name for the same kind of file.
+ * T3 Code's protocol stream, so a BASH_ENV that prints breaks the session.
+ * ENV is the POSIX name for the same kind of file.
  */
 export const SHELL_STARTUP_ENV = Object.freeze(['BASH_ENV', 'ENV']);
 
@@ -42,19 +48,13 @@ export function passthroughPlan(binaryPath, args, env) {
 /**
  * The plan as records: unset, then env, then argv, then watch when
  * `plan.watch` is set, then ok. A name in the env the adapter started with
- * that the plan leaves out is unset. A name in `plan.unset` is unset even
- * when that env did not have it.
+ * that the plan leaves out is unset.
  */
 export function encodePlan(plan, original) {
   const records = [];
-  const unset = new Set();
   for (const name of Object.keys(original)) {
-    if (!(name in plan.env) && ENV_NAME.test(name)) unset.add(name);
+    if (!(name in plan.env) && ENV_NAME.test(name)) records.push('unset', name);
   }
-  for (const name of plan.unset ?? []) {
-    if (!(name in plan.env) && ENV_NAME.test(name)) unset.add(name);
-  }
-  for (const name of unset) records.push('unset', name);
   for (const [name, value] of Object.entries(plan.env)) {
     if (original[name] === value || !ENV_NAME.test(name)) continue;
     records.push('env', `${name}=${value}`);
@@ -67,20 +67,99 @@ export function encodePlan(plan, original) {
   return `${records.join('\0')}\0`;
 }
 
-export function writeStdout(text) {
+function writeStdout(text) {
   return new Promise((resolve, reject) => {
     process.stdout.write(text, (error) => (error ? reject(error) : resolve()));
   });
 }
 
+function parseOwnArgs(argv, provider) {
+  const own = {};
+  let i = 0;
+  for (; i < argv.length && argv[i] !== '--'; i++) {
+    const name = argv[i];
+    const value = argv[++i];
+    if (name === provider.binaryFlag) own.binaryPath = value;
+    else if (name === '--config-dir') own.configDir = value;
+    else own.bad = true;
+  }
+  if (own.bad || !own.binaryPath || !own.configDir || argv[i] !== '--')
+    throw new Error(
+      `usage: ${provider.adapterFile} ${provider.binaryFlag} PATH --config-dir DIR -- ARGS...`,
+    );
+  return { ...own, args: argv.slice(i + 1) };
+}
+
 /**
- * The launcher is the adapter's parent. If T3 Code kills it while the plan is
- * still being computed, the adapter stops too, instead of finishing a catalog
- * fetch that nobody will use.
+ * The Subconscious launch, or null when this process should exit without a
+ * plan: SYSTEM_CA is refused here, or a restart with the system CA already
+ * printed the plan.
  */
-export function exitWithParent() {
+async function configuredPlan(provider, own, original, planName) {
+  const launch = await import('./t3-launch.js');
+  launch.isolateLaunchEnv(process.env, own.configDir, provider);
+  const profiles = await import('./profiles.js');
+  const network = await import('./network.js');
+  const profile = await profiles.loadProfile(profiles.DEFAULT_PROFILE);
+  const systemCa = profiles.systemCaEnabledFor(profile);
+  if (network.refuseUnsupportedSystemCa(systemCa, profile.path)) return null;
+  if (systemCa && !process.execArgv.includes('--use-system-ca')) {
+    const restarted = await launch.restartWithCallerEnv({
+      env: process.env,
+      original,
+      configDir: own.configDir,
+      restart: () => network.ensureSystemCa({ interactive: false }),
+      provider,
+    });
+    if (restarted) return null;
+  }
+  return launch[planName]({
+    args: own.args,
+    binaryPath: own.binaryPath,
+    configDir: own.configDir,
+    launch: await launch.resolveT3Launch({ agentId: provider.agentId }),
+  });
+}
+
+async function adapterMain(provider, classify, planName) {
+  // The launcher is the adapter's parent. If T3 Code kills it while the plan
+  // is still being computed, the adapter stops too.
   const parent = process.ppid;
   setInterval(() => {
     if (process.ppid !== parent) process.exit(1);
   }, 100).unref();
+  process.stdout.on('error', () => process.exit(1));
+  const own = parseOwnArgs(process.argv.slice(2), provider);
+  const kind = classify(own.args);
+  if (kind === 'unsupported') {
+    const shown = own.args.join(' ') || '(no command)';
+    console.error(
+      `${provider.launcherName}: \`${provider.binaryName} ${shown}\` is not available through the Subconscious provider. Run ${provider.binaryName} directly for it.`,
+    );
+    return 64;
+  }
+  const original = { ...process.env };
+  const plan =
+    kind === 'passthrough'
+      ? passthroughPlan(own.binaryPath, own.args, original)
+      : await configuredPlan(provider, own, original, planName);
+  if (!plan) return process.exitCode || 0;
+  if (plan.fallback)
+    console.error(`${provider.launcherName}: ${plan.fallback}`);
+  await writeStdout(encodePlan(plan, original));
+  return 0;
+}
+
+/**
+ * Run an adapter: sort the args with `classify`, then print the plan.
+ * `planName` names the plan builder in `t3-launch.js`.
+ */
+export function runAdapter(provider, classify, planName) {
+  adapterMain(provider, classify, planName).then(
+    (code) => process.exit(code),
+    (error) => {
+      console.error(`${provider.launcherName}: ${error.message}`);
+      process.exit(1);
+    },
+  );
 }

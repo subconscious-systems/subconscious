@@ -1,39 +1,16 @@
 #!/usr/bin/env node
 
 /**
- * The adapter behind T3 Code's "Subconscious (OpenCode)" provider. T3 runs
- * the launcher `subc t3 install` writes, and the launcher runs this file:
- *
- *   node t3-opencode.js --opencode PATH --config-dir DIR -- OPENCODE_ARGS...
- *
- * This file never starts OpenCode. It prints a plan on stdout as
- * NUL-separated pairs of kind and value, and the launcher applies the plan
- * and execs:
- *
- *   env   NAME=VALUE   export the variable
- *   unset NAME         unset the variable
- *   arg   WORD         the next argv word
- *   watch (empty)      start the watchdog before the exec
- *   ok    (empty)      the plan is complete
- *
- * T3 Code 0.1.11 runs OpenCode in two ways. The version check (`--version`)
- * runs the real OpenCode unchanged, without reading the profile or the
- * network, and starts no watchdog. The helper (`serve --hostname=H
- * --port=P`) gets the Subconscious launch and a `watch` record, so the
- * launcher stops it after T3 Code's server dies. `serve --service` and `serve --stdio` are refused, because the
- * first starts OpenCode's shared background service and the second is
- * another protocol. `upgrade` and every other command are refused too.
+ * The adapter behind T3 Code's "Subconscious (OpenCode)" provider; see
+ * `t3-plan.js`. The version check runs the real OpenCode unchanged and
+ * starts no watchdog. The helper (`serve --hostname=H --port=P`) gets the
+ * Subconscious launch and a `watch` record. `serve --service`, `serve
+ * --stdio`, `upgrade`, and every other command are refused: the first starts
+ * OpenCode's shared background service, and the second is another protocol.
  */
 
-import {
-  encodePlan,
-  exitWithParent,
-  passthroughPlan,
-  writeStdout,
-} from './t3-plan.js';
-
-const USAGE =
-  'usage: t3-opencode.js --opencode PATH --config-dir DIR -- OPENCODE_ARGS...';
+import { runAdapter } from './t3-plan.js';
+import { OPENCODE_PROVIDER } from './t3-providers.js';
 
 const HELP_OR_VERSION = new Set(['-h', '--help', '-v', '--version']);
 const SERVE_HELP = new Set(['-h', '--help']);
@@ -77,82 +54,4 @@ function classifyOpenCodeArgs(args) {
   return knownServeFlags(rest) ? 'configured' : 'unsupported';
 }
 
-function parseOwnArgs(argv) {
-  const own = {};
-  let i = 0;
-  for (; i < argv.length && argv[i] !== '--'; i++) {
-    const name = argv[i];
-    const value = argv[++i];
-    if (name === '--opencode') own.opencodePath = value;
-    else if (name === '--config-dir') own.configDir = value;
-    else throw new Error(USAGE);
-  }
-  if (!own.opencodePath || !own.configDir || argv[i] !== '--')
-    throw new Error(USAGE);
-  return { ...own, args: argv.slice(i + 1) };
-}
-
-async function configuredPlan(own) {
-  const original = { ...process.env };
-  const [launch, { OPENCODE_PROVIDER }] = await Promise.all([
-    import('./t3-launch.js'),
-    import('./t3-providers.js'),
-  ]);
-  launch.isolateLaunchEnv(process.env, own.configDir, OPENCODE_PROVIDER);
-  const profiles = await import('./profiles.js');
-  const network = await import('./network.js');
-  const profile = await profiles.loadProfile(profiles.DEFAULT_PROFILE);
-  const systemCa = profiles.systemCaEnabledFor(profile);
-  if (network.refuseUnsupportedSystemCa(systemCa, profile.path)) return null;
-  if (systemCa && !process.execArgv.includes('--use-system-ca')) {
-    const restarted = await launch.restartWithCallerEnv({
-      env: process.env,
-      original,
-      configDir: own.configDir,
-      restart: () => network.ensureSystemCa({ interactive: false }),
-      provider: OPENCODE_PROVIDER,
-    });
-    if (restarted) return null;
-  }
-  const resolved = await launch.resolveT3Launch({
-    agentId: OPENCODE_PROVIDER.agentId,
-  });
-  const plan = await launch.t3OpenCodePlan({
-    args: own.args,
-    opencodePath: own.opencodePath,
-    launch: resolved,
-  });
-  return { plan, original };
-}
-
-async function main() {
-  exitWithParent();
-  process.stdout.on('error', () => process.exit(1));
-  const own = parseOwnArgs(process.argv.slice(2));
-  const kind = classifyOpenCodeArgs(own.args);
-  if (kind === 'unsupported') {
-    const shown = own.args.join(' ') || '(no command)';
-    console.error(
-      `subc-t3-opencode: \`opencode ${shown}\` is not available through the Subconscious provider. Run opencode directly for it.`,
-    );
-    return 64;
-  }
-  if (kind === 'passthrough') {
-    const original = { ...process.env };
-    const plan = passthroughPlan(own.opencodePath, own.args, original);
-    await writeStdout(encodePlan(plan, original));
-    return 0;
-  }
-  const configured = await configuredPlan(own);
-  if (!configured) return process.exitCode || 0;
-  await writeStdout(encodePlan(configured.plan, configured.original));
-  return 0;
-}
-
-main().then(
-  (code) => process.exit(code),
-  (error) => {
-    console.error(`subc-t3-opencode: ${error.message}`);
-    process.exit(1);
-  },
-);
+runAdapter(OPENCODE_PROVIDER, classifyOpenCodeArgs, 't3OpenCodePlan');

@@ -11,26 +11,16 @@
  * subc owns one entry per provider, such as `subconscious-codex`. It never
  * changes another entry, the secret store, the default provider, or text
  * generation. An entry is subc's when it has the provider's driver and its
- * binary is the launcher subc wrote.
- *
- * The one other write is the hide list of a provider with a built-in twin,
- * such as Claude: `providerModelPreferences[<subc instance id>]`. It is
- * keyed by subc's own instance id, and subc never changes another key in
- * `providerModelPreferences`.
- *
- * Every function takes a `target`: the T3 home, the launcher path, the agent
- * home path when the provider has one, and the provider descriptor from
- * `t3-providers.js`. A target with no provider means Codex.
+ * binary is the launcher subc wrote. Every function takes a `target`: the T3
+ * home, the launcher path, the agent home path when the provider has one,
+ * and the provider descriptor from `t3-providers.js`.
  */
 
 import { randomBytes } from 'node:crypto';
-import { realpathSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { CODEX_PROVIDER } from './t3-providers.js';
 
-const providerOf = (target) => target.provider ?? CODEX_PROVIDER;
 const MAX_WRITE_ATTEMPTS = 5;
 const MAX_BACKUPS = 10;
 // T3 debounces its settings watcher by 100 ms. Wait longer than that before
@@ -59,7 +49,7 @@ function t3Files(home) {
   };
 }
 
-async function readText(file) {
+export async function readText(file) {
   try {
     return await fs.readFile(file, 'utf8');
   } catch (error) {
@@ -98,40 +88,26 @@ async function t3Version(files) {
 }
 
 /**
- * The file to write. A symlinked settings file is written through only when
- * its target is a regular file in a directory this user owns and other users
- * cannot write; T3 itself follows the link.
+ * The file to write: a regular file owned by this user, in a directory that
+ * other users cannot write. A symlinked settings file is refused.
  */
 async function writeTarget(settingsPath) {
   const uid = process.getuid?.();
-  const link = await fs.lstat(settingsPath);
-  let target = settingsPath;
-  if (link.isSymbolicLink()) {
-    try {
-      target = await fs.realpath(settingsPath);
-    } catch {
-      return { problem: `${settingsPath} is a link to a missing file` };
-    }
-  } else if (!link.isFile()) {
+  const file = await fs.lstat(settingsPath);
+  if (!file.isFile())
     return { problem: `${settingsPath} is not a regular file` };
-  }
-  const file = await fs.lstat(target);
-  const dir = await fs.stat(path.dirname(target));
+  const dir = await fs.stat(path.dirname(settingsPath));
   // World-writable is refused; group-writable is not, because Linux user
   // private groups make 0664 the normal mode there.
-  const unsafe =
-    !file.isFile() ||
+  if (
     (uid !== undefined && (file.uid !== uid || dir.uid !== uid)) ||
     (file.mode & 0o002) !== 0 ||
-    (dir.mode & 0o002) !== 0;
-  if (unsafe) {
+    (dir.mode & 0o002) !== 0
+  )
     return {
-      problem: link.isSymbolicLink()
-        ? `${settingsPath} links to ${target}, which is not a private regular file owned by you`
-        : `${settingsPath} is writable by other users or not owned by you`,
+      problem: `${settingsPath} is writable by other users or not owned by you`,
     };
-  }
-  return { target, symlink: link.isSymbolicLink(), mode: file.mode & 0o7777 };
+  return { target: settingsPath, mode: file.mode & 0o7777 };
 }
 
 function parseSettings(text) {
@@ -160,29 +136,6 @@ function parseSettings(text) {
   return { settings };
 }
 
-// T3 Code expands a leading ~ in binaryPath, and a symlink to the launcher
-// runs the launcher, so both count as the same file.
-function canonicalPath(file) {
-  const expanded =
-    file === '~' || file.startsWith('~/')
-      ? path.join(os.homedir(), file.slice(1))
-      : file;
-  const resolved = path.resolve(expanded);
-  try {
-    return realpathSync(resolved);
-  } catch {
-    return resolved;
-  }
-}
-
-function sameFile(left, right) {
-  return (
-    typeof left === 'string' &&
-    typeof right === 'string' &&
-    canonicalPath(left) === canonicalPath(right)
-  );
-}
-
 function launcherOf(entry) {
   return isObject(entry?.config) ? entry.config.binaryPath : undefined;
 }
@@ -191,29 +144,23 @@ function launcherOf(entry) {
 function isOwnedEntry(entry, target) {
   return (
     isObject(entry) &&
-    entry.driver === providerOf(target).driver &&
-    sameFile(launcherOf(entry), target.launcherPath)
+    entry.driver === target.provider.driver &&
+    launcherOf(entry) === target.launcherPath
   );
 }
 
 /**
- * The managed fields that differ from what subc writes.
- *
- * T3 Code 0.1.11 folds a boolean `config.enabled` into the envelope's
- * `enabled` and removes it from `config` on every settings load and save
- * (`foldProviderInstanceEnabledFlags` in `apps/server/src/serverSettings.ts`).
- * The envelope flag alone turns an instance on (`resolveEntryEnabled` in
- * `ProviderInstanceRegistry.ts`). So subc writes only the envelope flag, a
- * missing `config.enabled` is current, and only a `false` in either place is
- * drift, because T3 Code resolves either one to off.
+ * The managed fields that differ from what subc writes. T3 Code 0.1.11 folds
+ * `config.enabled` into the envelope's `enabled`, so only a `false` in
+ * either place is drift.
  */
 function driftOf(entry, target) {
-  const provider = providerOf(target);
+  const provider = target.provider;
   const drift = [];
   if (entry.displayName !== provider.displayName) drift.push('displayName');
   if (entry.enabled === false) drift.push('enabled');
   if (entry.config?.enabled === false) drift.push('config.enabled');
-  // binaryPath decides ownership, so a ~ path or a symlink is not drift.
+  // binaryPath decides ownership, so it is never drift.
   for (const [field, value] of Object.entries(provider.managedConfig(target))) {
     if (field !== 'binaryPath' && entry.config?.[field] !== value)
       drift.push(field);
@@ -230,7 +177,7 @@ function driftOf(entry, target) {
  * manage, such as an accent color or custom models.
  */
 function expectedEntry(target, current = {}) {
-  const provider = providerOf(target);
+  const provider = target.provider;
   const config = { ...(isObject(current.config) ? current.config : {}) };
   for (const field of provider.clearedFields) delete config[field];
   // T3 Code would fold this into enabled: false.
@@ -270,7 +217,6 @@ export async function inspectT3(target) {
     policy: (await managedPolicy(files.runtime)).state,
     state: 'ok',
     problem: null,
-    symlink: false,
     entry: 'absent',
     drift: [],
     duplicates: [],
@@ -289,7 +235,6 @@ export async function inspectT3(target) {
     report.problem = writable.problem;
     return report;
   }
-  report.symlink = writable.symlink;
   const text = await fs.readFile(writable.target, 'utf8');
   const parsed = parseSettings(text);
   if (parsed.problem || parsed.unsupported) {
@@ -297,7 +242,7 @@ export async function inspectT3(target) {
     report.problem = parsed.problem || parsed.unsupported;
     return report;
   }
-  const { instanceId } = providerOf(target);
+  const { instanceId } = target.provider;
   const instances = parsed.settings.providerInstances ?? {};
   const ours = instances[instanceId];
   if (ours !== undefined) {
@@ -428,7 +373,7 @@ async function edit(target, backupDir, change) {
 async function readEntry(target) {
   const text = await readText(t3Files(target.home).settings);
   const parsed = text === null ? {} : parseSettings(text);
-  return parsed.settings?.providerInstances?.[providerOf(target).instanceId];
+  return parsed.settings?.providerInstances?.[target.provider.instanceId];
 }
 
 /**
@@ -438,7 +383,7 @@ async function readEntry(target) {
  */
 export async function installT3Provider(target, options = {}) {
   const { backupDir, settleMs = DEFAULT_SETTLE_MS } = options;
-  const { instanceId } = providerOf(target);
+  const { instanceId } = target.provider;
   const blockers = settingsBlockers(await inspectT3(target));
   if (blockers.length) throw new Error(blockers.join('\n'));
   let result = { changed: false, backup: null };
@@ -473,264 +418,21 @@ export async function installT3Provider(target, options = {}) {
 
 /**
  * Remove subc's entry and nothing else. Threads and other providers stay.
- * With `preferences`, also remove subc's hide list, the instance's key in
- * `providerModelPreferences`, in the same write, and report it as
- * `removedPreferences`. Returns what was removed;
- * a foreign entry with the same id, and its preferences, are left alone.
+ * Returns whether an entry was removed; a foreign entry with the same id is
+ * left alone.
  */
 export async function removeT3Provider(target, options = {}) {
-  const preferences = Boolean(options.preferences);
-  const none = {
-    removed: false,
-    ...(preferences ? { removedPreferences: false } : {}),
-    backup: null,
-  };
   const report = await inspectT3(target);
-  if (report.state === 'missing') return none;
+  if (report.state === 'missing') return { removed: false, backup: null };
   const blockers = settingsBlockers(report, { forRemoval: true });
   if (blockers.length) throw new Error(blockers.join('\n'));
-  if (report.entry === 'conflict') return none;
-  if (report.entry !== 'owned' && !preferences) return none;
-  const { instanceId } = providerOf(target);
-  let removed = false;
-  let removedPreferences = false;
+  if (report.entry !== 'owned') return { removed: false, backup: null };
+  const { instanceId } = target.provider;
   const written = await edit(target, options.backupDir, (settings) => {
-    removed = false;
-    removedPreferences = false;
-    const next = { ...settings };
-    const instances = settings.providerInstances ?? {};
-    const current = instances[instanceId];
-    if (current !== undefined) {
-      if (!isOwnedEntry(current, target)) return null;
-      const rest = { ...instances };
-      delete rest[instanceId];
-      next.providerInstances = rest;
-      removed = true;
-    }
-    const prefs = settings.providerModelPreferences;
-    if (preferences && isObject(prefs) && Object.hasOwn(prefs, instanceId)) {
-      const rest = { ...prefs };
-      delete rest[instanceId];
-      next.providerModelPreferences = rest;
-      removedPreferences = true;
-    }
-    return removed || removedPreferences ? next : null;
+    const instances = { ...(settings.providerInstances ?? {}) };
+    if (!isOwnedEntry(instances[instanceId], target)) return null;
+    delete instances[instanceId];
+    return { ...settings, providerInstances: instances };
   });
-  return {
-    removed: written.changed && removed,
-    ...(preferences
-      ? { removedPreferences: written.changed && removedPreferences }
-      : {}),
-    backup: written.backup,
-  };
-}
-
-/**
- * T3 Code's model cache for one instance, `<T3 home>/caches/<id>.json`, or
- * null when it is missing or unreadable. The file is the provider snapshot
- * itself. `slugs` lists its models in order, and `checkedAt` is the time of
- * the probe that wrote it, in ms, or null.
- *
- * The snapshot also holds what T3 Code found at that probe: `status` is
- * `ready`, `warning`, `error`, or `disabled`, `authStatus` is
- * `authenticated`, `unauthenticated`, or `unknown`, and `message` is T3
- * Code's text for a problem. Each is null when the file lacks it.
- */
-export async function readT3ModelCache(home, instanceId) {
-  const file = path.join(home, 'caches', `${instanceId}.json`);
-  let snapshot;
-  try {
-    snapshot = JSON.parse((await readText(file)) ?? 'null');
-  } catch {
-    return null;
-  }
-  if (!isObject(snapshot) || !Array.isArray(snapshot.models)) return null;
-  const slugs = [];
-  for (const model of snapshot.models) {
-    const slug = model?.slug;
-    if (typeof slug === 'string' && slug && !slugs.includes(slug))
-      slugs.push(slug);
-  }
-  const checkedAt = Date.parse(snapshot.checkedAt);
-  const text = (value) =>
-    typeof value === 'string' && value.trim() ? value.trim() : null;
-  return {
-    file,
-    slugs,
-    checkedAt: Number.isFinite(checkedAt) ? checkedAt : null,
-    status: text(snapshot.status),
-    authStatus: text(snapshot.auth?.status),
-    message: text(snapshot.message) ?? text(snapshot.unavailableReason),
-  };
-}
-
-/**
- * subc's hide list in T3 Code's settings. `state` is one of:
- *
- * - `unmigrated`: `providerModelPreferences` is missing or null. T3 Code
- *   uses null to mean that its clients have not migrated their own model
- *   preferences yet, and a value from subc would stop that migration.
- * - `absent`: the object exists and has no key for subc's instance.
- * - `present`: the key exists. `hiddenModels` and `modelOrder` hold it.
- * - `invalid`: the value is not an object.
- * - `unreadable`: the settings file is missing or not valid.
- */
-export async function readT3ModelPreferences(target) {
-  const text = await readText(t3Files(target.home).settings);
-  const parsed = text === null ? { problem: 'missing' } : parseSettings(text);
-  if (!parsed.settings) return { state: 'unreadable' };
-  const prefs = parsed.settings.providerModelPreferences;
-  if (prefs === undefined || prefs === null) return { state: 'unmigrated' };
-  if (!isObject(prefs)) return { state: 'invalid' };
-  const ours = prefs[providerOf(target).instanceId];
-  if (ours === undefined) return { state: 'absent' };
-  const list = (value) =>
-    Array.isArray(value)
-      ? value.filter((item) => typeof item === 'string')
-      : [];
-  return {
-    state: 'present',
-    hiddenModels: list(ours?.hiddenModels),
-    modelOrder: list(ours?.modelOrder),
-  };
-}
-
-/**
- * Set subc's hide list to `hiddenModels`, with the same compare-and-rename
- * edit and backup as the entry. An existing `modelOrder` is kept. The write
- * is skipped when `providerModelPreferences` is missing, null, or not an
- * object, and when subc's entry is not in the file.
- *
- * `state` is `written`, `current`, `unmigrated`, or `no-entry`.
- */
-export async function writeT3HideList(target, hiddenModels, options = {}) {
-  const blockers = settingsBlockers(await inspectT3(target));
-  if (blockers.length) throw new Error(blockers.join('\n'));
-  const { instanceId } = providerOf(target);
-  let state = 'current';
-  const written = await edit(target, options.backupDir, (settings) => {
-    const prefs = settings.providerModelPreferences;
-    if (!isObject(prefs)) {
-      state = 'unmigrated';
-      return null;
-    }
-    if (!isOwnedEntry(settings.providerInstances?.[instanceId], target)) {
-      state = 'no-entry';
-      return null;
-    }
-    const current = isObject(prefs[instanceId]) ? prefs[instanceId] : {};
-    const next = {
-      ...current,
-      hiddenModels: [...hiddenModels],
-      modelOrder: Array.isArray(current.modelOrder) ? current.modelOrder : [],
-    };
-    if (JSON.stringify(prefs[instanceId]) === JSON.stringify(next)) {
-      state = 'current';
-      return null;
-    }
-    state = 'written';
-    return {
-      ...settings,
-      providerModelPreferences: { ...prefs, [instanceId]: next },
-    };
-  });
-  return { state, backup: written.backup };
-}
-
-// T3 Code 0.1.11 decodes a missing textGenerationModelSelection to its
-// built-in Codex instance (`packages/contracts/src/settings.ts`).
-const DEFAULT_TEXT_GENERATION_INSTANCE = 'codex';
-
-/**
- * Where one model selection points. T3 Code reads `instanceId`, or the
- * older `provider` field. `kind` is `subconscious` for an entry that subc
- * owns, `textGenerator` for a model API from `textGenerators`, `provider`
- * for any other instance, or `invalid`.
- */
-function describeSelection(selection, settings, targets) {
-  if (!isObject(selection)) return { kind: 'invalid' };
-  const instanceId =
-    typeof selection.instanceId === 'string'
-      ? selection.instanceId
-      : selection.provider;
-  if (typeof instanceId !== 'string' || !instanceId) return { kind: 'invalid' };
-  const model = typeof selection.model === 'string' ? selection.model : null;
-  const entry = settings.providerInstances?.[instanceId];
-  const ours = targets.find(
-    (target) => providerOf(target).instanceId === instanceId,
-  );
-  if (ours && isOwnedEntry(entry, ours))
-    return {
-      kind: 'subconscious',
-      instanceId,
-      model,
-      name: providerOf(ours).displayName,
-    };
-  const generator = isObject(settings.textGenerators)
-    ? settings.textGenerators[instanceId]
-    : undefined;
-  if (isObject(generator)) {
-    let origin = null;
-    try {
-      origin = new URL(generator.baseUrl).origin;
-    } catch {
-      // T3 Code refuses such a value too.
-    }
-    return {
-      kind: 'textGenerator',
-      instanceId,
-      model,
-      name: typeof generator.label === 'string' ? generator.label : instanceId,
-      origin,
-    };
-  }
-  return {
-    kind: 'provider',
-    instanceId,
-    model,
-    name:
-      typeof entry?.displayName === 'string' && entry.displayName
-        ? entry.displayName
-        : instanceId,
-  };
-}
-
-/**
- * Where T3 Code sends its generated text, read from the settings with no
- * network. subc never writes these settings.
- *
- * - `titles`: `textGenerationModelSelection`, for thread titles. A missing
- *   value is T3 Code's default, marked `isDefault`.
- * - `commits`: `sourceControlWriterModelSelection`, for commit messages, or
- *   null when it is null or missing, because T3 Code then uses `titles`.
- *
- * `targets` lists subc's targets, so that an entry subc owns counts as
- * Subconscious. `state` is `ok` or `unreadable`.
- */
-export async function readT3TextGeneration(home, targets) {
-  const text = await readText(t3Files(home).settings);
-  const parsed = text === null ? {} : parseSettings(text);
-  if (!parsed.settings) return { state: 'unreadable' };
-  const { settings } = parsed;
-  const titles =
-    settings.textGenerationModelSelection === undefined
-      ? {
-          ...describeSelection(
-            { instanceId: DEFAULT_TEXT_GENERATION_INSTANCE },
-            settings,
-            targets,
-          ),
-          isDefault: true,
-        }
-      : describeSelection(
-          settings.textGenerationModelSelection,
-          settings,
-          targets,
-        );
-  const writer = settings.sourceControlWriterModelSelection;
-  const commits =
-    writer === undefined || writer === null
-      ? null
-      : describeSelection(writer, settings, targets);
-  return { state: 'ok', titles, commits };
+  return { removed: written.changed, backup: written.backup };
 }

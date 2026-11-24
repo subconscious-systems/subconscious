@@ -12,15 +12,15 @@ export const MODELS = ['subconscious/sandbox-a', 'subconscious/sandbox-b'];
 /**
  * A fake agent CLI, as a Node script. Every fake reads its options from
  * FAKE_<NAME>_* names, such as FAKE_CODEX_LOG. A lone `--version` or `-v`
- * writes one file where the real CLI writes on every start, so a test can
- * see which dir a version check used, and prints `versionLine` with
+ * writes one file where the real CLI writes on every start, if it does, so
+ * a test can see which dir a version check used, and prints `versionLine` with
  * FAKE_<NAME>_VERSION, or `version` without it. Any other call reads stdin
  * when READ_STDIN is 1, and appends its argv, env, stdin, cwd, pid, ppid,
  * and the fields of `record` to the LOG file. Then `body` runs.
  */
 function fakeAgent(
   name,
-  { version, versionLine, versionFile, record = '{}', body },
+  { version, versionLine, versionFile = 'null', record = '{}', body },
 ) {
   const prefix = `FAKE_${name.toUpperCase()}_`;
   return `#!/usr/bin/env node
@@ -31,8 +31,10 @@ const args = process.argv.slice(2);
 const option = (key) => process.env['${prefix}' + key];
 if (args.length === 1 && (args[0] === '--version' || args[0] === '-v')) {
   const file = ${versionFile};
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.appendFileSync(file, 'version check\\n');
+  if (file) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, 'version check\\n');
+  }
   const version = option('VERSION') || '${version}';
   process.stdout.write(${versionLine} + '\\n');
   process.exit(0);
@@ -67,14 +69,12 @@ const FAKE_CODEX = fakeAgent('codex', {
   body: printAndSleep("{ fake: 'codex', args }"),
 });
 
-// A fake claude. Its version check writes in its config dir,
-// CLAUDE_CONFIG_DIR or ~/.claude. A launch prints a result line for -p and
+// A fake claude. Its version check writes nothing, as with the real Claude
+// Code. A launch prints a result line for -p and
 // an init message for stream-json.
 const FAKE_CLAUDE = fakeAgent('claude', {
   version: '2.1.326',
   versionLine: "version + ' (Claude Code)'",
-  versionFile:
-    "path.join(process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude'), 'fake-version-check')",
   body: printAndSleep(
     "args.includes('-p') || args.includes('--print') ? { type: 'result', subtype: 'success', result: 'fake', fake: 'claude' } : { type: 'system', subtype: 'init', fake: 'claude' }",
   ),
@@ -282,8 +282,6 @@ export async function t3Sandbox({
     launcher: path.join(subc, 'bin', 'subc-t3-codex'),
     codexHome: codexDir,
     catalogDir: path.join(subc, 't3', 'codex', 'catalog'),
-    // subc 8.2.0 wrote this file; nothing reads it now.
-    state: path.join(subc, 't3', 'state.json'),
     claudeDir,
     claudeJson,
     claudeBin,
@@ -409,54 +407,6 @@ export async function snapshot(dir) {
   };
   await walk(dir);
   return entries;
-}
-
-/**
- * The 14 built-in Claude models that T3 Code 0.1.11 lists on every
- * claudeAgent instance (step 0, November 23, 2026). Each has a display name.
- */
-export const BUILT_IN_CLAUDE_MODELS = Object.freeze([
-  ['claude-opus-5-5', 'Claude Opus 5.5'],
-  ['claude-sonnet-5-5', 'Claude Sonnet 5.5'],
-  ['claude-fable-5-2', 'Claude Fable 5.2'],
-  ['claude-fable-5-1', 'Claude Fable 5.1'],
-  ['claude-fable-5', 'Claude Fable 5'],
-  ['claude-opus-5', 'Claude Opus 5'],
-  ['claude-opus-4-8', 'Claude Opus 4.8'],
-  ['claude-opus-4-7', 'Claude Opus 4.7'],
-  ['claude-opus-4-6', 'Claude Opus 4.6'],
-  ['claude-opus-4-5', 'Claude Opus 4.5'],
-  ['claude-sonnet-5', 'Claude Sonnet 5'],
-  ['claude-sonnet-4-6', 'Claude Sonnet 4.6'],
-  ['claude-haiku-5-5', 'Claude Haiku 5.5'],
-  ['claude-haiku-4-5', 'Claude Haiku 4.5'],
-]);
-
-/**
- * Write a T3 Code 0.1.11 model cache, `caches/<instance id>.json`, mode
- * 600: the provider snapshot, with the fields that subc reads. Built-in
- * models and models that Claude Code reports look the same.
- */
-export async function writeT3ModelCache(
-  box,
-  {
-    instanceId,
-    builtIns = BUILT_IN_CLAUDE_MODELS.map(([slug]) => slug),
-    reported = [],
-    checkedAt = new Date().toISOString(),
-    status = 'ready',
-    auth = { status: 'authenticated', type: 'apiKey' },
-    message,
-  },
-) {
-  const dir = path.join(box.t3Home, 'caches');
-  await fs.mkdir(dir, { recursive: true });
-  const models = [...builtIns, ...reported].map((slug) => ({ slug }));
-  await fs.writeFile(
-    path.join(dir, `${instanceId}.json`),
-    JSON.stringify({ instanceId, status, auth, message, checkedAt, models }),
-    { mode: 0o600 },
-  );
 }
 
 /**
