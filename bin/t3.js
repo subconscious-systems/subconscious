@@ -4,8 +4,8 @@
  *
  * T3 Code is a host for Codex, so this is not another coding agent. Install
  * checks Codex, the default profile's key, and the live key-scoped catalog,
- * then writes a launcher, sets up the compaction hooks in ~/.codex the way
- * `subc codex` does, and adds one entry to T3's settings. Every launch
+ * then writes a launcher, removes the compaction hooks older subc versions
+ * left in ~/.codex, and adds one entry to T3's settings. Every launch
  * reads the default profile again, so a new key or model needs no reinstall.
  */
 
@@ -57,12 +57,13 @@ Codex on your hosted Subconscious models. This works on macOS and Linux, with
 Codex only, and with the default profile only.
 
   install            Check Codex, the default profile's key, and the live
-                     model catalog. Then write the launcher, set up the
-                     compaction hooks, and add the provider to T3 Code.
+                     model catalog. Then write the launcher, remove the
+                     compaction hooks older subc versions left in ~/.codex,
+                     and add the provider to T3 Code.
   install --dry-run  Run every check and print the plan. Change nothing.
   status             Show what is installed. Needs no network or key.
-  uninstall          Remove the provider and the launcher. The compaction
-                     hooks in ~/.codex stay, because subc codex uses them.
+  uninstall          Remove the provider, the launcher, and any compaction
+                     hooks older subc versions left in ~/.codex.
                      T3 Code threads stay.
 
 How it works:
@@ -77,10 +78,9 @@ How it works:
   apps and plugins stay off unless CODEX_EXTERNAL_TOOLS=true is in the
   default profile. Plain codex does not resume Subconscious sessions.
 
-  The compaction hooks are the same ~/.codex/hooks.json entries that subc
-  codex writes. Codex runs them only after you trust them with /hooks, and
-  they report only for Codex sessions that subc started. The hook env file
-  holds the profile's key, mode 600.
+  subc installs no Codex hooks. Install and uninstall remove only the
+  entries older subc versions merged into ~/.codex/hooks.json, with their
+  hook script, env file, and logs. Your own hooks stay.
 
   T3 Code reloads its settings on its own; subc never restarts it.
 `);
@@ -174,44 +174,35 @@ async function adapterPath() {
   return fs.realpath(fileURLToPath(new URL('./t3-codex.js', import.meta.url)));
 }
 
-/** Count subc's hook entries in a Codex home without needing jq. */
-async function hookStatus(codexHome) {
+/**
+ * What older subc versions left in a Codex home: compaction hook entries in
+ * hooks.json, the hook script, its env file (which held the API key), and its
+ * logs. Read without jq.
+ */
+async function legacyHookStatus(codexHome) {
   const hooksJson = path.join(codexHome, 'hooks.json');
   const status = {
     hooksJson,
     entries: 0,
-    // Our entries whose command is not this home's hook script, such as a
-    // path left by an older install. Codex cannot run them.
-    stale: 0,
     readable: true,
     script: await exists(path.join(codexHome, HOOK_MARKER)),
-    envFile: await exists(path.join(codexHome, 'subconscious-hooks.env')),
-    envMode: null,
+    envFile:
+      (await exists(path.join(codexHome, 'subconscious-hooks.env'))) ||
+      (await exists(path.join(codexHome, 'subconscious.env'))),
+    logs: await exists(path.join(codexHome, 'subconscious-hook-logs')),
   };
-  if (status.envFile) {
-    try {
-      const stat = await fs.stat(
-        path.join(codexHome, 'subconscious-hooks.env'),
-      );
-      status.envMode = stat.mode & 0o777;
-    } catch {
-      // Removed since the check above.
-    }
-  }
   const text = await readText(hooksJson);
   if (text === null) return status;
-  const hookScript = path.join(codexHome, HOOK_MARKER);
+  // A hooks.json that does not parse still counts when it names our script.
+  status.mentioned = text.includes(HOOK_MARKER);
   try {
     const hooks = JSON.parse(text)?.hooks ?? {};
     for (const groups of Object.values(hooks)) {
       if (!Array.isArray(groups)) continue;
       for (const group of groups)
-        for (const hook of group?.hooks ?? []) {
-          const command = String(hook?.command ?? '');
-          if (!command.includes(HOOK_MARKER)) continue;
-          status.entries++;
-          if (command !== hookScript) status.stale++;
-        }
+        for (const hook of group?.hooks ?? [])
+          if (String(hook?.command ?? '').includes(HOOK_MARKER))
+            status.entries++;
     }
   } catch {
     status.readable = false;
@@ -219,12 +210,34 @@ async function hookStatus(codexHome) {
   return status;
 }
 
+function hasLegacyHooks(legacy) {
+  return Boolean(
+    legacy.entries ||
+      legacy.script ||
+      legacy.envFile ||
+      legacy.logs ||
+      (!legacy.readable && legacy.mentioned),
+  );
+}
+
+function describeLegacyHooks(legacy) {
+  if (!legacy.readable) return `${legacy.hooksJson} is not valid JSON`;
+  if (!hasLegacyHooks(legacy)) return 'none';
+  const parts = [];
+  if (legacy.entries) parts.push(`${legacy.entries} hooks.json entries`);
+  if (legacy.script) parts.push('hook script');
+  if (legacy.envFile) parts.push('env file with an API key');
+  if (legacy.logs) parts.push('hook logs');
+  return `left by an older subc: ${parts.join(', ')}`;
+}
+
 /**
- * Run the Codex hook installer against the provider's Codex home. The
- * env is built here rather than inherited, so nothing in the caller's env can
- * redirect the hooks file, and the key travels in the env, never in argv.
+ * Remove what older subc versions left in the provider's Codex home with the
+ * Codex runbook's own cleanup (`install.sh install|uninstall`), which keeps
+ * the user's hooks. The env is built here rather than inherited, so nothing
+ * in the caller's env can redirect the hooks file. True on success.
  */
-function runHookScript(paths, action, launch) {
+function removeLegacyHooks(paths, action) {
   const env = {
     PATH: process.env.PATH ?? '',
     HOME: os.homedir(),
@@ -232,16 +245,12 @@ function runHookScript(paths, action, launch) {
   };
   for (const name of ['LANG', 'LC_ALL', 'TMPDIR'])
     if (process.env[name]) env[name] = process.env[name];
-  if (launch) {
-    env.GATEWAY_URL = launch.baseUrl;
-    env.API_KEY = launch.apiKey;
-  }
   const script = runbookScriptPath(agentById('codex'), 'install.sh');
   const result = spawnSync('bash', [script, action], {
     env,
-    stdio: ['ignore', 'inherit', 'inherit'],
+    stdio: ['ignore', 'ignore', 'inherit'],
   });
-  return result.status ?? 1;
+  return result.status === 0;
 }
 
 async function readState(paths) {
@@ -354,9 +363,12 @@ async function install({ dryRun }) {
     'Catalog',
     `${launch.catalog.models.length} models, key-scoped, from ${new URL(launch.baseUrl).origin}`,
   );
+  const legacy = await legacyHookStatus(paths.codexHome);
   line(
-    'Hooks',
-    'compaction hooks in that Codex home, as subc codex sets them up, inert until trusted',
+    'Old hooks',
+    hasLegacyHooks(legacy)
+      ? `${describeLegacyHooks(legacy)}; install removes them`
+      : 'none',
   );
   console.log('');
   if (dryRun) {
@@ -369,10 +381,10 @@ async function install({ dryRun }) {
   // never changes its mode.
   await fs.mkdir(paths.codexHome, { recursive: true });
   await writeLauncher(paths.launcher, script);
-  if (runHookScript(paths, 'install', launch) !== 0)
-    return failWith(
-      `Could not set up the compaction hooks in ${paths.codexHome}. T3 Code settings were not changed. The launcher ${paths.launcher} stays; subc t3 uninstall removes it.`,
-    );
+  // Nothing the provider needs depends on this cleanup, so a failure (no jq,
+  // or a hooks.json that is not valid JSON) is reported but does not stop it.
+  const cleanupFailed =
+    hasLegacyHooks(legacy) && !removeLegacyHooks(paths, 'install');
   await writeState(paths, {
     schema: 1,
     instanceId: T3_INSTANCE_ID,
@@ -384,7 +396,6 @@ async function install({ dryRun }) {
     node: process.execPath,
     adapter,
     codex: codex.path,
-    hooks: 'installed',
   });
 
   let result;
@@ -393,12 +404,15 @@ async function install({ dryRun }) {
   } catch (error) {
     return failWith([
       `T3 Code settings were not updated: ${error.message}`,
-      `The launcher and the compaction hooks are in place under ${paths.root}.`,
-      'The hooks run only for Codex sessions subc starts, so they send nothing on their own.',
-      'Retry subc t3 install, or run subc t3 uninstall to remove them.',
+      `The launcher ${paths.launcher} is in place.`,
+      'Retry subc t3 install, or run subc t3 uninstall to remove it.',
     ]);
   }
   if (result.backup) line('Backup', result.backup);
+  if (cleanupFailed)
+    console.log(
+      `  ${c.yellow}Could not remove the old Subconscious hooks from ${paths.codexHome}; see the warning above. The provider works without removing them.${c.reset}`,
+    );
   console.log(
     `\n  ${c.green}${c.bold}✓ ${T3_DISPLAY_NAME} is ${result.changed ? 'ready' : 'already set up'} in T3 Code.${c.reset}`,
   );
@@ -442,8 +456,7 @@ function entryReport(report) {
 async function status() {
   const { paths, target } = context();
   const report = await inspectT3(target);
-  const hooks = await hookStatus(paths.codexHome);
-  const state = await readState(paths);
+  const legacy = await legacyHookStatus(paths.codexHome);
   console.log(`\n  ${c.bold}${T3_DISPLAY_NAME} in T3 Code${c.reset}\n`);
   line(
     'T3 Code',
@@ -464,14 +477,11 @@ async function status() {
     'Codex home',
     `${paths.codexHome}${(await exists(paths.codexHome)) ? '' : ' (missing)'}`,
   );
-  const hookState = !hooks.readable
-    ? `${hooks.hooksJson} is not valid JSON`
-    : hooks.entries
-      ? `${hooks.entries} entries${hooks.stale ? `, ${hooks.stale} run another path (run subc t3 install to fix)` : ''}${hooks.script ? '' : ', hook script missing'}${hooks.envFile ? `, env file present (mode ${hooks.envMode?.toString(8) ?? 'unknown'}${hooks.envMode !== null && hooks.envMode & 0o077 ? ', readable by others' : ''})` : ''}`
-      : 'not installed';
   line(
-    'Hooks',
-    `${hookState}${state?.hooks === 'installed' ? '; set up by subc t3 install' : ''}`,
+    'Old hooks',
+    hasLegacyHooks(legacy)
+      ? `${describeLegacyHooks(legacy)}; run subc t3 install to remove them`
+      : describeLegacyHooks(legacy),
   );
   console.log('');
   return 0;
@@ -503,8 +513,15 @@ async function uninstall() {
       `Provider ${report.duplicates.join(', ')} still points at the launcher. Remove it in T3 Code.`,
     );
 
-  // The hooks in ~/.codex also serve plain `subc codex`, so they stay.
-  const hooks = await hookStatus(paths.codexHome);
+  const legacy = await legacyHookStatus(paths.codexHome);
+  if (hasLegacyHooks(legacy)) {
+    if (removeLegacyHooks(paths, 'uninstall'))
+      done.push(`Removed the old Subconscious hooks from ${paths.codexHome}.`);
+    else
+      problems.push(
+        `Could not remove the old Subconscious hooks from ${paths.codexHome}; see the warning above.`,
+      );
+  }
 
   const launcher = await readLauncher(paths.launcher);
   if (launcher.state === 'present') {
@@ -518,10 +535,6 @@ async function uninstall() {
 
   console.log('');
   for (const message of done) console.log(`  ${message}`);
-  if (hooks.entries || hooks.script || hooks.envFile)
-    console.log(
-      `  ${c.dim}Kept the compaction hooks in ${paths.codexHome}, because subc codex uses them too.${c.reset}`,
-    );
   if (problems.length) return failWith(problems);
   console.log(
     `\n  ${c.green}${c.bold}✓ T3 Code integration removed.${c.reset}\n`,

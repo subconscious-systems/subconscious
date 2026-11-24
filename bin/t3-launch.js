@@ -6,8 +6,8 @@
  * T3 is a host for Codex, not another coding agent. A launch here is an
  * ordinary Codex launch (the codex agent file, runbookEnv, launchPlan, and
  * run.sh) with two differences: settings come only from the saved default
- * profile, and run.sh runs in protocol mode, which writes no hooks and reuses
- * one catalog file.
+ * profile, and run.sh runs in protocol mode, which skips the old-hook
+ * cleanup and reuses one catalog file.
  *
  * Module imports that read the subc config directory happen inside the
  * functions, after isolateLaunchEnv, so this file is cheap to load.

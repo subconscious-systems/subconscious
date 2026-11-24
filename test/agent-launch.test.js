@@ -110,20 +110,23 @@ test('env entries take the first set override, else their value', () => {
     resolveInputs(claude, {
       ...base,
       CLAUDE_GATEWAY_URL: 'https://claude.example//',
-      OTEL_LOGS_EXPORTER: 'none',
+      CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '0',
       CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY: '1',
       CLAUDE_CODE_API_KEY: 'sk-claude',
     }),
   );
   assert.equal(env.ANTHROPIC_BASE_URL, 'https://claude.example//');
-  assert.equal(
-    env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-    'https://claude.example/v1/logs',
-  );
-  assert.equal(env.OTEL_LOGS_EXPORTER, 'none');
+  assert.equal(env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, '0');
   assert.equal(env.CLAUDE_CODE_ENABLE_GATEWAY_MODEL_DISCOVERY, '0');
   assert.equal(env.ANTHROPIC_AUTH_TOKEN, 'sk-claude');
-  assert.equal(env.OTEL_EXPORTER_OTLP_HEADERS, 'x-api-key=sk-claude');
+});
+
+test('claude-code exports no telemetry to the gateway', () => {
+  const env = resolveAgentEnv(claude, resolveInputs(claude, { ...base }));
+  for (const name of Object.keys(env)) {
+    assert.doesNotMatch(name, /^OTEL_/);
+  }
+  assert.equal(env.CLAUDE_CODE_ENABLE_TELEMETRY, undefined);
 });
 
 test('claude-code drops the mutating attribution header, unless the user keeps it', () => {

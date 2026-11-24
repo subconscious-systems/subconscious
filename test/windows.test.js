@@ -286,7 +286,7 @@ test('native child status is preserved and signal listeners are removed', async 
   assert.equal(process.listenerCount('SIGINT'), before);
 });
 
-test('Windows Claude launch retains model, subagent, telemetry and picker settings', async () => {
+test('Windows Claude launch retains model, subagent and picker settings', async () => {
   const launch = await windowsLaunch(
     'claude-code',
     [
@@ -320,10 +320,7 @@ test('Windows Claude launch retains model, subagent, telemetry and picker settin
   assert.equal(launch.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW, '750000');
   assert.equal(launch.env.CLAUDE_CODE_MAX_CONTEXT_TOKENS, '2500000');
   assert.equal(launch.env.ENABLE_CLAUDEAI_MCP_SERVERS, 'false');
-  assert.equal(
-    launch.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
-    'https://gateway.example/v1/logs',
-  );
+  assert.equal(launch.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT, undefined);
   const equals = await windowsLaunch(
     'claude-code',
     [
@@ -606,6 +603,13 @@ for (const client of ['codex', 'copilot'])
     );
     const merged = mergeHooks(original, client, command);
     assert.deepEqual(mergeHooks(merged, client, command), merged);
+    assert.deepEqual(
+      Object.keys(merged.hooks),
+      client === 'copilot'
+        ? ['PreCompact', 'UserPromptSubmit']
+        : ['PreCompact'],
+    );
+    assert.equal(merged.hooks.PreCompact.length, 1);
     const removed = mergeHooks(merged, client, null);
     assert.deepEqual(removed.hooks.PreCompact, [
       { ...custom, hooks: [custom.hooks[0]] },
@@ -674,7 +678,10 @@ for (const client of ['codex', 'copilot', 'pi'])
         },
       },
     );
-    assert.match(status, /installed/);
+    if (client === 'codex') {
+      assert.match(status, /no Subconscious hooks/);
+      await assert.rejects(fs.access(path.join(home, '.codex')));
+    } else assert.match(status, /installed/);
     if (client === 'copilot') {
       const providers = JSON.parse(await fs.readFile(providerFile, 'utf8'));
       assert.equal(providers.length, 2);
@@ -700,6 +707,97 @@ for (const client of ['codex', 'copilot', 'pi'])
         extra: true,
         providers: { existing: { apiKey: 'keep' } },
       });
+  });
+
+// The PowerShell command an older version registered for Codex or Copilot.
+const oldHook = (client, home) =>
+  windowsHookCommand(
+    client,
+    path.join(home, `.${client}`, 'hooks', 'subconscious-hook.cjs'),
+    path.join(home, `.${client}`, 'subconscious-windows.json'),
+  );
+
+for (const action of ['install', 'uninstall'])
+  test(`Windows Codex ${action} removes old Subconscious hooks and keeps the user's`, async (t) => {
+    const home = await temporary(t);
+    const dir = path.join(home, '.codex');
+    const user = {
+      PreCompact: [{ hooks: [{ type: 'command', command: 'mine.exe' }] }],
+    };
+    const ours = {
+      hooks: [{ type: 'command', command: oldHook('codex', home) }],
+    };
+    await writeJson(path.join(dir, 'hooks.json'), {
+      hooks: { PreCompact: [...user.PreCompact, ours], PostCompact: [ours] },
+    });
+    await writeJson(path.join(dir, 'subconscious-windows.json'), {});
+    await fs.mkdir(path.join(dir, 'hooks'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'hooks', 'subconscious-hook.cjs'), '');
+    await windowsSetup('codex', action, [], env, { home, log: quiet });
+    assert.deepEqual(
+      JSON.parse(await fs.readFile(path.join(dir, 'hooks.json'), 'utf8')),
+      { hooks: user },
+    );
+    assert.deepEqual((await fs.readdir(dir)).sort(), ['hooks', 'hooks.json']);
+    assert.deepEqual(await fs.readdir(path.join(dir, 'hooks')), []);
+  });
+
+test('Windows Copilot install over an old install drops PreCompact and its markers', async (t) => {
+  const home = await temporary(t);
+  const appData = path.join(home, 'AppData', 'Roaming');
+  const dir = path.join(home, '.copilot');
+  const command = oldHook('copilot', home);
+  const mine = { type: 'command', command: 'mine.exe' };
+  await writeJson(path.join(dir, 'hooks', 'subconscious-hooks.json'), {
+    hooks: {
+      UserPromptSubmit: [{ type: 'command', command }],
+      PreCompact: [{ type: 'command', command }, mine],
+    },
+  });
+  await fs.mkdir(path.join(dir, 'subconscious-compact-pending'));
+  await fs.writeFile(path.join(dir, 'subconscious-compact-pending', 'x'), '');
+  await windowsSetup(
+    'copilot',
+    'install',
+    [],
+    { ...env, APPDATA: appData },
+    { home, log: quiet },
+  );
+  const { hooks } = JSON.parse(
+    await fs.readFile(
+      path.join(dir, 'hooks', 'subconscious-hooks.json'),
+      'utf8',
+    ),
+  );
+  assert.deepEqual(hooks.PreCompact, [mine]);
+  assert.equal(hooks.UserPromptSubmit.length, 1);
+  await assert.rejects(
+    fs.access(path.join(dir, 'subconscious-compact-pending')),
+  );
+});
+
+for (const action of ['install', 'uninstall'])
+  test(`Windows Pi ${action} removes the old compaction extension and config`, async (t) => {
+    const home = await temporary(t);
+    const dir = path.join(home, '.pi', 'agent');
+    await fs.mkdir(path.join(dir, 'extensions'), { recursive: true });
+    await fs.writeFile(
+      path.join(dir, 'extensions', 'subconscious-compaction.ts'),
+      '',
+    );
+    await fs.writeFile(path.join(dir, 'extensions', 'mine.ts'), '');
+    await writeJson(path.join(dir, 'subconscious-windows.json'), {});
+    await windowsSetup('pi', action, [], env, { home, log: quiet });
+    assert.deepEqual(
+      (await fs.readdir(dir)).sort(),
+      action === 'install' ? ['extensions', 'models.json'] : ['extensions'],
+    );
+    assert.deepEqual(
+      (await fs.readdir(path.join(dir, 'extensions'))).sort(),
+      action === 'install'
+        ? ['mine.ts', 'subconscious-image-window']
+        : ['mine.ts'],
+    );
   });
 
 test('Copilot uses Roaming AppData and validates app and token options before writing', async (t) => {
@@ -775,7 +873,7 @@ test('legacy cleanup is auth-free and preserves unrelated OpenCode providers and
   );
 });
 
-test('Windows hooks report prompt and compaction events without Bash, jq or curl', async (t) => {
+test('the Windows hook reports only Copilot prompts, without Bash, jq or curl', async (t) => {
   const home = await temporary(t);
   const requests = [];
   const base = await gateway(t, (req, res) => {
@@ -801,21 +899,15 @@ test('Windows hooks report prompt and compaction events without Bash, jq or curl
     assert.equal(result.stderr, '');
     return JSON.parse(result.stdout);
   };
-  await emit('codex', {
-    hook_event_name: 'PreCompact',
-    session_id: 'c2',
-    turn_id: 't1',
-    trigger: 'auto',
-  });
-  await emit('codex', {
-    hook_event_name: 'PostCompact',
-    session_id: 'c2',
-    turn_id: 't1',
-  });
-  await emit('copilot', {
-    hook_event_name: 'PreCompact',
-    session_id: '../../unsafe?session',
-  });
+  // An old Codex hooks.json can still name this script until it is cleaned up.
+  assert.deepEqual(
+    await emit('codex', { hook_event_name: 'PreCompact', session_id: 'c2' }),
+    {},
+  );
+  assert.deepEqual(
+    await emit('copilot', { hook_event_name: 'PreCompact', session_id: 's' }),
+    { continue: true },
+  );
   assert.deepEqual(
     await emit('copilot', {
       hook_event_name: 'UserPromptSubmit',
@@ -826,19 +918,20 @@ test('Windows hooks report prompt and compaction events without Bash, jq or curl
     { continue: true },
   );
   assert.deepEqual(
-    requests.map((r) => r.body.phase || r.body.event),
-    ['start', 'end', 'start', 'conversation_ensure', 'end'],
+    requests.map((r) => r.body),
+    [
+      {
+        event: 'conversation_ensure',
+        conversation_id: '../../unsafe?session',
+        hook_event_name: 'UserPromptSubmit',
+        prompt: 'next',
+        workspace: 'Project',
+      },
+    ],
   );
-  assert.equal(requests[3].body.workspace, 'Project');
-  assert.equal(requests[0].headers['x-subconscious-client'], 'codex');
-  assert.equal(requests[2].headers['x-subconscious-client'], 'copilot');
-  assert.ok(
-    requests.every((r) => r.headers.authorization === 'Bearer sk-test'),
-  );
-  assert.deepEqual(
-    await fs.readdir(path.join(home, 'subconscious-compact-pending')),
-    [],
-  );
+  assert.equal(requests[0].headers['x-subconscious-client'], 'copilot');
+  assert.equal(requests[0].headers.authorization, 'Bearer sk-test');
+  assert.deepEqual(await fs.readdir(home), ['config.json']);
 });
 
 test('hooks fail open for malformed input, missing credentials, and offline gateways', async (t) => {
@@ -879,12 +972,12 @@ test('hook gateway timeouts are bounded and permissive', async (t) => {
   const started = Date.now();
   const result = await child(
     process.execPath,
-    [hook, 'codex', config],
+    [hook, 'copilot', config],
     {},
-    '{"hook_event_name":"PreCompact","session_id":"s"}',
+    '{"hook_event_name":"UserPromptSubmit","session_id":"s","prompt":"p"}',
   );
   assert.equal(result.code, 0);
-  assert.deepEqual(JSON.parse(result.stdout), {});
+  assert.deepEqual(JSON.parse(result.stdout), { continue: true });
   assert.ok(Date.now() - started < 5000);
 });
 

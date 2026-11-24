@@ -3,7 +3,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, test } from 'node:test';
-import { launchCommand, runSync } from './helpers/agent-command.js';
+import {
+  launchCommand,
+  runSync,
+  setupCommand,
+} from './helpers/agent-command.js';
 
 const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'subc-pi-test-'));
 const fakeBinDir = path.join(testDir, 'bin');
@@ -80,4 +84,88 @@ test('Pi launch replaces only the Subconscious provider with the live catalog', 
     ),
     false,
   );
+});
+
+function piSetup(dir, action) {
+  return runSync(
+    setupCommand('pi', [action], {
+      ...process.env,
+      PI_CODING_AGENT_DIR: dir,
+      GATEWAY_URL: 'https://gateway.example',
+      API_KEY: 'sk-test',
+      MODEL: 'subconscious/glm-5.3-marathon',
+      SUBCONSCIOUS_MODELS: 'subconscious/glm-5.3-marathon',
+    }),
+  );
+}
+
+// What an older install left next to the provider: the compaction extension
+// and its env file. The user also has an extension and a provider of their own.
+async function writeOldPiInstall(dir) {
+  const extensions = path.join(dir, 'extensions');
+  await fs.mkdir(extensions, { recursive: true });
+  await fs.writeFile(
+    path.join(extensions, 'subconscious-compaction.ts'),
+    '// old\n',
+  );
+  await fs.writeFile(path.join(extensions, 'mine.ts'), '// user\n');
+  await fs.writeFile(path.join(dir, 'subconscious.env'), 'x=1\n');
+  await fs.writeFile(
+    path.join(dir, 'models.json'),
+    JSON.stringify({ providers: { other: { models: [{ id: 'o' }] } } }),
+  );
+}
+
+test('Pi install writes the provider and image window, and nothing for compaction', async () => {
+  const dir = path.join(testDir, 'pi-fresh');
+  const result = piSetup(dir, 'install');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual((await fs.readdir(dir)).sort(), [
+    'extensions',
+    'models.json',
+  ]);
+  assert.deepEqual(await fs.readdir(path.join(dir, 'extensions')), [
+    'subconscious-image-window',
+  ]);
+  const { providers } = JSON.parse(
+    await fs.readFile(path.join(dir, 'models.json'), 'utf8'),
+  );
+  assert.deepEqual(providers.subconscious.headers, {
+    'x-subconscious-client': 'pi',
+  });
+  assert.deepEqual(providers.subconscious.models[0].compat, {
+    sendSessionAffinityHeaders: true,
+    sessionAffinityFormat: 'openai-nosession',
+  });
+});
+
+test('Pi install over an old install removes the compaction files and keeps the user', async () => {
+  const dir = path.join(testDir, 'pi-upgrade');
+  await writeOldPiInstall(dir);
+  const result = piSetup(dir, 'install');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual((await fs.readdir(dir)).sort(), [
+    'extensions',
+    'models.json',
+  ]);
+  assert.deepEqual((await fs.readdir(path.join(dir, 'extensions'))).sort(), [
+    'mine.ts',
+    'subconscious-image-window',
+  ]);
+  const { providers } = JSON.parse(
+    await fs.readFile(path.join(dir, 'models.json'), 'utf8'),
+  );
+  assert.deepEqual(Object.keys(providers).sort(), ['other', 'subconscious']);
+});
+
+test('Pi uninstall removes an old install and keeps the user', async () => {
+  const dir = path.join(testDir, 'pi-uninstall');
+  await writeOldPiInstall(dir);
+  const result = piSetup(dir, 'uninstall');
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual((await fs.readdir(dir)).sort(), [
+    'extensions',
+    'models.json',
+  ]);
+  assert.deepEqual(await fs.readdir(path.join(dir, 'extensions')), ['mine.ts']);
 });

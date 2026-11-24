@@ -77,7 +77,7 @@ test('install --dry-run checks everything and writes nothing', {
   assert.ok(gateway.requests.length > requests, 'the live catalog was read');
 });
 
-test('install adds the provider, the launcher, and hooks in ~/.codex', {
+test('install adds the provider and the launcher, and no hooks', {
   skip,
 }, async () => {
   const sandbox = installed;
@@ -103,31 +103,14 @@ test('install adds the provider, the launcher, and hooks in ~/.codex', {
   assert.equal((await fs.stat(sandbox.launcher)).mode & 0o777, 0o755);
   assert.equal(sandbox.codexHome, sandbox.codexDir, 'the shared Codex home');
 
-  const hooks = JSON.parse(
-    await fs.readFile(path.join(sandbox.codexHome, 'hooks.json'), 'utf8'),
-  );
-  for (const event of ['PreCompact', 'PostCompact']) {
-    assert.equal(hooks.hooks[event].length, 1, event);
-    assert.equal(
-      hooks.hooks[event][0].hooks[0].command,
-      path.join(sandbox.codexHome, 'subconscious-hook.sh'),
-    );
-  }
-  const envFile = path.join(sandbox.codexHome, 'subconscious-hooks.env');
-  assert.equal((await fs.stat(envFile)).mode & 0o777, 0o600);
   const state = JSON.parse(await fs.readFile(sandbox.state, 'utf8'));
-  assert.equal(state.hooks, 'installed');
+  assert.equal(state.hooks, undefined);
   assert.ok(!JSON.stringify(state).includes(GOOD_KEY));
   assert.ok(!(await fs.readFile(sandbox.launcher, 'utf8')).includes(GOOD_KEY));
   assert.ok(!text.includes(GOOD_KEY), 'no key in T3 settings');
 
-  // subc adds only its hook files to ~/.codex. The user's config is kept.
-  assert.deepEqual((await fs.readdir(sandbox.codexDir)).sort(), [
-    'config.toml',
-    'hooks.json',
-    'subconscious-hook.sh',
-    'subconscious-hooks.env',
-  ]);
+  // subc writes nothing to ~/.codex, so no key is stored there.
+  assert.deepEqual(await fs.readdir(sandbox.codexDir), ['config.toml']);
   assert.equal(
     await fs.readFile(path.join(sandbox.codexDir, 'config.toml'), 'utf8'),
     'model = "gpt-user"\n[mcp_servers.user]\ncommand = "user-mcp"\n',
@@ -136,14 +119,7 @@ test('install adds the provider, the launcher, and hooks in ~/.codex', {
 
 test('a second install changes nothing', { skip }, async () => {
   const sandbox = await installedBox();
-  const files = [
-    sandbox.settingsPath,
-    sandbox.launcher,
-    sandbox.state,
-    path.join(sandbox.codexHome, 'hooks.json'),
-    path.join(sandbox.codexHome, 'subconscious-hook.sh'),
-    path.join(sandbox.codexHome, 'subconscious-hooks.env'),
-  ];
+  const files = [sandbox.settingsPath, sandbox.launcher, sandbox.state];
   const before = await Promise.all(files.map(mtime));
   const backups = await fs.readdir(path.join(sandbox.subc, 't3', 'backups'));
   const result = await subc(sandbox, ['t3', 'install']);
@@ -201,7 +177,7 @@ test('an app-server launch uses only the default profile and the live catalog', 
   assert.equal(env.CODEX_API_KEY, undefined);
   assert.equal(env.SUBCONSCIOUS_GATEWAY_URL, gateway.url);
   assert.equal(env.SUBCONSCIOUS_MODELS, MODELS.join('\n'));
-  assert.equal(env.SUBCONSCIOUS_CODEX_LAUNCH, 'subc');
+  assert.equal(env.SUBCONSCIOUS_CODEX_LAUNCH, undefined);
   assert.equal(env.CODEX_HOME, sandbox.codexHome);
   assert.equal(env.SUBCONSCIOUS_BASE_URL, undefined);
   assert.equal(env.SUBCONSCIOUS_MODEL, undefined);
@@ -440,16 +416,15 @@ test('each launch reads the default profile again', { skip }, async () => {
   assert.equal(record.catalog.models[0].slug, MODELS[1]);
 });
 
-test('repeated probes keep one catalog file and never touch the hooks', {
+test('repeated probes keep one catalog file and write nothing to ~/.codex', {
   skip,
 }, async () => {
   const sandbox = await installedBox();
-  const hookFiles = [
-    'hooks.json',
-    'subconscious-hook.sh',
-    'subconscious-hooks.env',
-  ].map((name) => path.join(sandbox.codexHome, name));
-  const hooksBefore = await Promise.all(hookFiles.map(mtime));
+  // Codex itself may add files (such as tmp/); subc must add none.
+  const subcFiles = async () =>
+    (await fs.readdir(sandbox.codexHome)).filter(
+      (name) => name.startsWith('subconscious') || name === 'hooks.json',
+    );
   let catalogMtime;
   for (let i = 0; i < 6; i++) {
     const result = await launch(
@@ -470,7 +445,7 @@ test('repeated probes keep one catalog file and never touch the hooks', {
   );
   assert.equal(catalogStat.mode & 0o777, 0o600);
   assert.equal((await fs.stat(sandbox.catalogDir)).mode & 0o777, 0o700);
-  assert.deepEqual(await Promise.all(hookFiles.map(mtime)), hooksBefore);
+  assert.deepEqual(await subcFiles(), []);
   // An ordinary launch leaves a codex-model-catalog.XXXXXX.json in TMPDIR.
   assert.deepEqual(
     (await fs.readdir(sandbox.tmp)).filter((name) => name.includes('catalog')),
@@ -533,7 +508,7 @@ test('status and uninstall work offline, without a key or valid settings', {
   assert.equal(status.code, 0, status.stderr);
   assert.match(status.stdout, /subconscious-codex: installed/);
   assert.match(status.stdout, /subc-t3-codex: current/);
-  assert.match(status.stdout, /2 entries, env file present \(mode 600\)/);
+  assert.match(status.stdout, /Old hooks\s+none/);
 
   const result = await subc(sandbox, ['t3', 'uninstall']);
   assert.equal(result.code, 0, result.stderr);
@@ -544,18 +519,11 @@ test('status and uninstall work offline, without a key or valid settings', {
   await assert.rejects(fs.access(sandbox.launcher));
   await assert.rejects(fs.access(sandbox.state));
   await assert.rejects(fs.access(sandbox.catalogDir));
-  // The hooks in ~/.codex also serve plain `subc codex`, so they stay.
-  const hooks = JSON.parse(
-    await fs.readFile(path.join(sandbox.codexHome, 'hooks.json'), 'utf8'),
-  );
-  assert.ok(JSON.stringify(hooks).includes('subconscious-hook.sh'));
-  for (const name of ['subconscious-hook.sh', 'subconscious-hooks.env'])
-    await fs.access(path.join(sandbox.codexHome, name));
+  assert.deepEqual(await fs.readdir(sandbox.codexDir), ['config.toml']);
   assert.equal(
     await fs.readFile(path.join(sandbox.codexDir, 'config.toml'), 'utf8'),
     'model = "gpt-user"\n[mcp_servers.user]\ncommand = "user-mcp"\n',
   );
-  assert.match(result.stdout, /Kept the compaction hooks in .*subc codex/);
 
   const again = await subc(sandbox, ['t3', 'uninstall']);
   assert.equal(again.code, 0, again.stderr);
@@ -581,21 +549,23 @@ test('uninstall says the provider stays when settings cannot change', {
   );
 });
 
-test('install stops before T3 settings when hook setup fails', {
+test('a hooks.json that is not valid JSON does not stop install', {
   skip,
 }, async () => {
   const sandbox = await box();
   await fs.mkdir(sandbox.codexHome, { recursive: true });
-  await fs.writeFile(path.join(sandbox.codexHome, 'hooks.json'), '{ not json');
-  const settings = await fs.readFile(sandbox.settingsPath, 'utf8');
+  const hooksJson = path.join(sandbox.codexHome, 'hooks.json');
+  await fs.writeFile(hooksJson, '{ not json subconscious-hook.sh');
   const result = await subc(sandbox, ['t3', 'install']);
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /T3 Code settings were not changed/);
-  assert.match(
-    result.stderr,
-    /launcher .* stays; subc t3 uninstall removes it/,
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stderr, /not valid JSON; leaving it unchanged/);
+  assert.match(result.stdout, /provider works without removing them/);
+  assert.equal(
+    await fs.readFile(hooksJson, 'utf8'),
+    '{ not json subconscious-hook.sh',
   );
-  assert.equal(await fs.readFile(sandbox.settingsPath, 'utf8'), settings);
+  const settings = JSON.parse(await fs.readFile(sandbox.settingsPath, 'utf8'));
+  assert.ok(settings.providerInstances['subconscious-codex']);
 });
 
 test('a failed settings write says what stayed installed', {
@@ -611,7 +581,7 @@ test('a failed settings write says what stayed installed', {
     assert.match(result.stderr, /subc t3 uninstall/);
     const status = await subc(sandbox, ['t3', 'status']);
     assert.match(status.stdout, /subconscious-codex: not installed/);
-    assert.match(status.stdout, /2 entries.*set up by subc t3 install/);
+    assert.match(status.stdout, /Old hooks\s+none/);
   } finally {
     await fs.chmod(userdata, 0o700);
   }
@@ -676,7 +646,7 @@ test('help explains the scope and limits', { skip }, async () => {
     assert.match(result.stdout, /default profile only/);
     assert.match(result.stdout, /macOS and Linux/);
     assert.match(result.stdout, /same Codex home as subc codex/);
-    assert.match(result.stdout, /\/hooks/);
+    assert.match(result.stdout, /subc installs no Codex hooks/);
     assert.match(result.stdout, /never edits your\s+config\.toml/);
   }
   const top = await subc(sandbox, ['help']);
@@ -764,26 +734,74 @@ test('a failed SYSTEM_CA restart isolates the env again before the launch', asyn
   }
 });
 
-test('status flags hook entries that run another path, and install fixes them', {
+/** ~/.codex as an older subc left it, next to one hook of the user's. */
+async function writeOldHooks(codexHome) {
+  await fs.mkdir(codexHome, { recursive: true });
+  const script = path.join(codexHome, 'subconscious-hook.sh');
+  await fs.writeFile(script, '#!/usr/bin/env bash\n', { mode: 0o755 });
+  await fs.writeFile(
+    path.join(codexHome, 'subconscious-hooks.env'),
+    `export SUBCONSCIOUS_API_KEY='${GOOD_KEY}'\n`,
+    { mode: 0o600 },
+  );
+  await fs.mkdir(path.join(codexHome, 'subconscious-hook-logs'));
+  const ours = { hooks: [{ type: 'command', command: script, timeout: 3 }] };
+  const user = {
+    hooks: [{ type: 'command', command: '/usr/local/bin/guard.sh' }],
+  };
+  await fs.writeFile(
+    path.join(codexHome, 'hooks.json'),
+    `${JSON.stringify(
+      {
+        hooks: {
+          PreCompact: [ours],
+          PostCompact: [ours],
+          PreToolUse: [user],
+        },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  return { PreToolUse: [user] };
+}
+
+test('status reports hooks an older subc left, and install removes them', {
   skip,
 }, async () => {
   const sandbox = await installedBox();
-  const hooksJson = path.join(sandbox.codexHome, 'hooks.json');
-  const hookScript = path.join(sandbox.codexHome, 'subconscious-hook.sh');
-  const text = await fs.readFile(hooksJson, 'utf8');
-  await fs.writeFile(
-    hooksJson,
-    text.split(hookScript).join('/old/home/.codex/subconscious-hook.sh'),
+  const user = await writeOldHooks(sandbox.codexHome);
+  const before = await subc(sandbox, ['t3', 'status']);
+  assert.equal(before.code, 0, before.stderr);
+  assert.match(
+    before.stdout,
+    /left by an older subc: 2 hooks\.json entries, hook script, env file with an API key, hook logs/,
   );
-  const stale = await subc(sandbox, ['t3', 'status']);
-  assert.equal(stale.code, 0, stale.stderr);
-  assert.match(stale.stdout, /2 entries, 2 run another path/);
 
   const result = await subc(sandbox, ['t3', 'install']);
   assert.equal(result.code, 0, result.stderr);
-  const hooks = JSON.parse(await fs.readFile(hooksJson, 'utf8')).hooks;
-  for (const event of ['PreCompact', 'PostCompact'])
-    assert.equal(hooks[event][0].hooks[0].command, hookScript);
-  const fixed = await subc(sandbox, ['t3', 'status']);
-  assert.doesNotMatch(fixed.stdout, /run another path/);
+  const document = JSON.parse(
+    await fs.readFile(path.join(sandbox.codexHome, 'hooks.json'), 'utf8'),
+  );
+  assert.deepEqual(document, { hooks: user });
+  assert.deepEqual((await fs.readdir(sandbox.codexHome)).sort(), [
+    'config.toml',
+    'hooks.json',
+  ]);
+  const after = await subc(sandbox, ['t3', 'status']);
+  assert.match(after.stdout, /Old hooks\s+none/);
+});
+
+test("uninstall removes hooks an older subc left, and keeps the user's", {
+  skip,
+}, async () => {
+  const sandbox = await installedBox();
+  const user = await writeOldHooks(sandbox.codexHome);
+  const result = await subc(sandbox, ['t3', 'uninstall']);
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /Removed the old Subconscious hooks/);
+  const document = JSON.parse(
+    await fs.readFile(path.join(sandbox.codexHome, 'hooks.json'), 'utf8'),
+  );
+  assert.deepEqual(document, { hooks: user });
 });
