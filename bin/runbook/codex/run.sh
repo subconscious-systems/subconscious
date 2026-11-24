@@ -78,6 +78,33 @@ EOF
   } >"$catalog_file"
 }
 
+# Replace CATALOG_FILE only when its content changes. The temp file sits in
+# the same directory, so the rename is atomic and a reader never sees half a
+# catalog.
+replace_model_catalog() {
+  local catalog_file="$1" next
+  next="$(mktemp "$(dirname "$catalog_file")/.catalog.XXXXXX")"
+  chmod 600 "$next"
+  write_model_catalog "$next"
+  if cmp -s "$next" "$catalog_file"; then
+    rm -f "$next"
+  else
+    mv -f "$next" "$catalog_file"
+  fi
+}
+
+# A protocol launch is one a host such as T3 Code starts many times to probe
+# Codex (`subc t3`). It sets SUBC_CODEX_PROTOCOL_LAUNCH=1 and
+# SUBC_CODEX_CATALOG_FILE, and reuses one catalog file instead of a new temp
+# file per probe. It skips the hook cleanup below: `subc t3 install` already
+# removed what older versions left. Every other launch leaves both unset.
+if [[ "${SUBC_CODEX_PROTOCOL_LAUNCH:-}" == "1" ]]; then
+  CATALOG_FILE="${SUBC_CODEX_CATALOG_FILE:?protocol launches need SUBC_CODEX_CATALOG_FILE}"
+  unset SUBC_CODEX_PROTOCOL_LAUNCH SUBC_CODEX_CATALOG_FILE
+  replace_model_catalog "$CATALOG_FILE"
+  subc_exec "{tempFile}" "$CATALOG_FILE" -- "$@"
+fi
+
 # Remove the compaction hooks older subc versions merged into hooks.json.
 # This writes nothing when none are left.
 # shellcheck source=legacy-hooks.sh

@@ -61,6 +61,13 @@ declares no defaults, flags, or argv of its own.
 Setup scripts (`install.sh`) get the same inputs and keep their own
 `install|status|uninstall` command line.
 
+A protocol launch is a Codex launch that a host starts many times to probe
+Codex. `subc t3` (T3 Code) uses it. It sets `SUBC_CODEX_PROTOCOL_LAUNCH=1` and
+`SUBC_CODEX_CATALOG_FILE`. Codex's `run.sh` then skips the hook merge and
+replaces that one catalog file only when its content changes. Ordinary
+launches leave both variables unset. T3 Code is a host for Codex, not an
+agent, so it has no agent file here; its code is `bin/t3*.js`.
+
 ## Adding or changing an agent
 
 1. Create `bin/runbook/<id>/agent.json` (copy the closest agent) and add the
