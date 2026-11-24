@@ -1,5 +1,26 @@
 # Changelog
 
+## [8.3.0](https://github.com/subconscious-systems/subconscious/compare/v8.2.1...v8.3.0) (2026-11-24)
+
+
+### Features
+
+* **t3:** add Claude Code and OpenCode providers to subc t3, and stop the OpenCode key leak ([b99cdda](https://github.com/subconscious-systems/subconscious/commit/b99cdda5e9874bc80a7a54525345fc8a029e6cd2))
+* **t3:** warn when T3 Code is too old to list the Subconscious Claude models ([9745113](https://github.com/subconscious-systems/subconscious/commit/9745113757ed6446b59a25f60cecc4adb64fa815))
+
+
+### Bug fixes
+
+* **claude:** merge the gateway pin into a --settings value of the user's own ([8176be5](https://github.com/subconscious-systems/subconscious/commit/8176be57397124410fad2c0d13ef18ae08f8e478))
+* **cli:** drop subc t3 install --dry-run from the main help ([9117069](https://github.com/subconscious-systems/subconscious/commit/91170691856e450ae392451edd20a7a894dbf660))
+* **t3:** keep every Claude provider switch, and the --settings env, from steering the launch ([0fd0fe3](https://github.com/subconscious-systems/subconscious/commit/0fd0fe3aee6b741118fdb2b152193c47f6d92b98))
+* **t3:** keep exported bash functions out of the agent env ([ead9b86](https://github.com/subconscious-systems/subconscious/commit/ead9b86b6398d370bd0eadcbd60e63c6af65db21))
+* **t3:** keep secret profile lines out of the agent env ([395fa7e](https://github.com/subconscious-systems/subconscious/commit/395fa7e4476c9791eae659a0f9d2de656d5f62f3))
+* **t3:** keep subc_* names out of the launch plan ([61e58a7](https://github.com/subconscious-systems/subconscious/commit/61e58a7bee3d0c40353c3a144819815d4f69153a))
+* **t3:** refuse a Claude subcommand anywhere before -- ([a2a8e99](https://github.com/subconscious-systems/subconscious/commit/a2a8e99b3d740cf429adf4452502a16c02e9c655))
+* **t3:** refuse Claude subcommands that carry a protocol flag ([91b55a1](https://github.com/subconscious-systems/subconscious/commit/91b55a10e0f3fc137404768ea002ff4f4c1814cc))
+* **t3:** strip two more Claude env names that can steer the launch ([cf3e7b4](https://github.com/subconscious-systems/subconscious/commit/cf3e7b4f790c596b66f4b749fa99969fe6ccd3f9))
+
 ## [8.2.1](https://github.com/subconscious-systems/subconscious/compare/v8.2.0...v8.2.1) (2026-11-24)
 
 
