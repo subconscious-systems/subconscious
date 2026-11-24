@@ -327,11 +327,13 @@ for (const fixture of PROVIDERS) {
       assert.ok(!result.stderr.includes('sk-rejected-key'));
     }
     assert.deepEqual(await readRecords(log), []);
-    // The keyless profile made subc look in the Keychain: the fake one.
-    assert.match(
-      await fs.readFile(sandbox.keychainCalls, 'utf8'),
-      /^find-generic-password /m,
-    );
+    // On macOS, the keyless profile made subc look in the Keychain: the fake
+    // one. Other platforms have no Keychain lookup.
+    if (process.platform === 'darwin')
+      assert.match(
+        await fs.readFile(sandbox.keychainCalls, 'utf8'),
+        /^find-generic-password /m,
+      );
   });
 }
 
