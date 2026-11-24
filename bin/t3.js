@@ -149,8 +149,9 @@ Claude Code (beta):
   - T3 Code lets you switch a running thread between its own Claude
     provider and this one. The next turn sends the whole thread to the
     other backend.
-  - Each launch pins ANTHROPIC_BASE_URL in its --settings value, so a repo's .claude/settings.json or your
-    ~/.claude/settings.json cannot send the key to another host.
+  - Each launch pins ANTHROPIC_BASE_URL in its --settings value, so a
+    repo's .claude/settings.json or your ~/.claude/settings.json cannot
+    send the key to another host.
   - Claude Code still loads a repo's project settings, as in subc claude.
     Hooks in a repo's .claude/settings.json and its project MCP servers
     run with the key in their env. Open only repos that you trust.
