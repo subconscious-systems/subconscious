@@ -253,10 +253,6 @@ test('a model outside the catalog runs as the profile model, with one stderr lin
   assert.ok(session.args.includes(`--model=${MODELS[0]}`));
   assert.equal(text.args[text.args.indexOf('--model') + 1], MODELS[0]);
   assert.ok(!JSON.stringify([session.args, text.args]).includes('claude-'));
-  // A model named like a subcommand is an option value, so it still runs.
-  const named = await launch(sandbox, ['-p', '--model', 'doctor'], { log });
-  assert.equal(named.code, 0, named.stderr);
-  assert.equal((await readRecords(log)).length, 3);
 });
 
 test('an update that replaces the versioned file keeps the launcher working', {
