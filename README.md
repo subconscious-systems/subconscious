@@ -196,15 +196,15 @@ subc t3 uninstall
 Install checks Codex, the default profile's saved key, and the live key-scoped model catalog before it changes anything. Then it does three things in order:
 
 1. It writes `~/.subconscious/bin/subc-t3-codex`, a launcher that pins this Node, this subc package, and the Codex binary that install found.
-2. It sets up the compaction hooks in `~/.codex`, the same way `subc codex` does.
+2. It removes the compaction hooks that older subc versions left in `~/.codex`, the same way `subc codex install` does. Your own hooks stay. If this cleanup fails, install warns and continues, because the provider does not need it.
 3. It adds the `subconscious-codex` entry to the T3 Code settings, with that launcher as the binary and `~/.codex` as the Codex home.
 
-If step 2 fails, the T3 Code settings stay unchanged. If step 3 fails, install says that the launcher and hooks stay in place. `subc t3 uninstall` removes the launcher. Before each change, install copies the settings file to `~/.subconscious/t3/backups/`. It refuses settings that are malformed or in the old `providers` format, settings under a managed policy, and a `subconscious-codex` provider that subc did not write. A second install repairs the subc entry and changes nothing else. T3 Code reloads its settings by itself; subc never restarts it.
+If step 3 fails, install says that the launcher stays in place. `subc t3 uninstall` removes the launcher. Before each change, install copies the settings file to `~/.subconscious/t3/backups/`. It refuses settings that are malformed or in the old `providers` format, settings under a managed policy, and a `subconscious-codex` provider that subc did not write. A second install repairs the subc entry and changes nothing else. T3 Code reloads its settings by itself; subc never restarts it.
 
 Each Codex session reads the default profile again, so a new key, gateway, or model takes effect at the next launch. T3 Code also starts Codex to probe it. The launcher handles each Codex command in one of three ways:
 
 - `app-server` and `exec` get the same Codex config as `subc codex`, from the default profile only. The launcher ignores `SUBC_*`, `SUBCONSCIOUS_*`, and the Codex inputs that `subc codex` reads (such as `CODEX_EXTERNAL_TOOLS` and `CODEX_REASONING_EFFORT`) in the T3 Code environment. Codex gets no `CODEX_API_KEY`, because the provider reads its key from `SUBCONSCIOUS_API_KEY`. If the key-scoped catalog cannot be read, Codex does not start. There is no fallback to the public or packaged model list.
-- `--version`, help, `mcp list`, and `mcp get` run the real Codex unchanged. They read no profile, make no request, and touch no hooks.
+- `--version`, help, `mcp list`, and `mcp get` run the real Codex unchanged. They read no profile and make no request.
 - Every other Codex command fails with an error.
 
 Node computes the launch, and then the launcher `exec`s, so the process that T3 Code started becomes Codex. The model catalog is one file, `~/.subconscious/t3/codex/catalog/model-catalog.json`. The launcher replaces it only when its content changes.
@@ -213,10 +213,9 @@ Limits of this first version:
 
 - The provider shares `~/.codex` with plain Codex and `subc codex`, so your `AGENTS.md`, skills, and MCP servers carry over. Codex apps and plugins stay off unless the default profile sets `CODEX_EXTERNAL_TOOLS=true`.
 - subc never edits your `config.toml`. Its `-c` overrides route each T3 Code session to Subconscious. Subconscious and OpenAI sessions share one Codex history, but plain `codex` does not resume a Subconscious session.
-- The compaction hooks are the same `~/.codex/hooks.json` entries that `subc codex` writes. They run only after you trust them with `/hooks` in Codex, and T3 Code has no step for that. If you trusted them in `subc codex`, that trust should apply here too, because it is the same file. The hook env file holds the profile's key, with mode 600.
 - The launcher pins the Node and Codex paths from install time. If you move or upgrade either one, `subc t3 status` reports the launcher as broken or stale. Run `subc t3 install` again.
 
-`subc t3 uninstall` removes the `subconscious-codex` entry, the launcher, and the catalog. It keeps the compaction hooks in `~/.codex`, because `subc codex` uses them too. It also keeps the T3 Code threads and the other providers.
+`subc t3 uninstall` removes the `subconscious-codex` entry, the launcher, the catalog, and any compaction hooks that older subc versions left in `~/.codex`. It keeps the T3 Code threads and the other providers.
 
 ## Headless runs
 
@@ -377,14 +376,6 @@ available. Use `subc codex --external-tools` to opt back in when targeting a
 gateway with a larger tool limit. It also defaults reasoning effort to `max`,
 which is the highest effort accepted by the Subconscious models; override it
 with `subc codex --reasoning-effort high` when desired.
-
-On macOS and Linux, the Codex compaction hook reports only for Codex sessions
-that subc started. subc sets `SUBCONSCIOUS_CODEX_LAUNCH` on each Codex launch,
-and the hook then uses the key and gateway of that launch. A plain `codex`
-session that reads the same `~/.codex/hooks.json` sends nothing. The Windows
-hook does not check for this variable yet. When a new subc release changes the
-hook script, the next `subc codex` replaces the script and leaves `hooks.json`
-unchanged, so hooks you already trusted stay trusted.
 
 Persistent writes are merge/unmerge only. They never replace a user's
 `config.toml`, `opencode.json`, `models.json`, `hooks.json`, or VS Code
