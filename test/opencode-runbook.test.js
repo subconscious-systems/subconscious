@@ -353,45 +353,35 @@ test('the OpenCode key setting is read from the profile under its old name, neve
     names.map((name) => [name, process.env[name]]),
   );
   for (const name of names) delete process.env[name];
-  const profile = (values) => ({
-    name: 'opencode-key',
-    path: '/profiles/opencode-key.env',
-    values: { API_KEY: 'profile-shared-key', ...values },
-  });
+  const keyFor = async (values) =>
+    (
+      await getAgentApiKey(
+        {
+          name: 'k',
+          path: '/profiles/k.env',
+          values: { API_KEY: 'shared', ...values },
+        },
+        opencode,
+      )
+    ).key;
   try {
     // A profile saved before the rename keeps working.
     assert.equal(
-      (
-        await getAgentApiKey(
-          profile({ OPENCODE_API_KEY: 'legacy-key' }),
-          opencode,
-        )
-      ).key,
+      await keyFor({ OPENCODE_API_KEY: 'legacy-key' }),
       'legacy-key',
     );
     assert.equal(
-      (
-        await getAgentApiKey(
-          profile({
-            SUBC_OPENCODE_API_KEY: 'new-key',
-            OPENCODE_API_KEY: 'old',
-          }),
-          opencode,
-        )
-      ).key,
+      await keyFor({
+        SUBC_OPENCODE_API_KEY: 'new-key',
+        OPENCODE_API_KEY: 'old',
+      }),
       'new-key',
     );
     // A user's own opencode.ai key in the shell is not a Subconscious key.
     process.env.OPENCODE_API_KEY = 'opencode-ai-key';
-    assert.equal(
-      (await getAgentApiKey(profile({}), opencode)).key,
-      'profile-shared-key',
-    );
+    assert.equal(await keyFor({}), 'shared');
     process.env.SUBC_OPENCODE_API_KEY = 'env-specific-key';
-    assert.equal(
-      (await getAgentApiKey(profile({}), opencode)).key,
-      'env-specific-key',
-    );
+    assert.equal(await keyFor({}), 'env-specific-key');
   } finally {
     for (const name of names) {
       if (previous[name] === undefined) delete process.env[name];

@@ -70,7 +70,7 @@ const FAKE_CODEX = fakeAgent('codex', {
 // A fake claude. Its version check writes in its config dir,
 // CLAUDE_CONFIG_DIR or ~/.claude. A launch prints a result line for -p and
 // an init message for stream-json.
-export const FAKE_CLAUDE = fakeAgent('claude', {
+const FAKE_CLAUDE = fakeAgent('claude', {
   version: '2.1.326',
   versionLine: "version + ' (Claude Code)'",
   versionFile:
@@ -80,16 +80,12 @@ export const FAKE_CLAUDE = fakeAgent('claude', {
   ),
 });
 
-// A fake opencode. Its version check writes its log under XDG_DATA_HOME, or
-// ~/.local/share, as the real OpenCode does. A launch records the parsed
-// OPENCODE_CONFIG_CONTENT. A call that is not `serve`, and `serve --help`,
-// print a usage line. `serve` listens on --port (0 picks a port), answers
-// GET /api/info, and prints exactly one line on stdout:
-// `server listening on http://127.0.0.1:<port>`. It exits at once, or after
-// SLEEP ms, or on SIGTERM. IGNORE_TERM=1 makes it ignore SIGTERM, and
-// CHILD=1 makes it start a long `sleep` child in its process group, like a
-// tool or an MCP server. Its PID goes in the record as childPid.
-export const FAKE_OPENCODE = fakeAgent('opencode', {
+// A fake opencode. Its version check writes its log under XDG_DATA_HOME, as
+// the real OpenCode does. A launch records the parsed launch config. Only
+// `serve` prints the one line T3 Code waits for, then runs for SLEEP ms.
+// IGNORE_TERM=1 makes it ignore SIGTERM, and CHILD=1 makes it start a long
+// `sleep` child in its process group, like a tool or an MCP server.
+const FAKE_OPENCODE = fakeAgent('opencode', {
   version: '2.3.0',
   versionLine: "'opencode v' + version",
   versionFile:
@@ -108,47 +104,29 @@ export const FAKE_OPENCODE = fakeAgent('opencode', {
   process.stdout.write('opencode ' + args.join(' ') + ': usage\\n');
   process.exit(0);
 }
-const portArg = args.find((arg) => arg.startsWith('--port='));
-const port = portArg ? Number(portArg.slice('--port='.length)) : 0;
-const server = require('http').createServer((req, res) => {
-  res.setHeader('content-type', 'application/json');
-  res.end(JSON.stringify({ version: '2.3.0', pid: process.pid }));
-});
 process.on('SIGTERM', () => {
   if (option('IGNORE_TERM') !== '1') process.exit(0);
 });
-server.listen(port, '127.0.0.1', () => {
-  process.stdout.write('server listening on http://127.0.0.1:' + server.address().port + '\\n');
-  const sleep = Number(option('SLEEP') || 0);
-  if (sleep > 0) setTimeout(() => process.exit(0), sleep);
-  else server.close();
-});`,
+process.stdout.write('server listening on http://127.0.0.1:4096\\n');
+if (option('SLEEP')) setTimeout(() => process.exit(0), Number(option('SLEEP')));`,
 });
 
 // The user's own Claude Code files. Install and launches must leave them as
 // they are.
-export const USER_CLAUDE_SETTINGS = `${JSON.stringify({ model: 'opus', env: { USER_SETTING: '1' } }, null, 2)}\n`;
-export const USER_CLAUDE_JSON = `${JSON.stringify({ projects: { '/x': { hasTrustDialogAccepted: true } } }, null, 2)}\n`;
+const USER_CLAUDE_SETTINGS = `${JSON.stringify({ model: 'opus', env: { USER_SETTING: '1' } }, null, 2)}\n`;
+const USER_CLAUDE_JSON = `${JSON.stringify({ projects: { '/x': { hasTrustDialogAccepted: true } } }, null, 2)}\n`;
 
 const shellWord = (text) => `'${text.replaceAll("'", "'\\''")}'`;
 
-/**
- * A local gateway: the canonical catalog for GOOD_KEY, 401 for any other.
- * Set `delayMs` on the returned object to make each answer wait that long.
- */
+/** A local gateway: the canonical catalog for GOOD_KEY, 401 for any other. */
 export async function fakeGateway() {
   const requests = [];
-  const gateway = { delayMs: 0 };
   const server = http.createServer((req, res) => {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
     });
-    req.on('end', async () => {
-      if (gateway.delayMs)
-        await new Promise((resolve) =>
-          setTimeout(resolve, gateway.delayMs).unref(),
-        );
+    req.on('end', () => {
       requests.push({
         method: req.method,
         url: req.url,
@@ -178,15 +156,11 @@ export async function fakeGateway() {
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const url = `http://127.0.0.1:${server.address().port}`;
-  return Object.assign(gateway, {
+  return {
     url,
     requests,
-    close: () =>
-      new Promise((resolve) => {
-        server.closeAllConnections?.();
-        server.close(resolve);
-      }),
-  });
+    close: () => new Promise((resolve) => server.close(resolve)),
+  };
 }
 
 /**
@@ -320,7 +294,6 @@ export async function t3Sandbox({
     // there.
     opencodeConfigDir: path.join(home, '.config', 'opencode'),
     opencodeDataDir: path.join(home, '.local', 'share', 'opencode'),
-    opencodeStateDir: path.join(home, '.local', 'state', 'opencode'),
   };
   return {
     ...paths,
@@ -460,101 +433,30 @@ export const BUILT_IN_CLAUDE_MODELS = Object.freeze([
 ]);
 
 /**
- * A T3 Code 0.1.11 model cache, `caches/<instance id>.json`: the provider
- * snapshot itself, with no wrapper. Built-in models carry a display name;
- * models that Claude Code reports, such as the Subconscious catalog, have
- * `name` equal to `slug`. No field tells the two kinds apart.
+ * Write a T3 Code 0.1.11 model cache, `caches/<instance id>.json`, mode
+ * 600: the provider snapshot, with the fields that subc reads. Built-in
+ * models and models that Claude Code reports look the same.
  */
-export function t3ModelCache({
-  instanceId,
-  home,
-  builtIns = BUILT_IN_CLAUDE_MODELS.map(([slug]) => slug),
-  reported = [],
-  checkedAt = new Date().toISOString(),
-  status = 'ready',
-  auth = { status: 'authenticated', type: 'apiKey' },
-  message,
-}) {
-  const names = new Map(BUILT_IN_CLAUDE_MODELS);
-  const capabilities = { supportsImages: true, supportsThinking: true };
-  return {
-    displayName:
-      instanceId === 'claudeAgent' ? 'Claude' : 'Subconscious (Claude)',
-    showInteractionModeToggle: true,
-    reportsContextWindow: true,
-    enabled: true,
-    installed: true,
-    version: '2.1.326',
-    status,
-    auth,
-    ...(message === undefined ? {} : { message }),
-    setup: { status: 'complete' },
-    checkedAt,
-    models: [
-      ...builtIns.map((slug) => ({
-        slug,
-        name: names.get(slug) ?? `Claude ${slug}`,
-        isCustom: false,
-        capabilities,
-        ...(slug === 'claude-opus-5-5' ? { isDefault: true } : {}),
-      })),
-      ...reported.map((slug) => ({
-        slug,
-        name: slug,
-        isCustom: false,
-        capabilities,
-      })),
-    ],
-    slashCommands: [],
-    skills: [],
-    usageLimits: null,
+export async function writeT3ModelCache(
+  box,
+  {
     instanceId,
-    driver: 'claudeAgent',
-    continuation: { groupKey: `claude:home:${home}/.claude` },
-    versionAdvisory: { canUpdate: false, updateCommand: null },
-    compatibilityAdvisory: null,
-  };
-}
-
-/** Write a model cache the way T3 Code does: one file per instance, mode 600. */
-export async function writeT3ModelCache(box, options) {
+    builtIns = BUILT_IN_CLAUDE_MODELS.map(([slug]) => slug),
+    reported = [],
+    checkedAt = new Date().toISOString(),
+    status = 'ready',
+    auth = { status: 'authenticated', type: 'apiKey' },
+    message,
+  },
+) {
   const dir = path.join(box.t3Home, 'caches');
   await fs.mkdir(dir, { recursive: true });
-  const file = path.join(dir, `${options.instanceId}.json`);
+  const models = [...builtIns, ...reported].map((slug) => ({ slug }));
   await fs.writeFile(
-    file,
-    JSON.stringify(t3ModelCache({ home: box.home, ...options })),
+    path.join(dir, `${instanceId}.json`),
+    JSON.stringify({ instanceId, status, auth, message, checkedAt, models }),
     { mode: 0o600 },
   );
-  return file;
-}
-
-/**
- * Play T3 Code's probe: once the settings name `instanceId`, write that
- * instance's model cache with a fresh checkedAt, as T3 Code does about 1 s
- * after a settings change. Returns a stop function.
- */
-export function fakeT3Probe(
-  box,
-  { instanceId = 'subconscious-claude', ...cache } = {},
-) {
-  let done = false;
-  const timer = setInterval(async () => {
-    if (done) return;
-    try {
-      const settings = JSON.parse(await fs.readFile(box.settingsPath, 'utf8'));
-      if (!settings.providerInstances?.[instanceId]) return;
-      done = true;
-      clearInterval(timer);
-      await writeT3ModelCache(box, { instanceId, ...cache });
-    } catch {
-      // The file is between writes. Try again at the next tick.
-    }
-  }, 50);
-  return () => {
-    done = true;
-    clearInterval(timer);
-  };
 }
 
 /**

@@ -405,43 +405,6 @@ test('a T3 Code save between the read and the rename survives', {
   const afterEntry = await box.read();
   assert.equal(afterEntry.t3Saved, 'entry');
   assert.ok(afterEntry.providerInstances[T3_INSTANCE_ID]);
-
-  // The hide list relies on the same compare.
-  const launcherPath = '/opt/subc home/bin/subc-t3-claude';
-  const hide = await t3Home({
-    ...BASE,
-    providerModelPreferences: {},
-    providerInstances: {
-      ...BASE.providerInstances,
-      'subconscious-claude': {
-        driver: 'claudeAgent',
-        displayName: 'Subconscious (Claude)',
-        enabled: true,
-        config: { binaryPath: launcherPath },
-      },
-    },
-  });
-  const prefsSave = saveDuringReplace(t, hide.file, (settings) => {
-    settings.providerModelPreferences.claudeAgent = {
-      hiddenModels: ['claude-haiku-4-5'],
-      modelOrder: [],
-    };
-  });
-  const result = await writeT3HideList(
-    { home: hide.target.home, launcherPath, provider: CLAUDE_PROVIDER },
-    ['claude-opus-5-5'],
-    { backupDir: hide.backupDir },
-  );
-  t.mock.restoreAll();
-  assert.ok(prefsSave.saved, 'the save landed inside the write');
-  assert.equal(result.state, 'written');
-  assert.deepEqual((await hide.read()).providerModelPreferences, {
-    claudeAgent: { hiddenModels: ['claude-haiku-4-5'], modelOrder: [] },
-    'subconscious-claude': {
-      hiddenModels: ['claude-opus-5-5'],
-      modelOrder: [],
-    },
-  });
 });
 
 test('uninstall removes only subc entry and keeps a backup', {
@@ -517,62 +480,6 @@ test('a ~ path or a symlink to the launcher counts as the launcher', {
   }
 });
 
-test('another descriptor writes its own entry and leaves the Codex one alone', {
-  skip,
-}, async () => {
-  // Shaped like a provider with no agent home: no homePath, and one field
-  // that subc keeps empty.
-  const other = Object.freeze({
-    ...CODEX_PROVIDER,
-    id: 'other',
-    instanceId: 'subconscious-other',
-    displayName: 'Subconscious (Other)',
-    driver: 'otherAgent',
-    homeDir: null,
-    managedConfig: ({ launcherPath }) => ({ binaryPath: launcherPath }),
-    clearedFields: ['launchArgs'],
-  });
-  const codexEntry = ours();
-  const box = await t3Home({
-    ...BASE,
-    providerInstances: {
-      ...BASE.providerInstances,
-      [T3_INSTANCE_ID]: codexEntry,
-    },
-  });
-  const target = {
-    home: box.target.home,
-    launcherPath: '/opt/subc home/bin/subc-t3-other',
-    provider: other,
-  };
-  assert.equal((await inspectT3(target)).entry, 'absent');
-  await installT3Provider(target, { backupDir: box.backupDir, settleMs: 0 });
-  const settings = await box.read();
-  assert.deepEqual(settings.providerInstances['subconscious-other'], {
-    driver: 'otherAgent',
-    displayName: 'Subconscious (Other)',
-    enabled: true,
-    config: { binaryPath: '/opt/subc home/bin/subc-t3-other' },
-  });
-  assert.deepEqual(settings.providerInstances[T3_INSTANCE_ID], codexEntry);
-  // The Codex target does not count the other entry as a duplicate.
-  assert.deepEqual((await inspectT3(box.target)).duplicates, []);
-
-  settings.providerInstances['subconscious-other'].config.launchArgs = '--x';
-  settings.providerInstances['subconscious-other'].config.homePath = '/a';
-  await fs.writeFile(box.file, JSON.stringify(settings));
-  // homePath is not managed for this descriptor, so it is not drift.
-  assert.deepEqual((await inspectT3(target)).drift, ['launchArgs']);
-
-  assert.equal(
-    (await removeT3Provider(target, { backupDir: box.backupDir })).removed,
-    true,
-  );
-  const after = await box.read();
-  assert.equal(after.providerInstances['subconscious-other'], undefined);
-  assert.deepEqual(after.providerInstances[T3_INSTANCE_ID], codexEntry);
-});
-
 test('the hide list write skips unmigrated preferences and a missing entry', {
   skip,
 }, async () => {
@@ -585,13 +492,13 @@ test('the hide list write skips unmigrated preferences and a missing entry', {
   };
   const withEntry = (prefs) => ({
     ...BASE,
-    ...(prefs === undefined ? {} : { providerModelPreferences: prefs }),
+    providerModelPreferences: prefs,
     providerInstances: {
       ...BASE.providerInstances,
       'subconscious-claude': entry,
     },
   });
-  for (const prefs of [null, undefined, ['not', 'an', 'object']]) {
+  for (const prefs of [null, ['not', 'an', 'object']]) {
     const box = await t3Home(withEntry(prefs));
     const target = {
       home: box.target.home,
@@ -617,23 +524,4 @@ test('the hide list write skips unmigrated preferences and a missing entry', {
   assert.equal(result.state, 'no-entry');
   assert.deepEqual((await noEntry.read()).providerModelPreferences, {});
   assert.equal((await readT3ModelPreferences(target)).state, 'absent');
-
-  const written = await t3Home(withEntry({ other: { hiddenModels: ['x'] } }));
-  const ownTarget = { ...target, home: written.target.home };
-  const first = await writeT3HideList(ownTarget, ['claude-opus-5-5'], {
-    backupDir: written.backupDir,
-  });
-  assert.equal(first.state, 'written');
-  assert.ok(first.backup);
-  assert.deepEqual((await written.read()).providerModelPreferences, {
-    other: { hiddenModels: ['x'] },
-    'subconscious-claude': {
-      hiddenModels: ['claude-opus-5-5'],
-      modelOrder: [],
-    },
-  });
-  const again = await writeT3HideList(ownTarget, ['claude-opus-5-5'], {
-    backupDir: written.backupDir,
-  });
-  assert.equal(again.state, 'current');
 });

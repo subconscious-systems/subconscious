@@ -564,10 +564,7 @@ async function installHideList(paths, item) {
         `${result.state === 'written' ? 'hid' : 'already hides'} ${plan.hiddenModels.length} models that are not in the catalog: ${modelList(plan.hiddenModels)}`,
       );
     else
-      lines(
-        'Hide list',
-        hideListSkipLines({ state: 'unmigrated' }, provider),
-      );
+      lines('Hide list', hideListSkipLines({ state: 'unmigrated' }, provider));
   } catch (error) {
     lines('Hide list', [
       `${c.yellow}Not written: ${error.message}${c.reset}`,
