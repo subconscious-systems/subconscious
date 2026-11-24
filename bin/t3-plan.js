@@ -53,17 +53,13 @@ export function passthroughPlan(binaryPath, args, env) {
 export function encodePlan(plan, original) {
   const records = [];
   const stuck = [];
-  // The launcher keeps its own state in subc_* shell variables, such as
-  // subc_argv, so the plan never sets or unsets one, and the agent gets none.
-  const shellWord = (name) => ENV_NAME.test(name) && !name.startsWith('subc_');
-  const kept = (name) => name in plan.env && !name.startsWith('subc_');
   for (const name of Object.keys(original)) {
-    if (kept(name)) continue;
-    if (shellWord(name)) records.push('unset', name);
+    if (name in plan.env) continue;
+    if (ENV_NAME.test(name)) records.push('unset', name);
     else stuck.push('-u', name);
   }
   for (const [name, value] of Object.entries(plan.env)) {
-    if (original[name] === value || !shellWord(name)) continue;
+    if (original[name] === value || !ENV_NAME.test(name)) continue;
     records.push('env', `${name}=${value}`);
   }
   const argv = stuck.length

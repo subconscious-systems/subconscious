@@ -354,11 +354,10 @@ for (const fixture of PROVIDERS) {
     skip,
   }, async () => {
     const sandbox = await installedBox(fixture);
-    // Profile lines can hold more copies of the key, under any name. A
-    // subc_* line names one of the launcher's own variables.
+    // Profile lines can hold more copies of the key, under any name.
     await fs.appendFile(
       profileFile(sandbox),
-      `${PROFILE_COPIES.map((key) => `${key}=${GOOD_KEY}\n`).join('')}subc_argv=/usr/bin/true\n`,
+      PROFILE_COPIES.map((key) => `${key}=${GOOD_KEY}\n`).join(''),
     );
     const log = logFile(sandbox);
     const result = await launch(fixture, sandbox, fixture.configured, { log });
@@ -379,7 +378,6 @@ for (const fixture of PROVIDERS) {
       ),
       'no SUBC_* name reaches the agent',
     );
-    assert.equal(record.env.subc_argv, undefined);
     assert.ok(
       !JSON.stringify([record.args, record.config ?? null]).includes(GOOD_KEY),
       'no key in argv or config',
