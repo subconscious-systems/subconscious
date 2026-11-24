@@ -37,6 +37,9 @@ function classifyClaudeArgs(args) {
     args.slice(1).every((arg) => HELP_OR_VERSION.has(arg))
   )
     return 'passthrough';
+  // T3 Code starts every launch with a flag. A first word that is not one
+  // is a subcommand, such as `auth login --print`.
+  if (!args[0]?.startsWith('-')) return 'unsupported';
   const end = args.indexOf('--');
   const options = end < 0 ? args : args.slice(0, end);
   return options.some(isProtocolFlag) ? 'configured' : 'unsupported';

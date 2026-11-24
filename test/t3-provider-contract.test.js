@@ -102,7 +102,13 @@ const FIXTURES = {
     passthrough: [['--help'], ['update']],
     notConfigured: (record) =>
       assert.equal(record.env.ANTHROPIC_AUTH_TOKEN, undefined),
-    refused: [[], ['auth', 'login'], ['mcp', 'add', 'x', '--', 'cmd', '-p']],
+    refused: [
+      [],
+      ['auth', 'login'],
+      ['mcp', 'add', 'x', '--', 'cmd', '-p'],
+      ['auth', 'login', '--print'],
+      ['plugin', 'install', 'x', '-p'],
+    ],
     keyCarriers: ['ANTHROPIC_AUTH_TOKEN'],
     unset: ['ANTHROPIC_API_KEY', 'API_KEY', 'CLAUDE_CODE_API_KEY'],
     hostile: async () => ({
