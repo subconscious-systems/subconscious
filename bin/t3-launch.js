@@ -383,8 +383,6 @@ export async function t3OpenCodePlan({ args, binaryPath, launch }) {
       'OPENCODE_CONTEXT_LIMIT',
       'OPENCODE_OUTPUT_LIMIT',
     ]),
-    // The helper is long-lived, so the launcher starts its watchdog.
-    watch: true,
   };
 }
 
@@ -402,47 +400,6 @@ export function shellQuote(value) {
  * the two words, because a shebang passes one argument.
  */
 export const LAUNCHER_SHEBANG = '#!/usr/bin/env -S bash -p';
-
-/**
- * A background check, started just before the exec, for a long-lived helper
- * that T3 Code may fail to stop. Every 2 s it checks the process T3 Code
- * started. When that process has another parent, T3 Code's server is gone,
- * so the check sends SIGTERM, then SIGKILL after 5 s, to the helper's
- * process group, or to the helper alone when it does not lead one. The
- * check runs in that group, so it ignores the SIGTERM. When `ps` gives no
- * answer, the check keeps the helper for that round; install refuses a
- * host without `ps`. `env -i` keeps the key and every launch value out of
- * the check and its children.
- */
-function watchdog(provider) {
-  return `if [ "$subc_watch" = 1 ]; then
-  subc_helper=$$
-  subc_parent=$PPID
-  /usr/bin/env -i PATH="$PATH" "$BASH" -p -c '
-    while sleep 2; do
-      kill -0 "$1" 2>/dev/null || exit 0
-      parent=$(ps -o ppid= -p "$1" 2>/dev/null | tr -d " ")
-      [ -n "$parent" ] || continue
-      [ "$parent" = "$2" ] && continue
-      if [ "$(ps -o pgid= -p "$1" 2>/dev/null | tr -d " ")" = "$1" ]; then
-        trap "" TERM
-        kill -TERM -- "-$1" 2>/dev/null
-        sleep 5
-        kill -KILL -- "-$1" 2>/dev/null
-        exit 0
-      fi
-      kill -TERM "$1" 2>/dev/null
-      for second in 1 2 3 4 5; do
-        sleep 1
-        kill -0 "$1" 2>/dev/null || exit 0
-      done
-      kill -KILL "$1" 2>/dev/null
-      exit 0
-    done
-  ' ${provider.launcherName}-watchdog "$subc_helper" "$subc_parent" "$subc_config_dir" </dev/null >/dev/null 2>&1 &
-fi
-`;
-}
 
 /**
  * The launcher T3 Code runs as the provider's agent binary. It pins this
@@ -466,7 +423,7 @@ ${LAUNCHER_HEADER} (subconscious-cli ${version}). Do not edit.
 #
 # T3 Code runs this file as the ${provider.label} binary of its "${provider.displayName}"
 # provider. The adapter prints how to start ${provider.label} as NUL-separated records:
-#   env NAME=VALUE | unset NAME | arg WORD | ${provider.watchdog ? 'watch | ' : ''}ok
+#   env NAME=VALUE | unset NAME | arg WORD | ok
 # This shell applies them and execs, so no Node process stays behind.
 unset BASH_ENV ENV
 set -u
@@ -482,19 +439,19 @@ for subc_path in "$subc_node" "$subc_adapter" "$subc_${name}"; do
 done
 subc_argv=()
 subc_ok=0
-${provider.watchdog ? 'subc_watch=0\n' : ''}while IFS= read -r -d '' subc_kind; do
+while IFS= read -r -d '' subc_kind; do
   IFS= read -r -d '' subc_value || exit 70
   case "$subc_kind" in
     env) export -- "$subc_value" ;;
     unset) unset -v -- "$subc_value" ;;
     arg) subc_argv+=("$subc_value") ;;
     ok) subc_ok=1 ;;
-${provider.watchdog ? '    watch) subc_watch=1 ;;\n' : ''}    *) exit 70 ;;
+    *) exit 70 ;;
   esac
 done < <("$subc_node" "$subc_adapter" ${binaryFlag} "$subc_${name}" --config-dir "$subc_config_dir" -- "$@" </dev/null)
 if [ "$subc_ok" != 1 ] || [ "\${#subc_argv[@]}" -eq 0 ]; then
   exit 1
 fi
-${provider.watchdog ? watchdog(provider) : ''}exec "\${subc_argv[@]}"
+exec "\${subc_argv[@]}"
 `;
 }

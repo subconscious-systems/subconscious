@@ -11,7 +11,6 @@
  *   env   NAME=VALUE   export the variable
  *   unset NAME         unset the variable
  *   arg   WORD         the next argv word
- *   watch (empty)      start the watchdog before the exec
  *   ok    (empty)      the plan is complete
  *
  * Each adapter sorts its agent's command lines into three kinds. A
@@ -46,8 +45,7 @@ export function passthroughPlan(binaryPath, args, env) {
 }
 
 /**
- * The plan as records: unset, then env, then argv, then watch when
- * `plan.watch` is set, then ok. A name in the env the adapter started with
+ * The plan as records: unset, then env, then argv, then ok. A name in the env the adapter started with
  * that the plan leaves out is unset.
  */
 export function encodePlan(plan, original) {
@@ -60,7 +58,6 @@ export function encodePlan(plan, original) {
     records.push('env', `${name}=${value}`);
   }
   for (const word of plan.argv) records.push('arg', word);
-  if (plan.watch) records.push('watch', '');
   records.push('ok', '');
   if (records.some((record) => record.includes('\0')))
     throw new Error('A launch value contains a NUL byte');

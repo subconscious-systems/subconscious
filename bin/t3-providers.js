@@ -26,8 +26,6 @@
  *   agent file's `minimum_version`.
  * - `legacyHooks`: install and uninstall remove the compaction hooks that
  *   older subc versions left in `homeDir`.
- * - `watchdog`: the launcher can start a watchdog that stops a long-lived
- *   helper after T3 Code's server dies.
  */
 
 import path from 'node:path';
@@ -55,7 +53,6 @@ const CODEX = Object.freeze({
   versionProbeEnv: (dir) => ({ CODEX_HOME: dir }),
   minimumVersion: null,
   legacyHooks: true,
-  watchdog: false,
 });
 
 const CLAUDE = Object.freeze({
@@ -91,7 +88,6 @@ const CLAUDE = Object.freeze({
   // T3 Code 0.1.11 supports Claude Code 2.1.280 and newer.
   minimumVersion: '2.1.280',
   legacyHooks: false,
-  watchdog: false,
 });
 
 const OPENCODE = Object.freeze({
@@ -125,8 +121,6 @@ const OPENCODE = Object.freeze({
   // Subconscious plugin.
   minimumVersion: '2.0.18',
   legacyHooks: false,
-  // T3 Code runs `opencode serve` as a long-lived helper that holds the key.
-  watchdog: true,
 });
 
 /** Every provider this subc version can install, in a fixed order. */

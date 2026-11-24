@@ -88,8 +88,7 @@ settings file cannot send the key to another host. Hooks and MCP servers
 from a repo's .claude settings still run with the key in their env.
 
 OpenCode: T3 Code shares one helper across threads, so a new key or model
-applies after the helper restarts. A watchdog stops the helper when T3
-Code's server dies, and it needs ps.
+applies after the helper restarts.
 
 See the README for details.
 `);
@@ -270,23 +269,6 @@ function checkLauncherShell() {
     );
 }
 
-/**
- * Check that the watchdog can read a parent PID here. Without `ps`, it
- * cannot tell when T3 Code's server dies, so a helper with the key could
- * outlive it.
- */
-function checkWatchdogTools() {
-  const result = spawnSync('bash', ['-c', 'ps -o ppid= -p $$ | tr -d " "'], {
-    encoding: 'utf8',
-    env: { PATH: process.env.PATH ?? '', LC_ALL: 'C' },
-    stdio: ['ignore', 'pipe', 'ignore'],
-  });
-  if (result.status !== 0 || !/^\d+\n?$/.test(result.stdout ?? ''))
-    throw new T3LaunchError(
-      'This system cannot run the helper watchdog, because "ps -o ppid= -p $$" failed. Install procps (for example, apt install procps), then retry.',
-    );
-}
-
 const repairCommand = (provider) => `subc t3 install --provider ${provider.id}`;
 
 function describeEntry(report) {
@@ -298,7 +280,6 @@ function describeEntry(report) {
 /** Run every check for one provider. Changes nothing. */
 async function prepare(paths, item) {
   const { provider, agent, binDir } = item;
-  if (provider.watchdog) checkWatchdogTools();
   item.binary = await checkBinary(provider, agent, binDir);
   isolateLaunchEnv(process.env, paths.configDir, provider);
   item.launch = await resolveT3Launch({ agentId: provider.agentId });

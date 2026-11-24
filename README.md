@@ -222,7 +222,7 @@ OpenCode notes:
 
 - A new key or model applies after the helper restarts: restart T3 Code, or wait until its OpenCode threads have been idle for 30 minutes.
 - Keep the provider's Server URL and Server password empty, because T3 Code skips the launcher when a Server URL is set.
-- A watchdog stops the helper's process group within about 10 s after T3 Code's server dies. It needs `ps`, so install refuses OpenCode on a system without it.
+- If T3 Code is force-killed, its helper keeps running with the key until T3 Code starts again and stops it.
 
 T3 Code writes thread titles and commit messages with its own text generation setting, which defaults to its built-in Codex provider. To use Subconscious there, pick a Subconscious provider in T3 Code's settings.
 

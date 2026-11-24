@@ -2,9 +2,9 @@
 
 /**
  * The adapter behind T3 Code's "Subconscious (OpenCode)" provider; see
- * `t3-plan.js`. The version check runs the real OpenCode unchanged and
- * starts no watchdog. The helper (`serve --hostname=H --port=P`) gets the
- * Subconscious launch and a `watch` record. `serve --service`, `serve
+ * `t3-plan.js`. The version check runs the real OpenCode unchanged. The
+ * helper (`serve --hostname=H --port=P`) gets the Subconscious launch.
+ * `serve --service`, `serve
  * --stdio`, `upgrade`, and every other command are refused: the first starts
  * OpenCode's shared background service, and the second is another protocol.
  */

@@ -46,12 +46,9 @@ ${body}
 `;
 }
 
-// The fake prints exactly one line, then stays alive for SLEEP ms, as a
-// long-lived agent would be.
-const printAndSleep = (
-  line,
-) => `process.stdout.write(JSON.stringify(${line}) + '\\n');
-if (option('SLEEP')) setTimeout(() => {}, Number(option('SLEEP')));`;
+// The fake prints exactly one line.
+const printLine = (line) =>
+  `process.stdout.write(JSON.stringify(${line}) + '\\n');`;
 
 // A fake codex. Its version check writes under CODEX_HOME/tmp, as the real
 // Codex does on every start. A launch records the catalog it was given and
@@ -66,7 +63,7 @@ const FAKE_CODEX = fakeAgent('codex', {
   const catalogPath = arg && arg.slice('model_catalog_json='.length);
   return { catalogPath, catalog: catalogPath ? JSON.parse(fs.readFileSync(catalogPath, 'utf8')) : null };
 })()`,
-  body: printAndSleep("{ fake: 'codex', args }"),
+  body: printLine("{ fake: 'codex', args }"),
 });
 
 // A fake claude. Its version check writes nothing, as with the real Claude
@@ -75,16 +72,14 @@ const FAKE_CODEX = fakeAgent('codex', {
 const FAKE_CLAUDE = fakeAgent('claude', {
   version: '2.1.326',
   versionLine: "version + ' (Claude Code)'",
-  body: printAndSleep(
+  body: printLine(
     "args.includes('-p') || args.includes('--print') ? { type: 'result', subtype: 'success', result: 'fake', fake: 'claude' } : { type: 'system', subtype: 'init', fake: 'claude' }",
   ),
 });
 
 // A fake opencode. Its version check writes its log under XDG_DATA_HOME, as
 // the real OpenCode does. A launch records the parsed launch config. Only
-// `serve` prints the one line T3 Code waits for, then runs for SLEEP ms.
-// IGNORE_TERM=1 makes it ignore SIGTERM, and CHILD=1 makes it start a long
-// `sleep` child in its process group, like a tool or an MCP server.
+// `serve` prints the one line T3 Code waits for.
 const FAKE_OPENCODE = fakeAgent('opencode', {
   version: '2.3.0',
   versionLine: "'opencode v' + version",
@@ -95,20 +90,13 @@ const FAKE_OPENCODE = fakeAgent('opencode', {
   try {
     config = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
   } catch {}
-  const childPid = option('CHILD') === '1' && args[0] === 'serve'
-    ? require('child_process').spawn('sleep', ['600'], { stdio: 'ignore' }).pid
-    : null;
-  return { config, childPid };
+  return { config };
 })()`,
   body: `if (args[0] !== 'serve' || args.includes('--help') || args.includes('-h')) {
   process.stdout.write('opencode ' + args.join(' ') + ': usage\\n');
   process.exit(0);
 }
-process.on('SIGTERM', () => {
-  if (option('IGNORE_TERM') !== '1') process.exit(0);
-});
-process.stdout.write('server listening on http://127.0.0.1:4096\\n');
-if (option('SLEEP')) setTimeout(() => process.exit(0), Number(option('SLEEP')));`,
+process.stdout.write('server listening on http://127.0.0.1:4096\\n');`,
 });
 
 // The user's own Claude Code files. Install and launches must leave them as
