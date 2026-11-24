@@ -580,4 +580,7 @@ test('install refuses an unknown provider or option', { skip }, async () => {
     option.stderr,
     /Unknown argument for subc t3 install: --dry-run/,
   );
+  // No help still shows the removed option.
+  const help = await subc(installed, ['help']);
+  assert.doesNotMatch(help.stdout, /t3 install --dry-run/);
 });

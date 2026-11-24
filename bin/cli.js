@@ -145,7 +145,6 @@ ${agents}
     ${c.dim}$${c.reset} subc pi install
     ${c.dim}$${c.reset} subc harness-manifest --json
     ${c.dim}$${c.reset} subc codex headless "fix the failing test"
-    ${c.dim}$${c.reset} subc t3 install --dry-run
     ${c.dim}$${c.reset} subc -p staging codex
 
   ${c.bold}Network${c.reset}
