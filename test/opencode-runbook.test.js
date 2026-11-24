@@ -173,7 +173,9 @@ test('OpenCode uninstall removes the old compaction plugin and env file, and kee
   assert.deepEqual(await fs.readdir(path.join(home, '.opencode')), []);
 });
 
-test('OpenCode launch sets no x-subconscious-client header', () => {
+// The gateway labels a conversation's coding agent from this header; without
+// it, OpenCode conversations show no agent.
+test('OpenCode launch names the client with x-subconscious-client', () => {
   const result = runSync(
     launchCommand('opencode', {
       env: {
@@ -187,7 +189,7 @@ test('OpenCode launch sets no x-subconscious-client header', () => {
   );
   assert.equal(result.status, 0, result.stderr);
   const { options } = JSON.parse(result.stdout).provider.subconscious;
-  assert.equal(options.headers, undefined);
+  assert.deepEqual(options.headers, { 'x-subconscious-client': 'opencode' });
   assert.equal(options.baseURL, 'https://gateway.example/v1');
   assert.equal(options.apiKey, '{env:SUBCONSCIOUS_API_KEY}');
 });

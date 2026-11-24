@@ -149,7 +149,15 @@
       "verified": false,
       "note": "OPENCODE_CONFIG_CONTENT carries no mcp block. Whether OpenCode merges user MCP config with it is not confirmed here."
     },
-    "headers": [],
+    "headers": [
+      {
+        "name": "x-subconscious-client",
+        "value": "opencode",
+        "on": "model requests",
+        "set_by_subc": true,
+        "verified": true
+      }
+    ],
     "hooks": []
   }
 }

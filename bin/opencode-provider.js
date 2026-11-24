@@ -88,6 +88,9 @@ export function buildOpenCodeConfig({
         options: {
           baseURL: `${baseUrl}/v1`,
           apiKey: '{env:SUBCONSCIOUS_API_KEY}',
+          // The gateway labels the conversation's coding agent from this
+          // header. OpenCode sends no other signal that names it.
+          headers: { 'x-subconscious-client': 'opencode' },
           modelsDiscovery: { enabled: false },
         },
         models: buildOpenCodeModels(modelIds, { context, output, entries }),
